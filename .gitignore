@@ -1,5 +1,18 @@
+wandb/
+wandb.txt
+data/build*
+.paquo*
+
+
+#nonpublic data 
+Notebooks/data.ipynb
+Notebooks/slide_vis.ipynb
+Notebooks/index.ipynb
+Notebooks/lang_index.ipynb
+Notebooks/
+
 # Byte-compiled / optimized / DLL files
-__pycache__/
+**/__pycache__/
 *.py[codz]
 *$py.class
 
