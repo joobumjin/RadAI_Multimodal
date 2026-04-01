@@ -36,8 +36,11 @@ class EmbPred(nn.Module):
         elif isinstance(m, nn.LayerNorm):
             nn.init.constant_(m.bias, 0)
             nn.init.constant_(m.weight, 1.0)
+
+    def predict(self, h: torch.Tensor) -> torch.Tensor:
+        return self.predictor(h)
     
-    def forward(self, h: torch.Tensor, labels: torch.Tensor) -> torch.Tensor:
+    def forward(self, h: torch.Tensor, labels: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         if h.get_device() != labels.get_device():
             labels = labels.to(h.get_device())
 

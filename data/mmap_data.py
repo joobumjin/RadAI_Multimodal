@@ -9,7 +9,7 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 import numpy as np
 import pandas as pd
 import torch
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import Dataset, DataLoader, default_collate
 
 class MemmapDataset(Dataset):
     """
@@ -26,8 +26,10 @@ class MemmapDataset(Dataset):
         data_dir: str,
         indices: Optional[List[int]] = None,
         max_instances: Optional[int] = None,
+        keys: Optional[List[str]] = None,
         return_key: bool = False,
         label_column: Optional[str] = None,
+        label_dtype: Optional[np.dtype] = np.float32,
         index_filename: str = "index_arrays_labeled.npz",
         bin_path: str = "path_rad_embs.dat",
         num_modalities: int = 2,
@@ -46,7 +48,7 @@ class MemmapDataset(Dataset):
         self.data_dir       = data_dir
         self.max_instances  = max_instances
         self.return_key     = return_key
-        self.modality_inds = modality_inds if modality_inds is not None else [0,1]
+        self.modality_inds  = modality_inds if modality_inds is not None else [0,1]
 
         # Load index
         index_path = os.path.join(data_dir, index_filename)
@@ -59,7 +61,14 @@ class MemmapDataset(Dataset):
         self._slide_ids = index['slide_ids']
         self._lengths   = index['combined_lengths'].astype(int)
         if modality_inds is not None: self._lengths = self._lengths[..., self.modality_inds]
-        self._labels    = index[label_column] if label_column is not None else None
+        self._labels    = index[label_column].astype(label_dtype) if label_column is not None else None
+
+        #handle keys
+        keys = [index[col].tolist() for col in keys] if self.return_key and keys is not None else None
+        self._keys = None
+        if self.return_key:
+            self._keys = [key_tuple for key_tuple in zip(*keys)] if keys is not None else self._slide_ids
+
         
         # Handle different ways feat_dim might be stored
         feat_dim        = index['feat_dim']
@@ -123,16 +132,17 @@ class MemmapDataset(Dataset):
 
         offset      = int(self._offsets[real_idx])
         lengths     = self._lengths[real_idx]
-        slide_id    = int(self._slide_ids[real_idx])
+        # slide_id    = int(self._slide_ids[real_idx])
+        keys        = self._keys[real_idx] if self.return_key else None
 
         label = self._labels[real_idx]
         
         # Handle empty/failed slides
-        if offset < 0 or np.prod(lengths) == 0 or label == np.nan:
-            dummy = torch.zeros((1, self._feat_dim), dtype=torch.float32)
-            if self.return_key:
-                return dummy, None, slide_id
-            return dummy, None
+        # if offset < 0 or np.prod(lengths) == 0 or label == np.nan:
+        #     dummy = torch.zeros((1, self._feat_dim), dtype=torch.float32)
+        #     if self.return_key:
+        #         return dummy, None, keys
+        #     return dummy, None
         
         # =================================================================
         # CRITICAL OPTIMIZATION: Subsample BEFORE copying from memmap
@@ -151,7 +161,7 @@ class MemmapDataset(Dataset):
             feats.append(torch.from_numpy(features_np))
 
         if self.return_key:
-            return feats, label, slide_id
+            return feats, label, keys
         return feats, label
 
 
@@ -160,12 +170,12 @@ class MemmapDataset(Dataset):
 # =============================================================================
 def collate_bags(
     batch: List[Union[
-        Tuple[torch.Tensor, np.float64],
         Tuple[torch.Tensor, np.float64, int],
+        Tuple[torch.Tensor, np.float64],
     ]]
 ) -> Union[
-    Tuple[List[torch.Tensor], List[np.float64]],
     Tuple[List[torch.Tensor], List[np.float64], List[int]],
+    Tuple[List[torch.Tensor], List[np.float64]],
 ]:
     """
     Collate variable-size bags into lists.
@@ -173,10 +183,23 @@ def collate_bags(
     """
     if len(batch[0]) == 3:
         feats, labels, keys = zip(*batch)
+        if isinstance(keys[0], tuple):
+            keys = [np.array(key) for key in zip(*keys)]
         return list(feats), list(labels), list(keys)
     else:
         feats, labels = zip(*batch)
         return list(feats), list(labels)
+    
+def collate_tensors(
+    batch: List[Union[
+        Tuple[torch.Tensor, np.float64, int],
+        Tuple[torch.Tensor, np.float64],
+    ]]
+):
+    batch = default_collate(batch)
+    if len(batch) == 3: batch[2] = [key.numpy() for key in batch[2]]
+    return batch
+
 
 def collate_bags_padded(
     batch: List[Union[
@@ -194,6 +217,8 @@ def collate_bags_padded(
     if has_keys:
         views1, labels, keys = zip(*batch)
         keys = list(keys)
+        if isinstance(keys[0], tuple):
+            keys = [np.array(key) for key in zip(*keys)]
     else:
         views1, labels = zip(*batch)
         keys = None

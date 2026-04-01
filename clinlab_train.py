@@ -8,6 +8,7 @@ from tqdm import trange
 import numpy as np
 import matplotlib.pyplot as plt
 from torch import nn
+from torch.utils.data import TensorDataset, DataLoader
 from torch.nn import functional as F
 from torch import optim
 from torch.optim.lr_scheduler import SequentialLR, LinearLR, CosineAnnealingLR
@@ -16,19 +17,17 @@ from sksurv.metrics import cumulative_dynamic_auc, concordance_index_censored
 from torchmetrics import ROC, AUROC
 
 from data import *
-from model import EmbPred
+from model import LinearModel
 from util import *
 
 def get_args_parser():
-    parser = argparse.ArgumentParser('Supervised ABMIL Panc Training', add_help=False)
+    parser = argparse.ArgumentParser('Supervised Panc Training', add_help=False)
 
     parser.add_argument('--seed',               type=int,   default=0)
-    
-    parser.add_argument('--model',              type=str,   default="conch")
-    
-    parser.add_argument('--batch_size',         type=int,   default=12)
-    parser.add_argument('--loss_fn',            type=str,   default="mse")
-    parser.add_argument('--data_path',          type=str,   default="../{model}_path_rad_text_embs")
+      
+    parser.add_argument('--batch_size',         type=int,   default=32)
+    parser.add_argument('--loss_fn',            type=str,   default="bce")
+    parser.add_argument('--data_path',          type=str,   default="../lab_clinical")
     parser.add_argument('--epochs',             type=int,   default=200)
     parser.add_argument('--device',                         default='cuda')
     parser.add_argument('--float16',            type=bool,  default=True)
@@ -37,10 +36,9 @@ def get_args_parser():
     parser.add_argument('--prefetch_factor',    type=int,   default=2)
     parser.add_argument('--num_workers',        type=int,   default=1)
     parser.add_argument('--pin_mem',            type=bool,  default=True)
-    parser.add_argument('--max_instances',      type=int,   default=5000)
     parser.add_argument('--train_split',        type=float, default=.85)
 
-    parser.add_argument('--label_col',          type=str,   default="survival_months")
+    parser.add_argument('--label_col',          type=str,   default="death_indicator_2yr")
     parser.add_argument('--censor_col',         type=str,   default="survival_censor")
 
     # Optimizer parameters
@@ -94,7 +92,7 @@ def get_metrics(split: str, args):
 
 
 def train_one_epoch(model: torch.nn.Module,
-                    train_loader: Iterable, merge_fn,
+                    train_loader: Iterable,
                     optimizer: optim.Optimizer, scheduler: optim.lr_scheduler.LRScheduler,
                     device: str,
                     args=None):
@@ -103,25 +101,23 @@ def train_one_epoch(model: torch.nn.Module,
 
     metrics, fns, torchmetrics = get_metrics("Train", args)
     
-    for batch in train_loader:
-        feats, labels, _ = batch
-        feats = merge_fn(feats).squeeze(dim=1)
+    for (feats, labels, _) in train_loader:
         feats = feats.to(device)
         labels = labels.unsqueeze(-1)
         labels = labels.to(device)
-        with torch.autocast(device_type=device, dtype=torch.float16, enabled=args.float16):
-            loss, preds = model(h=feats, labels=labels)
 
-            with torch.inference_mode():
-                metrics["Train Loss"].update(loss.detach().item())
-                metrics["lr"].update(optimizer.param_groups[0]["lr"])
-                for name, fn in fns.items():
-                    train_loss = fn(preds, labels)
-                    metrics[name].update(train_loss.detach().item())
+        loss, preds = model(h=feats, labels=labels)
 
-                preds = torch.sigmoid(preds)
-                for obj in torchmetrics.values():
-                    obj.update(preds.detach().squeeze(-1), labels.detach().int().squeeze(-1))
+        with torch.inference_mode():
+            metrics["Train Loss"].update(loss.detach().item())
+            metrics["lr"].update(optimizer.param_groups[0]["lr"])
+            for name, fn in fns.items():
+                train_loss = fn(preds, labels)
+                metrics[name].update(train_loss.detach().item())
+
+            preds = torch.sigmoid(preds)
+            for obj in torchmetrics.values():
+                obj.update(preds.detach().squeeze(-1), labels.detach().int().squeeze(-1))
 
         loss.backward()
         optimizer.step()
@@ -130,14 +126,12 @@ def train_one_epoch(model: torch.nn.Module,
 
     return {k: meter.avg for k, meter in metrics.items()}, torchmetrics
 
-def test(model: torch.nn.Module, data_loader: Iterable, merge_fn, device: str, args=None):
+def test(model: torch.nn.Module, data_loader: Iterable, device: str, args=None):
     model.eval()
 
     metrics, fns, torchmetrics = get_metrics("Test", args)
 
-    for batch in data_loader:
-        feats, labels, _ = batch
-        feats = merge_fn(feats).squeeze(dim=1)
+    for (feats, labels, _) in data_loader:
         feats = feats.to(device)
         labels = labels.unsqueeze(-1)
         labels = labels.to(device)
@@ -157,38 +151,34 @@ def test(model: torch.nn.Module, data_loader: Iterable, merge_fn, device: str, a
 
 # --------------------------------------------------------
 
-def calculate_c_indices(model: torch.nn.Module, train_loader, test_loader, merge_fn, device):
+def calculate_c_indices(model: torch.nn.Module, train_loader, test_loader, device):
     model.eval()
 
     train_preds, train_deaths, train_times = [], [], []
     test_preds, test_deaths, test_times = [], [], []
 
-    for batch in train_loader:
-        feats, _, keys = batch
-        train_deaths.append(~keys[1])
-        train_times.append(keys[2])
+    for (feats, _, keys) in train_loader:
+        keys = keys.numpy().astype(bool)
+        train_deaths.append(~keys[:, 1])
+        train_times.append(keys[:, 2])
 
-        feats = merge_fn(feats).squeeze(dim=1)
         feats = feats.to(device)
         with torch.inference_mode():
-            with torch.autocast(device_type=device, dtype=torch.float16, enabled=args.float16):
-                preds = model.predict(h=feats)
+            preds = model.predict(h=feats)
 
             preds = preds.detach().squeeze(-1).cpu().numpy()
             train_preds.append(preds)
     
     train = [np.concatenate(l) for l in [train_deaths, train_times, train_preds]]
 
-    for batch in test_loader:
-        feats, _, keys = batch
-        test_deaths.append(~keys[1])
-        test_times.append(keys[2])
+    for (feats, _, keys) in test_loader:
+        keys = keys.numpy().astype(bool)
+        test_deaths.append(~keys[:, 1])
+        test_times.append(keys[:, 2])
 
-        feats = merge_fn(feats).squeeze(dim=1)
         feats = feats.to(device)
         with torch.inference_mode():
-            with torch.autocast(device_type=device, dtype=torch.float16, enabled=args.float16):
-                preds = model.predict(h=feats)
+            preds = model.predict(h=feats)
 
             preds = preds.detach().squeeze(-1).cpu().numpy()
             test_preds.append(preds)
@@ -207,16 +197,18 @@ def calculate_c_indices(model: torch.nn.Module, train_loader, test_loader, merge
 # --------------------------------------------------------
 
 def get_loaders(args):
-    modality_inds = defaultdict(lambda: [0,1])
-    modality_inds["path_only"] = [0]
-    modality_inds["rad_only"] = [1]
     keys = ["slide_ids", "vital_status", "survival_months"]
 
-    index = np.load(f"{args.data_path}/index_arrays_labeled.npz", allow_pickle=True)
-    inds = np.arange(len(index[args.label_col]))
+    index = np.load(f"{args.data_path}/lab_clin.npz", allow_pickle=True)
+
+    feats   = index['feats']
+    labels  = index['death_indicator_2yr'].astype(np.float32)
+    key_arr = np.hstack([index[key][:, None] for key in keys])
+    inds    = np.arange(len(labels))
+
     label_mask = ~np.isnan(index[args.label_col])
     exclusion_mask = ~index["excluded"]
-    feat_mask = np.prod(index['combined_lengths'][:, modality_inds[args.emb_merge]], axis=1).astype(bool)
+    feat_mask = ~np.isnan(feats).any(axis=1)
     mask = label_mask & exclusion_mask & feat_mask
     if "indicator" in args.label_col: 
         for key in keys:
@@ -226,41 +218,37 @@ def get_loaders(args):
     num_train = int(len(valid_inds) * args.train_split)
     num_valid = len(valid_inds) - num_train
     
-    del index, inds, mask
-
     np.random.shuffle(valid_inds)
     train_inds, test_inds = valid_inds[:num_train], valid_inds[num_train:]
 
-    dataset_args = {
-        "data_dir": args.data_path,
-        "max_instances": args.max_instances,
-        "return_key": True,
-        "keys": keys,
-        "label_column": args.label_col,
-        "label_dtype": np.float32,
-        "num_modalities": 1 if args.emb_merge in modality_inds else 2,
-        "modality_inds": modality_inds[args.emb_merge]
-    }
+    train_feats, test_feats = feats[train_inds], feats[test_inds]
+    train_feats, test_feats = torch.from_numpy(train_feats), torch.from_numpy(test_feats)
+
+    train_labels, test_labels = labels[train_inds], labels[test_inds]
+    train_labels, test_labels = torch.from_numpy(train_labels), torch.from_numpy(test_labels)
+
+    train_keys, test_keys = key_arr[train_inds], key_arr[test_inds]
+    train_keys, test_keys = torch.from_numpy(train_keys), torch.from_numpy(test_keys)
+
+    train_set = TensorDataset(train_feats, train_labels, train_keys)
+    test_set = TensorDataset(test_feats, test_labels, test_keys)
+
     loader_args = {
         "batch_size": args.batch_size,
         "pin_memory": args.pin_mem,
         "num_workers": args.num_workers,
-        "collate_fn": collate_tensors,
         "persistent_workers": args.num_workers > 0,
         "drop_last": False,
     }
 
-    train_set = MemmapDataset(indices=train_inds, **dataset_args)
     train_loader = DataLoader(train_set, shuffle=True, **loader_args)
-
-    test_set = MemmapDataset(indices=test_inds, **dataset_args)
     test_loader = DataLoader(test_set, shuffle=False, **loader_args)
 
     print(f"Found: {len(valid_inds)} valid samples split into "
         f"\n{num_train} train samples, {len(train_loader)} batches and "
         f"\n{num_valid} validation samples, {len(test_loader)} batches"
-        # f"\nTrain: under 5 year: {np.sum(index[args.label_col][train_inds] == 0)}, over 5 year: {np.sum(index[args.label_col][train_inds] == 1)}"
-        # f"\nTest: under 5 year: {np.sum(index[args.label_col][test_inds] == 0)}, over 5 year: {np.sum(index[args.label_col][test_inds] == 1)}"
+        f"\nTrain: under 2 year: {torch.sum(train_labels == 0)}, over 2 year: {torch.sum(train_labels == 1)}"
+        f"\nTest: under 2 year: {torch.sum(test_labels == 0)}, over 2 year: {torch.sum(test_labels == 1)}"
     )
 
     return train_loader, test_loader, num_train
@@ -273,21 +261,8 @@ def main(args):
     torch.manual_seed(seed)
     np.random.seed(seed)
 
-    train_loader, test_loader, train_samples = get_loaders(args)
+    train_loader, test_loader, _ = get_loaders(args)
     device = "cuda" if torch.cuda.is_available() else "cpu"
-
-    merge_fn = {
-        "sum": sum,
-        "prod": lambda embs: torch.prod(torch.stack(embs), dim=0),
-        "none": lambda embs: embs,
-        "path_only": lambda embs: embs[0],
-        "rad_only": lambda embs: embs[0],
-    }
-
-    modalities = defaultdict(lambda: "Path + Rad")
-    modalities["path_only"] = "Path"
-    modalities["rad_only"] = "Rad"
-    
 
     losses = {
         "l1": F.l1_loss,
@@ -296,7 +271,9 @@ def main(args):
         "bce": F.binary_cross_entropy_with_logits,
     }
 
-    model = EmbPred(loss_fn=losses[args.loss_fn])
+    hidden_dims = [64, 16]
+
+    model = LinearModel(hidden_dims = hidden_dims, loss_fn=losses[args.loss_fn])
     model = model.to(device)
 
     optimizer, scheduler = get_opt_and_sched(model, args, iter_per_epoch=len(train_loader))
@@ -305,30 +282,23 @@ def main(args):
     if args.disable_wandb: run = None
     else:
         config = {
-            "Model": args.model,
-            # "lr": args.lr,
-            # **loader_args
+            "Hidden Sizes": hidden_dims,
             "Loss": args.loss_fn,
             "Seed": args.seed,
-            "Modalities": modalities[args.emb_merge],
-            "Merge Func": args.emb_merge
         }
 
         run = wandb.init(
             entity="bumjin_joo-brown-university", 
             project=f"Panc MM 2yr Surv", 
-            name=f"{args.model} Text - w Censored- {modalities[args.emb_merge]} - {args.emb_merge} - {args.label_col}", 
+            name=f"Clinical + Lab - {args.label_col}", 
             config=config
         )
 
     print(f"Start training for {args.epochs} epochs")
     pbar = trange(0, args.epochs, desc="Training Epochs", postfix={})
     for e in pbar:
-        train_stats, train_tm = train_one_epoch(model, train_loader, 
-                               merge_fn[args.emb_merge],
-                               optimizer, scheduler,
-                               device, args)
-        test_stats, test_tm = test(model, test_loader, merge_fn[args.emb_merge], device, args=args)
+        train_stats, train_tm = train_one_epoch(model, train_loader, optimizer, scheduler, device, args)
+        test_stats, test_tm = test(model, test_loader, device, args=args)
 
         tm = {}
         if len(train_tm) > 0:
@@ -346,7 +316,7 @@ def main(args):
 
         c_indices = {}
         if "indicator" in args.label_col:
-            c_indices = calculate_c_indices(model, train_loader, test_loader, merge_fn[args.emb_merge], device)
+            c_indices = calculate_c_indices(model, train_loader, test_loader, device)
 
         postfix = {**train_stats, **test_stats, **c_indices, **tm}
         if run is not None: run.log(postfix)
@@ -357,7 +327,6 @@ if __name__ == '__main__':
     parser  = get_args_parser()
     args    = parser.parse_args()
 
-    args.data_path = args.data_path.format(model=args.model)
     if args.debug:
         args.epochs = 1
         args.disable_wandb = True
