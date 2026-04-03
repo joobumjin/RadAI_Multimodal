@@ -23,6 +23,9 @@ class LearnedWeightSum(nn.Module):
     
 
 class LogitFusion(nn.Module):
+    """
+    Logit-level fusion using either a standard lambda func or an nn.Module 
+    """
     def __init__(self, encoders: Dict[str, nn.Module], fusion_fn: Union[NAIVE_FUSERS, nn.Module], loss_fn: nn.Module):
         super().__init__()
 
