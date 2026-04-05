@@ -13,7 +13,7 @@ class EmbPred(nn.Module):
                  predictor_layers: int = 3,
                  hidden_dim: int = 128,
                  out_dim: int = 1,
-                 loss_fn: Callable = F.mse_loss,
+                 loss_fn: Optional[Callable] = F.mse_loss,
     ):
         super().__init__()
         self.loss_fn = loss_fn
@@ -46,7 +46,7 @@ class EmbPred(nn.Module):
 
         pred = self.predictor(h)
 
-        loss = self.loss_fn(pred, labels)
+        loss = self.loss_fn(pred, labels) if self.loss_fn is not None else None
         return loss, pred
 
 

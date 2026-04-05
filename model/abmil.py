@@ -110,10 +110,10 @@ class EmbMIL(nn.Module):
         attn_dict = [attn_dict] if return_attention else []
 
         pred = self.projector(attn_out)
-        if self.loss_fn is None:
-            return pred, *attn_dict
+        # if self.loss_fn is None:
+        #     return pred, *attn_dict
         
-        loss = self.loss_fn(pred, labels)
+        loss = self.loss_fn(pred, labels) if self.loss_fn is not None else None
         return loss, pred, *attn_dict
     
     def predict(self, h: torch.Tensor, attn_mask=None, return_attention: bool = True) -> torch.Tensor:

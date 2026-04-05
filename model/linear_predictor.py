@@ -13,7 +13,7 @@ class LinearModel(nn.Module):
                  hidden_dims: list[int] = [128, 128, 32],
                  out_dim: int = 1,
                  act: nn.Module = nn.LeakyReLU(),
-                 loss_fn: Callable = F.mse_loss,
+                 loss_fn: Optional[Callable] = F.mse_loss,
     ):
         super().__init__()
         self.loss_fn = loss_fn
@@ -47,6 +47,6 @@ class LinearModel(nn.Module):
 
         pred = self.predictor(h)
 
-        loss = self.loss_fn(pred, labels)
+        loss = self.loss_fn(pred, labels) if self.loss_fn is not None else None
         return loss, pred
 

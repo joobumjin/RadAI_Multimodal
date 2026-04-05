@@ -1,20 +1,29 @@
 from typing import List, Dict, Union, Literal
+from abc import ABC, abstractmethod
 
 import torch
 import torch.nn as nn
 from torch.nn import functional as F
 
-NAIVE_FUSERS = Literal["sum", "avg"]
-fusion_fns = {
-    "sum": lambda modality_logits: torch.sum(torch.stack(list(modality_logits.values())), axis=-1),
-    "avg": lambda modality_logits: torch.sum(torch.stack(list(modality_logits.values())), axis=-1) / len(modality_logits)
-}
-
-class LearnedWeightSum(nn.Module):
+class Fuser(nn.Module, ABC):
     def __init__(self, modalities: List[str]):
         super().__init__()
+        self.modalities = modalities
+    
+    @abstractmethod
+    def forward(self, x: Dict[str, torch.Tensor]) -> torch.Tensor: ...
 
-        self.modalities = modalities        
+class NaiveSum(Fuser):
+    def forward(self, x):
+        return torch.sum(torch.stack([x[mod] for mod in self.modalities]), axis=-1)
+    
+class NaiveAvg(Fuser):
+    def forward(self, x):
+        return torch.sum(torch.stack([x[mod] for mod in self.modalities]), axis=-1) / len(x)
+
+class LearnedWeightSum(Fuser):
+    def __init__(self, modalities: List[str]):
+        super().__init__(modalities)
         self.weights = nn.Linear(len(modalities), 1, bias=False)
 
     def forward(self, x: Dict[str, torch.Tensor]) -> torch.Tensor:
@@ -24,30 +33,23 @@ class LearnedWeightSum(nn.Module):
 
 class LogitFusion(nn.Module):
     """
-    Logit-level fusion using either a standard lambda func or an nn.Module 
+    Logit-level fusion using an nn.Module 
     """
-    def __init__(self, encoders: Dict[str, nn.Module], fusion_fn: Union[NAIVE_FUSERS, nn.Module], loss_fn: nn.Module):
+    def __init__(self, encoders: Dict[str, nn.Module], fusion_fn: Fuser, loss_fn: nn.Module):
         super().__init__()
 
         self.encoders = encoders
         self.loss_fn = loss_fn
-        self.modality_order = encoders.keys()
-
-        if issubclass(fusion_fn, nn.Module): self.fusion_fn = fusion_fn(self.modality_order)
-        elif isinstance(fusion_fn, NAIVE_FUSERS): self.fusion_fn = fusion_fns[fusion_fn]
-        else:
-            print(f"Unknown Logit Fusion Operation {fusion_fn}")
+        self.modality_order = list(encoders.keys())
+        self.fusion_fn = fusion_fn(self.modality_order)
 
     def predict(self, x: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:            
         logits = {modality: enc.pred(x[modality]) for modality, enc in self.encoders.items()}
-
         return self.fusion_fn(logits)
     
     def forward(self, x: Dict[str, torch.Tensor], y: torch.Tensor) -> Dict[str, torch.Tensor]:
         preds = self.predict(x)
-
-        loss = self.loss_fn(x, y)
-
-        return {"preds": preds, "loss": loss}
+        loss = self.loss_fn(preds, y)
+        return loss, preds
 
 

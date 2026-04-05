@@ -16,7 +16,7 @@ from torch.optim.lr_scheduler import SequentialLR, LinearLR, CosineAnnealingLR
 from torchmetrics import ROC, AUROC
 
 from data import *
-from model import LinearModel
+from model import LinearModel, EmbPred, EmbMIL, LogitFusion, NaiveSum, NaiveAvg, LearnedWeightSum
 from util import *
 
 def get_args_parser():
@@ -30,7 +30,12 @@ def get_args_parser():
     parser.add_argument('--epochs',             type=int,   default=200)
     parser.add_argument('--device',                         default='cuda')
     parser.add_argument('--float16',            type=bool,  default=True)
-    parser.add_argument('--emb_merge',          type=str,   default="sum")
+
+    parser.add_argument('--clinical',           action="store_true")
+    parser.add_argument('--path_lang',          action="store_true")
+    parser.add_argument('--rad_lang',           action="store_true")
+    parser.add_argument('--path_img',           action="store_true")
+    parser.add_argument('--fusion',             type=str,   default="naive_sum", choices=["naive_sum", "naive_avg", "weighted_sum"])
     
     parser.add_argument('--prefetch_factor',    type=int,   default=2)
     parser.add_argument('--num_workers',        type=int,   default=1)
@@ -59,8 +64,53 @@ def get_args_parser():
 
 # --------------------------------------------------------
 
+def get_clinical_encoder(args):
+    hidden_dims = [64, 16]
+    clin_enc = LinearModel(hidden_dims = hidden_dims, loss_fn=None)
+    return clin_enc
+
+def get_path_lang_encoder(args):
+    path_lang_enc = EmbPred(loss_fn=None)
+    return path_lang_enc
+
+def get_rad_lang_encoder(args):
+    rad_lang_enc = EmbPred(loss_fn=None)
+    return rad_lang_enc
+
+def get_path_img_encoder(args):
+    mil = EmbMIL(loss_fn=None)
+    return mil
+
+def get_fusion_model(args):
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+
+    fusers = {
+        "naive_sum": NaiveSum,
+        "naive_avg": NaiveAvg,
+        "weight_sum": LearnedWeightSum
+    }
+
+    losses = {
+        "l1": F.l1_loss,
+        "smooth_l1": F.smooth_l1_loss,
+        "mse": F.mse_loss,
+        "bce": F.binary_cross_entropy_with_logits,
+    }
+
+    encs = {}
+    arg_dict = vars(args)
+    for mod, get_enc_fn in zip(["clinical", "path_lang", "rad_lang", "path_img"],
+                               [get_clinical_encoder(args), get_path_lang_encoder(args), get_rad_lang_encoder(args), get_path_img_encoder(args)]):
+        if arg_dict.get(mod, False):
+            enc = get_enc_fn(args)
+            enc = enc.to(device)
+            encs[mod] = encs[mod].to(device)
+
+    model = LogitFusion(encs, fusion_fn=fusers[args.fusion], loss_fn=losses[args.loss_fn])
+    return model, device
+
 def get_opt_and_sched(model, args, iter_per_epoch = None):
-    optimizer = optim.AdamW(model.parameters(), lr=args.lr, betas=(0.9, 0.95))
+    optimizer = optim.AdamW({mod: enc.parameters() for mod, enc in model.encoders.items()}, lr=args.lr, betas=(0.9, 0.95))
 
     #linear warmup
     wu_iters = args.warmup_epochs * iter_per_epoch if iter_per_epoch is not None else args.warmup_epochs
@@ -79,7 +129,7 @@ def get_metrics(split: str, args):
     bool_var = "indicator" in args.label_col
 
     metrics = {f"{split} Loss": AverageMeter(), "lr": AverageMeter()}
-    fns = {"Acc": lambda p, l: acc(torch.sigmoid(p) > 0.5, l)} if bool_var else {"MSE": F.mse_loss, "L1": F.l1_loss, "5yr Acc": lambda p, l: acc(p > 60, l > 60)}
+    fns = {"Acc": lambda p, l: acc(torch.sigmoid(p) > 0.5, l)} if bool_var else {"MSE": F.mse_loss, "L1": F.l1_loss, "2yr Acc": lambda p, l: acc(p > 24, l > 24)}
     fns = {f"{split} {name}": fn for name, fn in fns.items()}
     test_metrics = {f"{name}": AverageMeter() for name in fns}
     metrics = {**metrics, **test_metrics}
@@ -216,27 +266,14 @@ def main(args):
     np.random.seed(seed)
 
     train_loader, test_loader, _ = get_loaders(args)
-    device = "cuda" if torch.cuda.is_available() else "cpu"
 
-    losses = {
-        "l1": F.l1_loss,
-        "smooth_l1": F.smooth_l1_loss,
-        "mse": F.mse_loss,
-        "bce": F.binary_cross_entropy_with_logits,
-    }
-
-    hidden_dims = [64, 16]
-
-    model = LinearModel(hidden_dims = hidden_dims, loss_fn=losses[args.loss_fn])
-    model = model.to(device)
+    model, device = get_fusion_model(args)
 
     optimizer, scheduler = get_opt_and_sched(model, args, iter_per_epoch=len(train_loader))
-    # scaler = torch.amp.GradScaler(device, enabled=True)
 
     if args.disable_wandb: run = None
     else:
         config = {
-            "Hidden Sizes": hidden_dims,
             "Loss": args.loss_fn,
             "Seed": args.seed,
         }
