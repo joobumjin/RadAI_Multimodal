@@ -163,6 +163,153 @@ class MemmapDataset(Dataset):
         if self.return_key:
             return feats, label, keys
         return feats, label
+    
+
+class MemmapDatasetMultimodal(Dataset):
+    """
+    Slide Bag Dataset using memory-mapped binary file.
+    
+    OPTIMIZED:
+    - Subsample BEFORE copying from memmap (critical for large slides)
+    - No unnecessary .clone() calls
+    - Keeps original dtype through pipeline
+    """
+    
+    def __init__(
+        self,
+        data_dir: str,
+        indices: Optional[List[int]] = None,
+        max_instances: Optional[int] = None,
+        keys: Optional[List[str]] = None,
+        return_key: bool = False,
+        label_column: Optional[str] = None,
+        label_dtype: Optional[np.dtype] = np.float32,
+        index_filename: str = "index_arrays_labeled.npz",
+        bin_path: str = "path_rad_embs.dat",
+        bin_modality_keys: Optional[List[str]] = [],
+        extra_modality_keys: Optional[List[str]] = [], #eg ['clinical']
+    ):
+        """
+        Args:
+            data_dir: Directory containing features.dat and index_arrays.npz
+            indices: Subset of slide indices to use (for train/val split)
+            augmentation: Augmentation for view 1 (and view 2 if augmentation_view2 is None)
+            augmentation_view2: Optional separate augmentation for view 2 (asymmetric)
+            max_instances: Max patches to sample per slide (CRITICAL: now samples BEFORE loading)
+            return_key: Whether to return slide ID with each sample
+        """
+
+        bin_inds = {"path_text": 0, "rad_text": 1}
+
+        self.data_dir       = data_dir
+        self.max_instances  = max_instances
+        self.return_key     = return_key
+        self.modality_inds  = {key: bin_inds[key] for key in bin_modality_keys}
+
+        # Load index
+        index_path = os.path.join(data_dir, index_filename)
+        if not os.path.exists(index_path):
+            raise FileNotFoundError(f"Index file not found: {index_path}")
+        
+        index = np.load(index_path, allow_pickle=True)
+        
+        self._offsets   = index['offsets']
+        self._slide_ids = index['slide_ids']
+        self._lengths   = index['combined_lengths'].astype(int)
+        if len(self.modality_inds) is not None: self._lengths = self._lengths[..., [bin_inds[key] for key in bin_modality_keys]]
+        self._labels    = index[label_column].astype(label_dtype) if label_column is not None else None
+
+        #handle keys
+        keys = [index[col].tolist() for col in keys] if self.return_key and keys is not None else None
+        self._keys = None
+        if self.return_key:
+            self._keys = [key_tuple for key_tuple in zip(*keys)] if keys is not None else self._slide_ids
+
+        self.extras = {key: index[key] for key in extra_modality_keys} if extra_modality_keys is not None else {}
+
+        
+        # Handle different ways feat_dim might be stored
+        feat_dim        = index['feat_dim']
+        self._feat_dim  = int(feat_dim.item() if feat_dim.ndim == 0 else feat_dim)
+        
+        # Handle dtype
+        dtype_arr = index['dtype']
+        if dtype_arr.ndim == 0:
+            self._dtype_str = str(dtype_arr.item())
+        else:
+            self._dtype_str = str(dtype_arr[0])
+        
+        # Total patches
+        total_patches = index['total_patches']
+        self._total_patches = int(total_patches.item() if total_patches.ndim == 0 else total_patches)
+        
+
+        # Filter valid indices (offset >= 0) and apply subset
+        all_valid = np.prod(self._lengths, axis=1)
+        # print(f"Valid Lengths: {len(np.flatnonzero(all_valid))}")
+        if self._labels is not None: all_valid *= (~np.isnan(self._labels))
+        all_valid = np.flatnonzero(all_valid)
+        
+        if indices is not None:
+            self.indices = [i for i in indices if i in all_valid]
+        else:
+            self.indices = list(all_valid)
+        
+        # Memory-map the binary file (read-only, OS handles caching)
+        bin_path = os.path.join(data_dir, bin_path)
+        if not os.path.exists(bin_path):
+            raise FileNotFoundError(f"Features file not found: {bin_path}")
+        
+        bin_shape = [self._total_patches, self._feat_dim, 2]
+        
+        self.data = np.memmap(
+            bin_path,
+            dtype=self._dtype_str,
+            mode='r',
+            shape=bin_shape
+        )
+    
+    def __len__(self) -> int:
+        return len(self.indices)
+    
+    @property
+    def feature_dim(self) -> int:
+        return self._feat_dim
+    
+    def __getitem__(self, idx: int) -> Union[
+        Tuple[list[torch.Tensor], np.float64],
+        Tuple[list[torch.Tensor], np.float64, int],
+    ]:
+        """
+        Returns:
+            view1:      bag of features [N1, D]
+            slide_id:   (if return_key=True) Slide identifier
+        """
+        # Map to real index
+        real_idx    = self.indices[idx]
+
+        offset      = int(self._offsets[real_idx])
+        lengths     = self._lengths[real_idx]
+        keys        = self._keys[real_idx] if self.return_key else None
+
+        label = self._labels[real_idx]
+        
+        sample = {"label": label}
+        
+        ks = lengths
+        if self.max_instances:
+            ks = np.min(np.vstack((ks, [self.max_instances] * len(ks))), axis=0)
+
+        for (bin_name, bin_ind), k, length in zip(self.modality_inds.items(), list(ks), list(lengths)):
+            start = np.random.randint(0, length - k + 1) if k < length else 0
+            sample[bin_name] = np.array(self.data[offset + start : offset + start + k, :, bin_ind], copy=True)
+
+        for mod_name, mod_data in self.extras.items():
+            sample[mod_name] = mod_data[real_idx]
+
+        if self.return_key: sample['key'] = keys
+
+        return sample
 
 
 # =============================================================================
