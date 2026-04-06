@@ -24,7 +24,7 @@ def get_args_parser():
 
     parser.add_argument('--seed',               type=int,   default=0)
     
-    parser.add_argument('--model',              type=str,   default="conch")
+    parser.add_argument('--model',              type=str,   default="conch", choices=['conch', 'biomedclip'])
     
     parser.add_argument('--batch_size',         type=int,   default=12)
     parser.add_argument('--loss_fn',            type=str,   default="mse")

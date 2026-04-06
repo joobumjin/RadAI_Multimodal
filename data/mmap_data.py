@@ -186,7 +186,7 @@ class MemmapDatasetMultimodal(Dataset):
         label_dtype: Optional[np.dtype] = np.float32,
         index_filename: str = "index_arrays_labeled.npz",
         bin_path: str = "path_rad_embs.dat",
-        bin_modality_keys: Optional[List[str]] = [],
+        bin_modality_keys: Optional[List[str]] = ["path_lang", "rad_lang"],
         extra_modality_keys: Optional[List[str]] = [], #eg ['clinical']
     ):
         """
@@ -199,7 +199,7 @@ class MemmapDatasetMultimodal(Dataset):
             return_key: Whether to return slide ID with each sample
         """
 
-        bin_inds = {"path_text": 0, "rad_text": 1}
+        bin_inds = {"path_lang": 0, "rad_lang": 1}
 
         self.data_dir       = data_dir
         self.max_instances  = max_instances

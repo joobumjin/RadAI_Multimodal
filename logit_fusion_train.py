@@ -26,7 +26,8 @@ def get_args_parser():
       
     parser.add_argument('--batch_size',         type=int,   default=32)
     parser.add_argument('--loss_fn',            type=str,   default="bce")
-    parser.add_argument('--data_path',          type=str,   default="../lab_clinical")
+    parser.add_argument('--model',              type=str,   default="conch", choices=['conch', 'biomedclip'])
+    parser.add_argument('--data_path',          type=str,   default="../{model}_path_rad_text_embs")
     parser.add_argument('--epochs',             type=int,   default=200)
     parser.add_argument('--device',                         default='cuda')
     parser.add_argument('--float16',            type=bool,  default=True)
@@ -100,11 +101,11 @@ def get_fusion_model(args):
     encs = {}
     arg_dict = vars(args)
     for mod, get_enc_fn in zip(["clinical", "path_lang", "rad_lang", "path_img"],
-                               [get_clinical_encoder(args), get_path_lang_encoder(args), get_rad_lang_encoder(args), get_path_img_encoder(args)]):
+                               [get_clinical_encoder, get_path_lang_encoder, get_rad_lang_encoder, get_path_img_encoder]):
         if arg_dict.get(mod, False):
             enc = get_enc_fn(args)
             enc = enc.to(device)
-            encs[mod] = encs[mod].to(device)
+            encs[mod] = enc
 
     model = LogitFusion(encs, fusion_fn=fusers[args.fusion], loss_fn=losses[args.loss_fn])
     return model, device
@@ -203,8 +204,7 @@ def test(model: torch.nn.Module, data_loader: Iterable, device: str, args=None):
 def get_loaders(args):
     keys = ["slide_ids", "vital_status", "survival_months"]
 
-    index = np.load(f"{args.data_path}/lab_clin.npz", allow_pickle=True)
-    feats   = index['clinical']
+    index = np.load(f"{args.data_path}/index_arrays_labeled.npz", allow_pickle=True)
     labels  = index['death_indicator_2yr'].astype(np.float32)
     inds    = np.arange(len(labels))
     modalities = []
@@ -218,9 +218,9 @@ def get_loaders(args):
 
     label_mask = ~np.isnan(index[args.label_col])
     exclusion_mask = ~index["excluded"]
-    feat_mask = ~np.isnan(feats).any(axis=1)
-    feat_mask = np.prod(index['combined_lengths'][:, mod_inds], axis=1).astype(bool)
-    mask = label_mask & exclusion_mask & feat_mask
+    mask = label_mask & exclusion_mask
+    if args.clinical: mask = mask & ~np.isnan(index['clinical']).any(axis=1)
+    if args.path_lang or args.rad_lang: mask = mask & np.prod(index['combined_lengths'][:, mod_inds], axis=1).astype(bool)
     if "indicator" in args.label_col: 
         for key in keys:
             mask = mask & (~np.isnan(index[key]))
@@ -233,12 +233,11 @@ def get_loaders(args):
 
     dataset_args = {
         "data_dir": args.data_path,
-        "max_instances": args.max_instances,
         "return_key": True,
         "keys": ["slide_ids", "vital_status", "survival_months"],
         "label_column": "survival_months",
         "label_dtype": np.float32,
-        "bin_modality_keys": ["path_text", "rad_text"],
+        "bin_modality_keys": modalities,
         "extra_modality_keys": ['clinical']
     }
     loader_args = {
@@ -250,11 +249,18 @@ def get_loaders(args):
         "drop_last": False,
     }
 
-    train_set = MemmapDataset(indices=train_inds, **dataset_args)
+    train_set = MemmapDatasetMultimodal(indices=train_inds, **dataset_args)
     train_loader = DataLoader(train_set, shuffle=True, **loader_args)
 
-    test_set = MemmapDataset(indices=test_inds, **dataset_args)
+    test_set = MemmapDatasetMultimodal(indices=test_inds, **dataset_args)
     test_loader = DataLoader(test_set, shuffle=False, **loader_args)
+
+    print(f"Found: {len(valid_inds)} valid samples split into "
+        f"\n{len(train_set)} train samples, {len(train_loader)} batches and "
+        f"\n{len(test_set)} validation samples, {len(test_loader)} batches"
+        # f"\nTrain: under 5 year: {np.sum(index[args.label_col][train_inds] == 0)}, over 5 year: {np.sum(index[args.label_col][train_inds] == 1)}"
+        # f"\nTest: under 5 year: {np.sum(index[args.label_col][test_inds] == 0)}, over 5 year: {np.sum(index[args.label_col][test_inds] == 1)}"
+    )
 
     return train_loader, test_loader, num_train
 
@@ -268,56 +274,64 @@ def main(args):
 
     train_loader, test_loader, _ = get_loaders(args)
 
+    batch = next(iter(train_loader))
+    print(f"Batch Keys: {batch.keys()}")
+
     model, device = get_fusion_model(args)
+    for key in batch:
+        batch[key] = batch[key].to(device)
+    model(batch)
 
-    optimizer, scheduler = get_opt_and_sched(model, args, iter_per_epoch=len(train_loader))
+    # optimizer, scheduler = get_opt_and_sched(model, args, iter_per_epoch=len(train_loader))
 
-    if args.disable_wandb: run = None
-    else:
-        config = {
-            "Loss": args.loss_fn,
-            "Seed": args.seed,
-        }
+    # if args.disable_wandb: run = None
+    # else:
+    #     config = {
+    #         "Loss": args.loss_fn,
+    #         "Seed": args.seed,
+    #     }
 
-        run = wandb.init(
-            entity="bumjin_joo-brown-university", 
-            project=f"Panc MM 2yr Surv", 
-            name=f"Clinical + Lab - {args.label_col}", 
-            config=config
-        )
+    #     run = wandb.init(
+    #         entity="bumjin_joo-brown-university", 
+    #         project=f"Panc MM 2yr Surv", 
+    #         name=f"Clinical + Lab - {args.label_col}", 
+    #         config=config
+    #     )
 
-    print(f"Start training for {args.epochs} epochs")
-    pbar = trange(0, args.epochs, desc="Training Epochs", postfix={})
-    for e in pbar:
-        train_stats, train_tm = train_one_epoch(model, train_loader, optimizer, scheduler, device, args)
-        test_stats, test_tm = test(model, test_loader, device, args=args)
+    # print(f"Start training for {args.epochs} epochs")
+    # pbar = trange(0, args.epochs, desc="Training Epochs", postfix={})
+    # for e in pbar:
+    #     train_stats, train_tm = train_one_epoch(model, train_loader, optimizer, scheduler, device, args)
+    #     test_stats, test_tm = test(model, test_loader, device, args=args)
 
-        tm = {}
-        if len(train_tm) > 0:
-            if e == args.epochs - 1:
-                if run is not None: 
-                    fig, (ax1, ax2) = plt.subplots(1, 2)
-                    fig.suptitle('Train and Test ROC Curves')
-                    train_tm["Train ROC"].plot(ax=ax1)
-                    test_tm["Test ROC"].plot(ax=ax2)
-                    run.log({"ROC": fig})
-            del train_tm["Train ROC"], test_tm["Test ROC"]
+    #     tm = {}
+    #     if len(train_tm) > 0:
+    #         if e == args.epochs - 1:
+    #             if run is not None: 
+    #                 fig, (ax1, ax2) = plt.subplots(1, 2)
+    #                 fig.suptitle('Train and Test ROC Curves')
+    #                 train_tm["Train ROC"].plot(ax=ax1)
+    #                 test_tm["Test ROC"].plot(ax=ax2)
+    #                 run.log({"ROC": fig})
+    #         del train_tm["Train ROC"], test_tm["Test ROC"]
 
-            tm = {**train_tm, **test_tm}
-            tm = {name: obj.compute() for name, obj in tm.items()}
+    #         tm = {**train_tm, **test_tm}
+    #         tm = {name: obj.compute() for name, obj in tm.items()}
 
-        c_indices = {}
-        if "indicator" in args.label_col:
-            c_indices = calculate_c_indices(model, train_loader, test_loader, device)
+    #     c_indices = {}
+    #     if "indicator" in args.label_col:
+    #         c_indices = calculate_c_indices(model, train_loader, test_loader, device)
 
-        postfix = {**train_stats, **test_stats, **c_indices, **tm}
-        if run is not None: run.log(postfix)
-        pbar.set_postfix(postfix)
+    #     postfix = {**train_stats, **test_stats, **c_indices, **tm}
+    #     if run is not None: run.log(postfix)
+    #     pbar.set_postfix(postfix)
        
 
 if __name__ == '__main__':
     parser  = get_args_parser()
     args    = parser.parse_args()
+
+    args.data_path = args.data_path.format(model=args.model)
 
     if args.debug:
         args.epochs = 1

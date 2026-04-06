@@ -44,12 +44,12 @@ class LogitFusion(nn.Module):
         self.fusion_fn = fusion_fn(self.modality_order)
 
     def predict(self, x: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:            
-        logits = {modality: enc.pred(x[modality]) for modality, enc in self.encoders.items()}
+        logits = {modality: enc.predict(x[modality]) for modality, enc in self.encoders.items()}
         return self.fusion_fn(logits)
     
-    def forward(self, x: Dict[str, torch.Tensor], y: torch.Tensor) -> Dict[str, torch.Tensor]:
+    def forward(self, x: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
         preds = self.predict(x)
-        loss = self.loss_fn(preds, y)
+        loss = self.loss_fn(preds, x["label"])
         return loss, preds
 
 
