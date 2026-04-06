@@ -15,11 +15,11 @@ class Fuser(nn.Module, ABC):
 
 class NaiveSum(Fuser):
     def forward(self, x):
-        return torch.sum(torch.stack([x[mod] for mod in self.modalities]), axis=-1)
+        return torch.sum(torch.stack([x[mod] for mod in self.modalities]), axis=0)
     
 class NaiveAvg(Fuser):
     def forward(self, x):
-        return torch.sum(torch.stack([x[mod] for mod in self.modalities]), axis=-1) / len(x)
+        return torch.sum(torch.stack([x[mod] for mod in self.modalities]), axis=0) / len(x)
 
 class LearnedWeightSum(Fuser):
     def __init__(self, modalities: List[str]):
@@ -48,7 +48,7 @@ class LogitFusion(nn.Module):
     def predict(self, x: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:            
         logits = {}
         for modality, enc in self.encoders.items():
-            with torch.autocast(device_type=self.device, dtype=torch.float16, enabled=self.autocast):
+            with torch.autocast(device_type=self.device, dtype=torch.float16, enabled=self.autocast[modality]):
                 logits[modality] = enc.predict(x[modality])
 
         return self.fusion_fn(logits)

@@ -10,28 +10,30 @@ def calculate_c_indices(model: torch.nn.Module, train_loader, test_loader, devic
     train_preds, train_deaths, train_times = [], [], []
     test_preds, test_deaths, test_times = [], [], []
 
-    for (feats, _, keys) in train_loader:
-        keys = keys.numpy().astype(bool)
-        train_deaths.append(~keys[:, 1])
-        train_times.append(keys[:, 2])
+    for batch in train_loader:
+        vitals = batch["vital_status"].numpy().astype(bool)
+        times = batch["survival_months"].numpy()
+        train_deaths.append(~vitals)
+        train_times.append(times)
 
-        feats = feats.to(device)
+        for key in batch: batch[key] = batch[key].to(device)
         with torch.inference_mode():
-            preds = model.predict(h=feats)
+            preds = model.predict(batch)
 
             preds = preds.detach().squeeze(-1).cpu().numpy()
             train_preds.append(preds)
     
     train = [np.concatenate(l) for l in [train_deaths, train_times, train_preds]]
 
-    for (feats, _, keys) in test_loader:
-        keys = keys.numpy().astype(bool)
-        test_deaths.append(~keys[:, 1])
-        test_times.append(keys[:, 2])
+    for batch in test_loader:
+        vitals = batch["vital_status"].numpy().astype(bool)
+        times = batch["survival_months"].numpy()
+        test_deaths.append(~vitals)
+        test_times.append(times)
 
-        feats = feats.to(device)
+        for key in batch: batch[key] = batch[key].to(device)
         with torch.inference_mode():
-            preds = model.predict(h=feats)
+            preds = model.predict(batch)
 
             preds = preds.detach().squeeze(-1).cpu().numpy()
             test_preds.append(preds)

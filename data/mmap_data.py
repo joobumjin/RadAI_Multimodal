@@ -292,7 +292,7 @@ class MemmapDatasetMultimodal(Dataset):
         lengths     = self._lengths[real_idx]
         keys        = {key: self._keys[key][real_idx] for key in self._keys}
 
-        label = self._labels[real_idx]
+        label = self._labels[real_idx:real_idx+1]
         
         sample = {"label": label}
         

@@ -107,11 +107,13 @@ def get_fusion_model(args):
             enc = enc.to(device)
             encs[mod] = enc
 
-    model = LogitFusion(encs, casts, fusion_fn=fusers[args.fusion], loss_fn=losses[args.loss_fn])
+    model = LogitFusion(encs, casts, fusion_fn=fusers[args.fusion], loss_fn=losses[args.loss_fn], device=device)
     return model, device
 
 def get_opt_and_sched(model, args, iter_per_epoch = None):
-    optimizer = optim.AdamW({mod: enc.parameters() for mod, enc in model.encoders.items()}, lr=args.lr, betas=(0.9, 0.95))
+    optimizer = optim.AdamW([{"params": enc.parameters(), "lr": args.lr} for enc in model.encoders.values()], 
+                            lr=args.lr, 
+                            betas=(0.9, 0.95))
 
     #linear warmup
     wu_iters = args.warmup_epochs * iter_per_epoch if iter_per_epoch is not None else args.warmup_epochs
@@ -151,23 +153,22 @@ def train_one_epoch(model: torch.nn.Module,
 
     metrics, fns, torchmetrics = get_metrics("Train", args)
     
-    for (feats, labels, _) in train_loader:
-        feats = feats.to(device)
-        labels = labels.unsqueeze(-1)
-        labels = labels.to(device)
+    for batch in train_loader:
+        for key in batch:
+            batch[key] = batch[key].to(device)
 
-        loss, preds = model(h=feats, labels=labels)
+        loss, preds = model(batch)
 
         with torch.inference_mode():
             metrics["Train Loss"].update(loss.detach().item())
             metrics["lr"].update(optimizer.param_groups[0]["lr"])
             for name, fn in fns.items():
-                train_loss = fn(preds, labels)
+                train_loss = fn(preds, batch["label"])
                 metrics[name].update(train_loss.detach().item())
 
             preds = torch.sigmoid(preds)
             for obj in torchmetrics.values():
-                obj.update(preds.detach().squeeze(-1), labels.detach().int().squeeze(-1))
+                obj.update(preds.detach().squeeze(-1), batch["label"].detach().int().squeeze(-1))
 
         loss.backward()
         optimizer.step()
@@ -181,21 +182,15 @@ def test(model: torch.nn.Module, data_loader: Iterable, device: str, args=None):
 
     metrics, fns, torchmetrics = get_metrics("Test", args)
 
-    for (feats, labels, _) in data_loader:
-        feats = feats.to(device)
-        labels = labels.unsqueeze(-1)
-        labels = labels.to(device)
-        with torch.inference_mode():
-            with torch.autocast(device_type=device, dtype=torch.float16, enabled=args.float16):
-                preds = model.predict(h=feats)
+    for batch in data_loader:
+        for key in batch:
+            batch[key] = batch[key].to(device)
 
-            for (_, fn), (_, meter) in zip(fns.items(), metrics.items()):
-                metric = fn(preds, labels)
-                meter.update(metric.detach().item())
+        preds = model.predict(batch)
 
-            preds = torch.sigmoid(preds)
-            for obj in torchmetrics.values():
-                obj.update(preds.detach().squeeze(-1), labels.detach().int().squeeze(-1))
+        preds = torch.sigmoid(preds)
+        for obj in torchmetrics.values():
+            obj.update(preds.detach().squeeze(-1), batch["label"].detach().int().squeeze(-1))
 
     return {k: meter.avg for k, meter in metrics.items()}, torchmetrics
 
@@ -235,7 +230,7 @@ def get_loaders(args):
         "data_dir": args.data_path,
         "return_key": True,
         "keys": ["slide_ids", "vital_status", "survival_months"],
-        "label_column": "survival_months",
+        "label_column": args.label_col,
         "label_dtype": np.float32,
         "bin_modality_keys": modalities,
         "extra_modality_keys": ['clinical']
@@ -244,7 +239,7 @@ def get_loaders(args):
         "batch_size": args.batch_size,
         "pin_memory": args.pin_mem,
         "num_workers": args.num_workers,
-        "collate_fn": collate_tensors,
+        "collate_fn": default_collate,
         "persistent_workers": args.num_workers > 0,
         "drop_last": False,
     }
@@ -258,8 +253,8 @@ def get_loaders(args):
     print(f"Found: {len(valid_inds)} valid samples split into "
         f"\n{len(train_set)} train samples, {len(train_loader)} batches and "
         f"\n{len(test_set)} validation samples, {len(test_loader)} batches"
-        # f"\nTrain: under 5 year: {np.sum(index[args.label_col][train_inds] == 0)}, over 5 year: {np.sum(index[args.label_col][train_inds] == 1)}"
-        # f"\nTest: under 5 year: {np.sum(index[args.label_col][test_inds] == 0)}, over 5 year: {np.sum(index[args.label_col][test_inds] == 1)}"
+        f"\nTrain: under 2 year: {np.sum(index[args.label_col][train_inds] == 0)}, over 2 year: {np.sum(index[args.label_col][train_inds] == 1)}"
+        f"\nTest: under 2 year: {np.sum(index[args.label_col][test_inds] == 0)}, over 2 year: {np.sum(index[args.label_col][test_inds] == 1)}"
     )
 
     return train_loader, test_loader, num_train
@@ -274,57 +269,65 @@ def main(args):
 
     train_loader, test_loader, _ = get_loaders(args)
 
-    batch = next(iter(train_loader))
-    print(f"Batch Keys: {batch.keys()}")
-
     model, device = get_fusion_model(args)
-    for key in batch:
-        batch[key] = batch[key].to(device)
-    model(batch)
 
-    # optimizer, scheduler = get_opt_and_sched(model, args, iter_per_epoch=len(train_loader))
+    optimizer, scheduler = get_opt_and_sched(model, args, iter_per_epoch=len(train_loader))
 
-    # if args.disable_wandb: run = None
-    # else:
-    #     config = {
-    #         "Loss": args.loss_fn,
-    #         "Seed": args.seed,
-    #     }
+    if args.disable_wandb: run = None
+    else:
+        config = {
+            "Loss": args.loss_fn,
+            "Seed": args.seed,
+            "Clnical": args.clinical,
+            "Path Lang": args.path_lang,
+            "Rad Lang": args.rad_lang,
+            "Path Img": args.path_img,
+            "Fusion": args.fusion,
+            "Model": args.model,
+        }
 
-    #     run = wandb.init(
-    #         entity="bumjin_joo-brown-university", 
-    #         project=f"Panc MM 2yr Surv", 
-    #         name=f"Clinical + Lab - {args.label_col}", 
-    #         config=config
-    #     )
+        mods = []
+        if args.clinical: mods.append("Clinical")
+        if args.path_lang: mods.append("Path Lang")
+        if args.rad_lang: mods.append("Rad Lang")
+        if args.path_img: mods.append("Path Img")
 
-    # print(f"Start training for {args.epochs} epochs")
-    # pbar = trange(0, args.epochs, desc="Training Epochs", postfix={})
-    # for e in pbar:
-    #     train_stats, train_tm = train_one_epoch(model, train_loader, optimizer, scheduler, device, args)
-    #     test_stats, test_tm = test(model, test_loader, device, args=args)
+        name = "+".join(mods) + f" - {args.label_col} - {args.fusion} - {args.model}"
 
-    #     tm = {}
-    #     if len(train_tm) > 0:
-    #         if e == args.epochs - 1:
-    #             if run is not None: 
-    #                 fig, (ax1, ax2) = plt.subplots(1, 2)
-    #                 fig.suptitle('Train and Test ROC Curves')
-    #                 train_tm["Train ROC"].plot(ax=ax1)
-    #                 test_tm["Test ROC"].plot(ax=ax2)
-    #                 run.log({"ROC": fig})
-    #         del train_tm["Train ROC"], test_tm["Test ROC"]
+        run = wandb.init(
+            entity="bumjin_joo-brown-university", 
+            project=f"Panc MM Fusion", 
+            name=name,
+            config=config
+        )
 
-    #         tm = {**train_tm, **test_tm}
-    #         tm = {name: obj.compute() for name, obj in tm.items()}
+    print(f"Start training for {args.epochs} epochs")
+    pbar = trange(0, args.epochs, desc="Training Epochs", postfix={})
+    for e in pbar:
+        train_stats, train_tm = train_one_epoch(model, train_loader, optimizer, scheduler, device, args)
+        test_stats, test_tm = test(model, test_loader, device, args=args)
 
-    #     c_indices = {}
-    #     if "indicator" in args.label_col:
-    #         c_indices = calculate_c_indices(model, train_loader, test_loader, device)
+        tm = {}
+        if len(train_tm) > 0:
+            if e == args.epochs - 1:
+                if run is not None: 
+                    fig, (ax1, ax2) = plt.subplots(1, 2)
+                    fig.suptitle('Train and Test ROC Curves')
+                    train_tm["Train ROC"].plot(ax=ax1)
+                    test_tm["Test ROC"].plot(ax=ax2)
+                    run.log({"ROC": fig})
+            del train_tm["Train ROC"], test_tm["Test ROC"]
 
-    #     postfix = {**train_stats, **test_stats, **c_indices, **tm}
-    #     if run is not None: run.log(postfix)
-    #     pbar.set_postfix(postfix)
+            tm = {**train_tm, **test_tm}
+            tm = {name: obj.compute() for name, obj in tm.items()}
+
+        c_indices = {}
+        if "indicator" in args.label_col:
+            c_indices = calculate_c_indices(model, train_loader, test_loader, device)
+
+        postfix = {**train_stats, **test_stats, **c_indices, **tm}
+        if run is not None: run.log(postfix)
+        pbar.set_postfix(postfix)
        
 
 if __name__ == '__main__':
