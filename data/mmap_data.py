@@ -180,8 +180,8 @@ class MemmapDatasetMultimodal(Dataset):
         data_dir: str,
         indices: Optional[List[int]] = None,
         max_instances: Optional[int] = None,
-        keys: Optional[List[str]] = None,
         return_key: bool = False,
+        keys: Optional[List[str]] = None,
         label_column: Optional[str] = None,
         label_dtype: Optional[np.dtype] = np.float32,
         index_filename: str = "index_arrays_labeled.npz",
@@ -220,10 +220,9 @@ class MemmapDatasetMultimodal(Dataset):
         self._labels    = index[label_column].astype(label_dtype) if label_column is not None else None
 
         #handle keys
-        keys = [index[col].tolist() for col in keys] if self.return_key and keys is not None else None
         self._keys = None
         if self.return_key:
-            self._keys = [key_tuple for key_tuple in zip(*keys)] if keys is not None else self._slide_ids
+            self._keys = {col: index[col] for col in keys} if keys is not None else {'slide_ids': self._slide_ids}
 
         self.extras = {key: index[key] for key in extra_modality_keys} if extra_modality_keys is not None else {}
 
