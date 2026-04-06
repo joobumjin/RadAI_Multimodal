@@ -212,6 +212,7 @@ class MemmapDatasetMultimodal(Dataset):
             raise FileNotFoundError(f"Index file not found: {index_path}")
         
         index = np.load(index_path, allow_pickle=True)
+        # print(f"Index Files: {list(index.keys())}")
         
         self._offsets   = index['offsets']
         self._slide_ids = index['slide_ids']
@@ -289,7 +290,7 @@ class MemmapDatasetMultimodal(Dataset):
 
         offset      = int(self._offsets[real_idx])
         lengths     = self._lengths[real_idx]
-        keys        = self._keys[real_idx] if self.return_key else None
+        keys        = {key: self._keys[key][real_idx] for key in self._keys}
 
         label = self._labels[real_idx]
         
@@ -301,12 +302,12 @@ class MemmapDatasetMultimodal(Dataset):
 
         for (bin_name, bin_ind), k, length in zip(self.modality_inds.items(), list(ks), list(lengths)):
             start = np.random.randint(0, length - k + 1) if k < length else 0
-            sample[bin_name] = np.array(self.data[offset + start : offset + start + k, :, bin_ind], copy=True)
+            sample[bin_name] = np.array(self.data[offset + start : offset + start + k, :, bin_ind], copy=True).squeeze(0)
 
         for mod_name, mod_data in self.extras.items():
             sample[mod_name] = mod_data[real_idx]
-
-        if self.return_key: sample['key'] = keys
+        
+        if self.return_key: sample = {**sample, **keys}
 
         return sample
 
