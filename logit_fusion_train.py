@@ -68,19 +68,19 @@ def get_args_parser():
 def get_clinical_encoder(args):
     hidden_dims = [64, 16]
     clin_enc = LinearModel(hidden_dims = hidden_dims, loss_fn=None)
-    return clin_enc
+    return clin_enc, False
 
 def get_path_lang_encoder(args):
     path_lang_enc = EmbPred(loss_fn=None)
-    return path_lang_enc
+    return path_lang_enc, True
 
 def get_rad_lang_encoder(args):
     rad_lang_enc = EmbPred(loss_fn=None)
-    return rad_lang_enc
+    return rad_lang_enc, True
 
 def get_path_img_encoder(args):
     mil = EmbMIL(loss_fn=None)
-    return mil
+    return mil, True
 
 def get_fusion_model(args):
     device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -98,16 +98,16 @@ def get_fusion_model(args):
         "bce": F.binary_cross_entropy_with_logits,
     }
 
-    encs = {}
+    encs, casts = {}, {}
     arg_dict = vars(args)
     for mod, get_enc_fn in zip(["clinical", "path_lang", "rad_lang", "path_img"],
                                [get_clinical_encoder, get_path_lang_encoder, get_rad_lang_encoder, get_path_img_encoder]):
         if arg_dict.get(mod, False):
-            enc = get_enc_fn(args)
+            enc, casts[mod] = get_enc_fn(args)
             enc = enc.to(device)
             encs[mod] = enc
 
-    model = LogitFusion(encs, fusion_fn=fusers[args.fusion], loss_fn=losses[args.loss_fn])
+    model = LogitFusion(encs, casts, fusion_fn=fusers[args.fusion], loss_fn=losses[args.loss_fn])
     return model, device
 
 def get_opt_and_sched(model, args, iter_per_epoch = None):

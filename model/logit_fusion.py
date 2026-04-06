@@ -35,16 +35,22 @@ class LogitFusion(nn.Module):
     """
     Logit-level fusion using an nn.Module 
     """
-    def __init__(self, encoders: Dict[str, nn.Module], fusion_fn: Fuser, loss_fn: nn.Module):
+    def __init__(self, encoders: Dict[str, nn.Module], autocast: Dict[str, bool], fusion_fn: Fuser, loss_fn: nn.Module, device: str):
         super().__init__()
 
         self.encoders = encoders
+        self.autocast = autocast
+        self.device = device
         self.loss_fn = loss_fn
         self.modality_order = list(encoders.keys())
         self.fusion_fn = fusion_fn(self.modality_order)
 
     def predict(self, x: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:            
-        logits = {modality: enc.predict(x[modality]) for modality, enc in self.encoders.items()}
+        logits = {}
+        for modality, enc in self.encoders.items():
+            with torch.autocast(device_type=self.device, dtype=torch.float16, enabled=self.autocast):
+                logits[modality] = enc.predict(x[modality])
+
         return self.fusion_fn(logits)
     
     def forward(self, x: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
