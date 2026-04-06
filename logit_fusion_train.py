@@ -204,15 +204,22 @@ def get_loaders(args):
     keys = ["slide_ids", "vital_status", "survival_months"]
 
     index = np.load(f"{args.data_path}/lab_clin.npz", allow_pickle=True)
-
-    feats   = index['feats']
+    feats   = index['clinical']
     labels  = index['death_indicator_2yr'].astype(np.float32)
-    key_arr = np.hstack([index[key][:, None] for key in keys])
     inds    = np.arange(len(labels))
+    modalities = []
+    mod_inds = []
+    if args.path_lang: 
+        modalities.append("path_lang")
+        mod_inds.append(0)
+    if args.rad_lang: 
+        modalities.append("rad_lang")
+        mod_inds.append(1)
 
     label_mask = ~np.isnan(index[args.label_col])
     exclusion_mask = ~index["excluded"]
     feat_mask = ~np.isnan(feats).any(axis=1)
+    feat_mask = np.prod(index['combined_lengths'][:, mod_inds], axis=1).astype(bool)
     mask = label_mask & exclusion_mask & feat_mask
     if "indicator" in args.label_col: 
         for key in keys:
@@ -220,40 +227,34 @@ def get_loaders(args):
 
     valid_inds = inds[mask]
     num_train = int(len(valid_inds) * args.train_split)
-    num_valid = len(valid_inds) - num_train
     
     np.random.shuffle(valid_inds)
     train_inds, test_inds = valid_inds[:num_train], valid_inds[num_train:]
 
-    train_feats, test_feats = feats[train_inds], feats[test_inds]
-    train_feats, test_feats = torch.from_numpy(train_feats), torch.from_numpy(test_feats)
-
-    train_labels, test_labels = labels[train_inds], labels[test_inds]
-    train_labels, test_labels = torch.from_numpy(train_labels), torch.from_numpy(test_labels)
-
-    train_keys, test_keys = key_arr[train_inds], key_arr[test_inds]
-    train_keys, test_keys = torch.from_numpy(train_keys), torch.from_numpy(test_keys)
-
-    train_set = TensorDataset(train_feats, train_labels, train_keys)
-    test_set = TensorDataset(test_feats, test_labels, test_keys)
-
+    dataset_args = {
+        "data_dir": args.data_path,
+        "max_instances": args.max_instances,
+        "return_key": True,
+        "keys": ["slide_ids", "vital_status", "survival_months"],
+        "label_column": "survival_months",
+        "label_dtype": np.float32,
+        "bin_modality_keys": ["path_text", "rad_text"],
+        "extra_modality_keys": ['clinical']
+    }
     loader_args = {
         "batch_size": args.batch_size,
         "pin_memory": args.pin_mem,
         "num_workers": args.num_workers,
+        "collate_fn": collate_tensors,
         "persistent_workers": args.num_workers > 0,
         "drop_last": False,
     }
 
+    train_set = MemmapDataset(indices=train_inds, **dataset_args)
     train_loader = DataLoader(train_set, shuffle=True, **loader_args)
-    test_loader = DataLoader(test_set, shuffle=False, **loader_args)
 
-    print(f"Found: {len(valid_inds)} valid samples split into "
-        f"\n{num_train} train samples, {len(train_loader)} batches and "
-        f"\n{num_valid} validation samples, {len(test_loader)} batches"
-        f"\nTrain: under 2 year: {torch.sum(train_labels == 0)}, over 2 year: {torch.sum(train_labels == 1)}"
-        f"\nTest: under 2 year: {torch.sum(test_labels == 0)}, over 2 year: {torch.sum(test_labels == 1)}"
-    )
+    test_set = MemmapDataset(indices=test_inds, **dataset_args)
+    test_loader = DataLoader(test_set, shuffle=False, **loader_args)
 
     return train_loader, test_loader, num_train
 
