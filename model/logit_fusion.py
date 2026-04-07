@@ -28,7 +28,7 @@ class LearnedWeightSum(Fuser):
 
     def forward(self, x: Dict[str, torch.Tensor]) -> torch.Tensor:
         x = torch.stack([x[mod] for mod in self.modalities]).T
-        return self.weights(x) #kind of a crude way to do it
+        return self.weights(x).squeeze(axis=-1) #kind of a crude way to do it
     
 
 class LogitFusion(nn.Module):

@@ -88,7 +88,7 @@ def get_fusion_model(args):
     fusers = {
         "naive_sum": NaiveSum,
         "naive_avg": NaiveAvg,
-        "weight_sum": LearnedWeightSum
+        "weighted_sum": LearnedWeightSum
     }
 
     losses = {
@@ -163,8 +163,8 @@ def train_one_epoch(model: torch.nn.Module,
             metrics["Train Loss"].update(loss.detach().item())
             metrics["lr"].update(optimizer.param_groups[0]["lr"])
             for name, fn in fns.items():
-                train_loss = fn(preds, batch["label"])
-                metrics[name].update(train_loss.detach().item())
+                metric_val = fn(preds, batch["label"])
+                metrics[name].update(metric_val.detach().item())
 
             preds = torch.sigmoid(preds)
             for obj in torchmetrics.values():
@@ -186,11 +186,16 @@ def test(model: torch.nn.Module, data_loader: Iterable, device: str, args=None):
         for key in batch:
             batch[key] = batch[key].to(device)
 
-        preds = model.predict(batch)
+        with torch.inference_mode():
+            loss, preds = model(batch)
+            metrics["Test Loss"].update(loss.detach().item())
+            for name, fn in fns.items():
+                metric_val = fn(preds, batch["label"])
+                metrics[name].update(metric_val.detach().item())
 
-        preds = torch.sigmoid(preds)
-        for obj in torchmetrics.values():
-            obj.update(preds.detach().squeeze(-1), batch["label"].detach().int().squeeze(-1))
+            preds = torch.sigmoid(preds)
+            for obj in torchmetrics.values():
+                obj.update(preds.detach().squeeze(-1), batch["label"].detach().int().squeeze(-1))
 
     return {k: meter.avg for k, meter in metrics.items()}, torchmetrics
 

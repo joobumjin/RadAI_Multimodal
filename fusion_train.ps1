@@ -11,6 +11,7 @@ foreach ($model in $models) {
     python .\logit_fusion_train.py --model $model --clinical  --label_col $target --loss_fn $loss
 }
 
+
 foreach ($model in $models) {
     foreach ($fusion in $fusions) {
         python .\logit_fusion_train.py --model $model --clinical --path_lang --fusion $fusion --label_col $target --loss_fn $loss
