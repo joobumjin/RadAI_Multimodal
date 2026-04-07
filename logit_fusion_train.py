@@ -90,6 +90,7 @@ def get_fusion_model(args):
         "naive_avg": NaiveAvg,
         "weighted_sum": LearnedWeightSum
     }
+    fusion_fn = fusers[args.fusion]
 
     losses = {
         "l1": F.l1_loss,
@@ -102,12 +103,10 @@ def get_fusion_model(args):
     arg_dict = vars(args)
     for mod, get_enc_fn in zip(["clinical", "path_lang", "rad_lang", "path_img"],
                                [get_clinical_encoder, get_path_lang_encoder, get_rad_lang_encoder, get_path_img_encoder]):
-        if arg_dict.get(mod, False):
-            enc, casts[mod] = get_enc_fn(args)
-            enc = enc.to(device)
-            encs[mod] = enc
+        if arg_dict.get(mod, False): 
+            encs[mod], casts[mod] = get_enc_fn(args)
 
-    model = LogitFusion(encs, casts, fusion_fn=fusers[args.fusion], loss_fn=losses[args.loss_fn], device=device)
+    model = LogitFusion(encs, casts, fusion_fn=fusion_fn, loss_fn=losses[args.loss_fn], device=device)
     return model, device
 
 def get_opt_and_sched(model, args, iter_per_epoch = None):
@@ -283,7 +282,7 @@ def main(args):
         config = {
             "Loss": args.loss_fn,
             "Seed": args.seed,
-            "Clnical": args.clinical,
+            "Clinical": args.clinical,
             "Path Lang": args.path_lang,
             "Rad Lang": args.rad_lang,
             "Path Img": args.path_img,
@@ -301,7 +300,7 @@ def main(args):
 
         run = wandb.init(
             entity="bumjin_joo-brown-university", 
-            project=f"Panc MM Fusion", 
+            project=f"Panc MM Logit Fusion", 
             name=name,
             config=config
         )
