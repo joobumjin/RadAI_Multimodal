@@ -1,6 +1,6 @@
 $models = "conch", "biomedclip"
-# $fusions = "naive_sum", "naive_avg", "weighted_sum"
-$fusions = "weighted_sum"
+$fusions = "naive_sum", "naive_avg", "weighted_sum"
+# $fusions = "weighted_sum"
 $target = "death_indicator_2yr"
 $loss = "bce"
 

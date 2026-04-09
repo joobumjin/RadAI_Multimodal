@@ -67,7 +67,7 @@ def get_args_parser():
 
 def get_clinical_encoder(args):
     hidden_dims = [64, 16]
-    clin_enc = LinearModel(hidden_dims = hidden_dims, loss_fn=None)
+    clin_enc = LinearModel(input_dim=24, hidden_dims = hidden_dims, loss_fn=None)
     return clin_enc, False
 
 def get_path_lang_encoder(args):
@@ -300,7 +300,7 @@ def main(args):
 
         run = wandb.init(
             entity="bumjin_joo-brown-university", 
-            project=f"Panc MM Logit Fusion", 
+            project=f"Panc MM Logit Fusion w Stage", 
             name=name,
             config=config
         )
