@@ -69,7 +69,7 @@ def get_args_parser():
 
 def get_clinical_encoder(args):
     hidden_dims = [64, 16]
-    clin_enc = LinearModel(input_dim=24, hidden_dims = hidden_dims, loss_fn=None, batch_norm=True)
+    clin_enc = LinearModel(input_dim=24, hidden_dims = hidden_dims, loss_fn=None, layer_norm=True)
     return clin_enc, False
 
 def get_path_lang_encoder(args):
@@ -293,6 +293,7 @@ def main(args):
             "Path Img": args.path_img,
             "Fusion": args.fusion,
             "Model": args.model,
+            "MLP Norm": "Layer Norm",
         }
 
         mods = []
