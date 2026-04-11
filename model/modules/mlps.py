@@ -11,6 +11,7 @@ def create_mlp(
         end_with_dropout=False,
         bias=True,
         batch_norm=False,
+        layer_norm=False,
     ):
 
     layers = []
@@ -18,6 +19,7 @@ def create_mlp(
     for hid_dim in hid_dims:
         layers.append(nn.Linear(in_dim, hid_dim, bias=bias))
         if batch_norm: layers.append(nn.BatchNorm1d(hid_dim))
+        if layer_norm: layers.append(nn.LayerNorm(hid_dim))
         layers.append(act)
         layers.append(nn.Dropout(dropout))
         in_dim = hid_dim

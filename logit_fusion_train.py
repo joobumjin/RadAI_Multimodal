@@ -31,6 +31,8 @@ def get_args_parser():
     parser.add_argument('--epochs',             type=int,   default=200)
     parser.add_argument('--device',                         default='cuda')
     parser.add_argument('--float16',            type=bool,  default=True)
+    parser.add_argument('--early_stop',         type=bool,  default=True)
+    parser.add_argument('--patience',           type=int,   default=5)
 
     parser.add_argument('--clinical',           action="store_true")
     parser.add_argument('--path_lang',          action="store_true")
@@ -67,7 +69,7 @@ def get_args_parser():
 
 def get_clinical_encoder(args):
     hidden_dims = [64, 16]
-    clin_enc = LinearModel(input_dim=24, hidden_dims = hidden_dims, loss_fn=None)
+    clin_enc = LinearModel(input_dim=24, hidden_dims = hidden_dims, loss_fn=None, batch_norm=True)
     return clin_enc, False
 
 def get_path_lang_encoder(args):
@@ -277,6 +279,9 @@ def main(args):
 
     optimizer, scheduler = get_opt_and_sched(model, args, iter_per_epoch=len(train_loader))
 
+    early_stopper = EarlyStopper(args.patience, False) if args.early_stop else None
+    stop_metric = "Test C-Index"
+
     if args.disable_wandb: run = None
     else:
         config = {
@@ -332,6 +337,10 @@ def main(args):
         postfix = {**train_stats, **test_stats, **c_indices, **tm}
         if run is not None: run.log(postfix)
         pbar.set_postfix(postfix)
+
+        if early_stopper is not None and early_stopper.update(postfix[stop_metric]): 
+            print("Early stopping triggered!")
+            return
        
 
 if __name__ == '__main__':
