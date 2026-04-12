@@ -25,6 +25,8 @@ def create_mlp(
         in_dim = hid_dim
 
     layers.append(nn.Linear(in_dim, out_dim))
+    # if batch_norm: layers.append(nn.BatchNorm1d(out_dim))
+    # if layer_norm: layers.append(nn.LayerNorm(out_dim))
 
     if not end_with_fc:
         layers.append(act)

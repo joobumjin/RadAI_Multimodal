@@ -67,15 +67,15 @@ def get_args_parser():
 # --------------------------------------------------------
 
 def get_clinical_encoder(args):
-    clin_enc = create_mlp(24, [256, 256], args.emb_dim, act = nn.GELU(), dropout = 0.3, layer_norm = True)
+    clin_enc = create_mlp(24, [128], args.emb_dim, act = nn.GELU(), dropout = 0.3, layer_norm = True)
     return clin_enc, False
 
 def get_path_lang_encoder(args):
-    path_lang_enc = create_mlp(512, [256, 256], args.emb_dim, act = nn.GELU(), dropout = 0.3, layer_norm = True)
+    path_lang_enc = create_mlp(512, [256], args.emb_dim, act = nn.GELU(), dropout = 0.3, layer_norm = True)
     return path_lang_enc, True
 
 def get_rad_lang_encoder(args):
-    rad_lang_enc = create_mlp(512, [256, 256], args.emb_dim, act = nn.GELU(), dropout = 0.3, layer_norm = True)
+    rad_lang_enc = create_mlp(512, [256], args.emb_dim, act = nn.GELU(), dropout = 0.3, layer_norm = True)
     return rad_lang_enc, True
 
 def get_path_img_encoder(args):
@@ -99,7 +99,7 @@ def get_fusion_model(args):
         if arg_dict.get(mod, False): 
             encs[mod], casts[mod] = get_enc_fn(args)
 
-    model = DenseFusion(encs, emb_dim=args.emb_dim, hidden_dims=[64], autocast=casts, loss_fn=losses[args.loss_fn], device=device)
+    model = DenseFusion(encs, emb_dim=args.emb_dim, hidden_dims=[32], autocast=casts, loss_fn=losses[args.loss_fn], device=device)
     return model, device
 
 # --------------------------------------------------------
@@ -137,7 +137,7 @@ def train_one_epoch(model: torch.nn.Module,
 
         with torch.inference_mode():
             metrics["Train Loss"].update(loss.detach().item())
-            metrics["lr"].update(optimizer.param_groups[0]["lr"] * 1000.0)
+            metrics["lr"].update(optimizer.param_groups[0]["lr"] * 10000000.0)
             for name, fn in fns.items():
                 metric_val = fn(preds, batch["label"])
                 metrics[name].update(metric_val.detach().item())
@@ -277,7 +277,7 @@ def main(args):
         if args.rad_lang: mods.append("Rad Lang")
         if args.path_img: mods.append("Path Img")
 
-        name = "+".join(mods) + f" - {args.label_col} - {args.model}"
+        name = "+".join(mods) + f"- small - {args.label_col} - {args.model}"
 
         run = wandb.init(
             entity="bumjin_joo-brown-university", 
@@ -326,7 +326,7 @@ if __name__ == '__main__':
     args.data_path = args.data_path.format(model=args.model)
 
     if args.debug:
-        args.epochs = 1
+        args.epochs = 200
         args.disable_wandb = True
 
     main(args)
