@@ -137,7 +137,7 @@ def train_one_epoch(model: torch.nn.Module,
 
         with torch.inference_mode():
             metrics["Train Loss"].update(loss.detach().item())
-            metrics["lr"].update(optimizer.param_groups[0]["lr"] * 1000.0 / 1000.0)
+            metrics["lr"].update(optimizer.param_groups[0]["lr"] * 1000.0)
             for name, fn in fns.items():
                 metric_val = fn(preds, batch["label"])
                 metrics[name].update(metric_val.detach().item())
@@ -277,7 +277,7 @@ def main(args):
         if args.rad_lang: mods.append("Rad Lang")
         if args.path_img: mods.append("Path Img")
 
-        name = "+".join(mods) + f" - {args.label_col} - {args.fusion} - {args.model}"
+        name = "+".join(mods) + f" - {args.label_col} - {args.model}"
 
         run = wandb.init(
             entity="bumjin_joo-brown-university", 

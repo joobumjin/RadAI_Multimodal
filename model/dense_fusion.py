@@ -28,7 +28,7 @@ class DenseFusion(nn.Module):
             with torch.autocast(device_type=self.device, dtype=torch.float16, enabled=self.autocast[modality]):
                 logits[modality] = enc(x[modality]).float()
         
-        catted = torch.cat([logits[mod] for mod in self.modalities], dim=1)
+        catted = torch.cat([logits[mod] for mod in self.modality_order], dim=1)
         return self.pred.predict(catted)
     
     def forward(self, x: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
