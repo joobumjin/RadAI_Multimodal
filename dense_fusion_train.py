@@ -11,12 +11,11 @@ from torch import nn
 from torch.utils.data import TensorDataset, DataLoader
 from torch.nn import functional as F
 from torch import optim
-from torch.optim.lr_scheduler import SequentialLR, LinearLR, CosineAnnealingLR
 
 from torchmetrics import ROC, AUROC
 
 from data import *
-from model import LinearModel, EmbPred, EmbMIL, LogitFusion, NaiveSum, NaiveAvg, LearnedWeightSum
+from model import create_mlp, EmbMIL, DenseFusion
 from util import *
 
 def get_args_parser():
@@ -38,7 +37,7 @@ def get_args_parser():
     parser.add_argument('--path_lang',          action="store_true")
     parser.add_argument('--rad_lang',           action="store_true")
     parser.add_argument('--path_img',           action="store_true")
-    parser.add_argument('--fusion',             type=str,   default="naive_sum", choices=["naive_sum", "naive_avg", "weighted_sum"])
+    parser.add_argument('--emb_dim',            type=int,   default=128)
     
     parser.add_argument('--prefetch_factor',    type=int,   default=2)
     parser.add_argument('--num_workers',        type=int,   default=1)
@@ -68,16 +67,15 @@ def get_args_parser():
 # --------------------------------------------------------
 
 def get_clinical_encoder(args):
-    hidden_dims = [64, 16]
-    clin_enc = LinearModel(input_dim=24, hidden_dims = hidden_dims, loss_fn=None, layer_norm=True)
+    clin_enc = create_mlp(24, [256, 256], args.emb_dim, act = nn.GELU(), dropout = 0.3, layer_norm = True)
     return clin_enc, False
 
 def get_path_lang_encoder(args):
-    path_lang_enc = EmbPred(loss_fn=None)
+    path_lang_enc = create_mlp(512, [256, 256], args.emb_dim, act = nn.GELU(), dropout = 0.3, layer_norm = True)
     return path_lang_enc, True
 
 def get_rad_lang_encoder(args):
-    rad_lang_enc = EmbPred(loss_fn=None)
+    rad_lang_enc = create_mlp(512, [256, 256], args.emb_dim, act = nn.GELU(), dropout = 0.3, layer_norm = True)
     return rad_lang_enc, True
 
 def get_path_img_encoder(args):
@@ -86,13 +84,6 @@ def get_path_img_encoder(args):
 
 def get_fusion_model(args):
     device = "cuda" if torch.cuda.is_available() else "cpu"
-
-    fusers = {
-        "naive_sum": NaiveSum,
-        "naive_avg": NaiveAvg,
-        "weighted_sum": LearnedWeightSum
-    }
-    fusion_fn = fusers[args.fusion]
 
     losses = {
         "l1": F.l1_loss,
@@ -108,7 +99,7 @@ def get_fusion_model(args):
         if arg_dict.get(mod, False): 
             encs[mod], casts[mod] = get_enc_fn(args)
 
-    model = LogitFusion(encs, casts, fusion_fn=fusion_fn, loss_fn=losses[args.loss_fn], device=device)
+    model = DenseFusion(encs, emb_dim=args.emb_dim, hidden_dims=[64], autocast=casts, loss_fn=losses[args.loss_fn], device=device)
     return model, device
 
 # --------------------------------------------------------
@@ -146,7 +137,7 @@ def train_one_epoch(model: torch.nn.Module,
 
         with torch.inference_mode():
             metrics["Train Loss"].update(loss.detach().item())
-            metrics["lr"].update(optimizer.param_groups[0]["lr"])
+            metrics["lr"].update(optimizer.param_groups[0]["lr"] * 1000.0 / 1000.0)
             for name, fn in fns.items():
                 metric_val = fn(preds, batch["label"])
                 metrics[name].update(metric_val.detach().item())
@@ -275,7 +266,7 @@ def main(args):
             "Path Lang": args.path_lang,
             "Rad Lang": args.rad_lang,
             "Path Img": args.path_img,
-            "Fusion": args.fusion,
+            "Fusion": "Dense",
             "Model": args.model,
             "MLP Norm": "Layer Norm",
         }
@@ -290,7 +281,7 @@ def main(args):
 
         run = wandb.init(
             entity="bumjin_joo-brown-university", 
-            project=f"Panc MM Logit Fusion w Stage", 
+            project=f"Panc MM Concat Fusion w Stage", 
             name=name,
             config=config
         )
