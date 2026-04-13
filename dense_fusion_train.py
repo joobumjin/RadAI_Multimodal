@@ -37,7 +37,7 @@ def get_args_parser():
     parser.add_argument('--path_lang',          action="store_true")
     parser.add_argument('--rad_lang',           action="store_true")
     parser.add_argument('--path_img',           action="store_true")
-    parser.add_argument('--emb_dim',            type=int,   default=128)
+    parser.add_argument('--emb_dim',            type=int,   default=64)
     
     parser.add_argument('--prefetch_factor',    type=int,   default=2)
     parser.add_argument('--num_workers',        type=int,   default=1)
@@ -67,15 +67,18 @@ def get_args_parser():
 # --------------------------------------------------------
 
 def get_clinical_encoder(args):
+    # clin_enc = create_mlp(24, [128], args.emb_dim, act = nn.GELU(), dropout = 0.3, layer_norm = True)
     clin_enc = create_mlp(24, [128], args.emb_dim, act = nn.GELU(), dropout = 0.3, layer_norm = True)
     return clin_enc, False
 
 def get_path_lang_encoder(args):
-    path_lang_enc = create_mlp(512, [256], args.emb_dim, act = nn.GELU(), dropout = 0.3, layer_norm = True)
+    # path_lang_enc = create_mlp(512, [128], args.emb_dim, act = nn.GELU(), dropout = 0.3, layer_norm = True)
+    path_lang_enc = create_mlp(512, [128], args.emb_dim, act = nn.GELU(), dropout = 0.3, layer_norm = True)
     return path_lang_enc, True
 
 def get_rad_lang_encoder(args):
-    rad_lang_enc = create_mlp(512, [256], args.emb_dim, act = nn.GELU(), dropout = 0.3, layer_norm = True)
+    # rad_lang_enc = create_mlp(512, [128], args.emb_dim, act = nn.GELU(), dropout = 0.3, layer_norm = True)
+    rad_lang_enc = create_mlp(512, [128], args.emb_dim, act = nn.GELU(), dropout = 0.3, layer_norm = True)
     return rad_lang_enc, True
 
 def get_path_img_encoder(args):
@@ -234,8 +237,8 @@ def get_loaders(args):
     print(f"Found: {len(valid_inds)} valid samples split into "
         f"\n{len(train_set)} train samples, {len(train_loader)} batches and "
         f"\n{len(test_set)} validation samples, {len(test_loader)} batches"
-        f"\nTrain: under 2 year: {np.sum(index[args.label_col][train_inds] == 0)}, over 2 year: {np.sum(index[args.label_col][train_inds] == 1)}"
-        f"\nTest: under 2 year: {np.sum(index[args.label_col][test_inds] == 0)}, over 2 year: {np.sum(index[args.label_col][test_inds] == 1)}"
+        f"\nTrain: under 2 year: {np.sum(index[args.label_col][train_inds] == 1)}, over 2 year: {np.sum(index[args.label_col][train_inds] == 0)}"
+        f"\nTest: under 2 year: {np.sum(index[args.label_col][test_inds] == 1)}, over 2 year: {np.sum(index[args.label_col][test_inds] == 0)}"
     )
 
     return train_loader, test_loader, num_train
@@ -277,7 +280,7 @@ def main(args):
         if args.rad_lang: mods.append("Rad Lang")
         if args.path_img: mods.append("Path Img")
 
-        name = "+".join(mods) + f"- small - {args.label_col} - {args.model}"
+        name = "+".join(mods) + f" - smaller, 64e - {args.label_col} - {args.model}"
 
         run = wandb.init(
             entity="bumjin_joo-brown-university", 
