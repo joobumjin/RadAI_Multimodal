@@ -285,7 +285,7 @@ def main(args):
 
         run = wandb.init(
             entity="bumjin_joo-brown-university", 
-            project=f"Panc MM Concat Fusion w Stage", 
+            project=f"Panc MM Cleanup Concat Fusion w Stage", 
             name=name,
             config=config
         )
