@@ -175,7 +175,8 @@ def get_loaders(args):
 def get_metrics(split: str, args):
     bool_var = "indicator" in args.label_col
 
-    metrics = {f"{split} Loss": AverageMeter(), "lr": AverageMeter()}
+    metrics = {f"{split} Loss": AverageMeter()}
+    if split == "Train": metrics["lr"] = AverageMeter()
     fns = {"Acc": lambda p, l: acc(torch.sigmoid(p) > 0.5, l)} if bool_var else {"MSE": F.mse_loss, "L1": F.l1_loss, "2yr Acc": lambda p, l: acc(p > 24, l > 24)}
     fns = {f"{split} {name}": fn for name, fn in fns.items()}
     test_metrics = {f"{name}": AverageMeter() for name in fns}
@@ -205,8 +206,7 @@ def train_one_epoch(model: torch.nn.Module,
 
         with torch.inference_mode():
             metrics["Train Loss"].update(loss.detach().item())
-            metrics["lr"].update(optimizer.param_groups[0]["lr"] * 10000000.0)
-            print(metrics["lr"].avg)
+            metrics["lr"].update(optimizer.param_groups[0]["lr"])
             for name, fn in fns.items():
                 metric_val = fn(preds, batch["label"])
                 metrics[name].update(metric_val.detach().item())
