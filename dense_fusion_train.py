@@ -82,7 +82,7 @@ def get_rad_lang_encoder(args):
     return rad_lang_enc, True
 
 def get_path_img_encoder(args):
-    mil = EmbMIL(loss_fn=None)
+    mil = EmbMIL(embed_dim=384, dropout=0.3, attn_dim = 256, proj_dim=args.emb_dim, loss_fn=None)
     return mil, True
 
 def get_fusion_model(args):
@@ -104,79 +104,6 @@ def get_fusion_model(args):
 
     model = DenseFusion(encs, emb_dim=args.emb_dim, hidden_dims=[32], autocast=casts, loss_fn=losses[args.loss_fn], device=device)
     return model, device
-
-# --------------------------------------------------------
-
-def get_metrics(split: str, args):
-    bool_var = "indicator" in args.label_col
-
-    metrics = {f"{split} Loss": AverageMeter(), "lr": AverageMeter()}
-    fns = {"Acc": lambda p, l: acc(torch.sigmoid(p) > 0.5, l)} if bool_var else {"MSE": F.mse_loss, "L1": F.l1_loss, "2yr Acc": lambda p, l: acc(p > 24, l > 24)}
-    fns = {f"{split} {name}": fn for name, fn in fns.items()}
-    test_metrics = {f"{name}": AverageMeter() for name in fns}
-    metrics = {**metrics, **test_metrics}
-    
-    torchmetrics = {"ROC": ROC(task="binary"), "AUC": AUROC(task="binary")} if bool_var else {}
-    torchmetrics = {f"{split} {name}": obj for name, obj in torchmetrics.items()}
-
-    return metrics, fns, torchmetrics
-
-
-def train_one_epoch(model: torch.nn.Module,
-                    train_loader: Iterable,
-                    optimizer: optim.Optimizer, scheduler: optim.lr_scheduler.LRScheduler,
-                    device: str,
-                    args=None):
-    model.train(True)
-    optimizer.zero_grad()
-
-    metrics, fns, torchmetrics = get_metrics("Train", args)
-    
-    for batch in train_loader:
-        for key in batch:
-            batch[key] = batch[key].to(device)
-
-        loss, preds = model(batch)
-
-        with torch.inference_mode():
-            metrics["Train Loss"].update(loss.detach().item())
-            metrics["lr"].update(optimizer.param_groups[0]["lr"] * 10000000.0)
-            for name, fn in fns.items():
-                metric_val = fn(preds, batch["label"])
-                metrics[name].update(metric_val.detach().item())
-
-            preds = torch.sigmoid(preds)
-            for obj in torchmetrics.values():
-                obj.update(preds.detach().squeeze(-1), batch["label"].detach().int().squeeze(-1))
-
-        loss.backward()
-        optimizer.step()
-        optimizer.zero_grad()
-        scheduler.step()
-
-    return {k: meter.avg for k, meter in metrics.items()}, torchmetrics
-
-def test(model: torch.nn.Module, data_loader: Iterable, device: str, args=None):
-    model.eval()
-
-    metrics, fns, torchmetrics = get_metrics("Test", args)
-
-    for batch in data_loader:
-        for key in batch:
-            batch[key] = batch[key].to(device)
-
-        with torch.inference_mode():
-            loss, preds = model(batch)
-            metrics["Test Loss"].update(loss.detach().item())
-            for name, fn in fns.items():
-                metric_val = fn(preds, batch["label"])
-                metrics[name].update(metric_val.detach().item())
-
-            preds = torch.sigmoid(preds)
-            for obj in torchmetrics.values():
-                obj.update(preds.detach().squeeze(-1), batch["label"].detach().int().squeeze(-1))
-
-    return {k: meter.avg for k, meter in metrics.items()}, torchmetrics
 
 # --------------------------------------------------------
 
@@ -242,6 +169,80 @@ def get_loaders(args):
     )
 
     return train_loader, test_loader, num_train
+
+# --------------------------------------------------------
+
+def get_metrics(split: str, args):
+    bool_var = "indicator" in args.label_col
+
+    metrics = {f"{split} Loss": AverageMeter(), "lr": AverageMeter()}
+    fns = {"Acc": lambda p, l: acc(torch.sigmoid(p) > 0.5, l)} if bool_var else {"MSE": F.mse_loss, "L1": F.l1_loss, "2yr Acc": lambda p, l: acc(p > 24, l > 24)}
+    fns = {f"{split} {name}": fn for name, fn in fns.items()}
+    test_metrics = {f"{name}": AverageMeter() for name in fns}
+    metrics = {**metrics, **test_metrics}
+    
+    torchmetrics = {"ROC": ROC(task="binary"), "AUC": AUROC(task="binary")} if bool_var else {}
+    torchmetrics = {f"{split} {name}": obj for name, obj in torchmetrics.items()}
+
+    return metrics, fns, torchmetrics
+
+
+def train_one_epoch(model: torch.nn.Module,
+                    train_loader: Iterable,
+                    optimizer: optim.Optimizer, scheduler: optim.lr_scheduler.LRScheduler,
+                    device: str,
+                    args=None):
+    model.train(True)
+    optimizer.zero_grad()
+
+    metrics, fns, torchmetrics = get_metrics("Train", args)
+    
+    for batch in train_loader:
+        for key in batch:
+            batch[key] = batch[key].to(device)
+
+        preds, loss = model(batch)
+
+        with torch.inference_mode():
+            metrics["Train Loss"].update(loss.detach().item())
+            metrics["lr"].update(optimizer.param_groups[0]["lr"] * 10000000.0)
+            print(metrics["lr"].avg)
+            for name, fn in fns.items():
+                metric_val = fn(preds, batch["label"])
+                metrics[name].update(metric_val.detach().item())
+
+            preds = torch.sigmoid(preds)
+            for obj in torchmetrics.values():
+                obj.update(preds.detach().squeeze(-1), batch["label"].detach().int().squeeze(-1))
+
+        loss.backward()
+        optimizer.step()
+        optimizer.zero_grad()
+        scheduler.step()
+
+    return {k: meter.avg for k, meter in metrics.items()}, torchmetrics
+
+def test(model: torch.nn.Module, data_loader: Iterable, device: str, args=None):
+    model.eval()
+
+    metrics, fns, torchmetrics = get_metrics("Test", args)
+
+    for batch in data_loader:
+        for key in batch:
+            batch[key] = batch[key].to(device)
+
+        with torch.inference_mode():
+            preds, loss = model(batch)
+            metrics["Test Loss"].update(loss.detach().item())
+            for name, fn in fns.items():
+                metric_val = fn(preds, batch["label"])
+                metrics[name].update(metric_val.detach().item())
+
+            preds = torch.sigmoid(preds)
+            for obj in torchmetrics.values():
+                obj.update(preds.detach().squeeze(-1), batch["label"].detach().int().squeeze(-1))
+
+    return {k: meter.avg for k, meter in metrics.items()}, torchmetrics
 
 
 # --------------------------------------------------------
@@ -329,7 +330,7 @@ if __name__ == '__main__':
     args.data_path = args.data_path.format(model=args.model)
 
     if args.debug:
-        args.epochs = 200
+        args.epochs = 5
         args.disable_wandb = True
 
     main(args)

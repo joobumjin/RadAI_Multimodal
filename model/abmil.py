@@ -30,7 +30,9 @@ class EmbMIL(nn.Module):
             hid_dims=[embed_dim] * (num_fc_layers - 1),
             dropout=dropout,
             out_dim=embed_dim,
-            end_with_fc=False
+            end_with_fc=False,
+            act=nn.LeakyReLU(),
+            layer_norm=True
         )
 
         attn_class = GlobalAttention
@@ -102,7 +104,7 @@ class EmbMIL(nn.Module):
         log_dict = {'attention': A_base.squeeze(1) if return_attention else None}
         return bag, log_dict
     
-    def forward(self, h: torch.Tensor, labels: torch.Tensor, attn_mask=None, return_attention: bool = True) -> torch.Tensor:
+    def forward(self, h: torch.Tensor, labels: torch.Tensor, attn_mask=None, return_attention: bool = False) -> torch.Tensor:
         if h.get_device() != labels.get_device():
             labels = labels.to(h.get_device())
         
@@ -110,13 +112,13 @@ class EmbMIL(nn.Module):
         attn_dict = [attn_dict] if return_attention else []
 
         pred = self.projector(attn_out)
-        # if self.loss_fn is None:
-        #     return pred, *attn_dict
+        if self.loss_fn is None:
+            return pred, *attn_dict
         
-        loss = self.loss_fn(pred, labels) if self.loss_fn is not None else None
+        loss = self.loss_fn(pred, labels)
         return loss, pred, *attn_dict
     
-    def predict(self, h: torch.Tensor, attn_mask=None, return_attention: bool = True) -> torch.Tensor:
+    def predict(self, h: torch.Tensor, attn_mask=None, return_attention: bool = False) -> torch.Tensor:
         attn_out, attn_dict = self.forward_features(h, attn_mask=attn_mask,return_attention=return_attention)
         attn_dict = [attn_dict] if return_attention else []
 
