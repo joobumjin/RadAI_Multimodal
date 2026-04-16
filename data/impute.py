@@ -36,9 +36,15 @@ def main():
     args    = parser.parse_args()
 
     df = pd.read_excel(args.excel)
-    imputed = impute(df)
-    imputed.to_excel(args.out, index=False)
 
+    df["AJCC Pathologic Stage Group"] = df["AJCC Pathologic Stage Group"].map(lambda x: int(str(x)[0]) if pd.notnull(x) else x)
+    dropped = df[["Exclusion", "Vital Status", "Cancer Status"]]
+    df = df.drop(["Exclusion", "Vital Status", "Cancer Status"])
+
+    imputed = impute(df)
+    imputed[["Exclusion", "Vital Status", "Cancer Status"]] = dropped[["Exclusion", "Vital Status", "Cancer Status"]]
+
+    imputed.to_excel(args.out, index=False)
 
 if __name__ == '__main__':
     main()
