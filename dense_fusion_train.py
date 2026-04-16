@@ -113,8 +113,7 @@ def get_loaders(args):
     index = np.load(f"{args.data_path}/index_arrays_labeled.npz", allow_pickle=True)
     labels  = index['death_indicator_2yr'].astype(np.float32)
     inds    = np.arange(len(labels))
-    modalities = []
-    mod_inds = []
+    modalities, mod_inds = [], []
     if args.path_lang: 
         modalities.append("path_lang")
         mod_inds.append(0)
