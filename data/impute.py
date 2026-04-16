@@ -31,10 +31,7 @@ def impute(df):
     # 5. Convert back to DataFrame
     return pd.DataFrame(final_data, columns=df.columns)
 
-def main():
-    parser  = get_args_parser()
-    args    = parser.parse_args()
-
+def main(args):
     df = pd.read_excel(args.excel)
     dropped_rows = df[df["Surgery"].astype(str).str.contains(r'[a-zA-Z]', na=False)]
     df = df[~df["Surgery"].astype(str).str.contains(r'[a-zA-Z]', na=False)]
@@ -51,4 +48,7 @@ def main():
     imputed.to_excel(args.out, index=False)
 
 if __name__ == '__main__':
+    parser  = get_args_parser()
+    args    = parser.parse_args()
+
     main()
