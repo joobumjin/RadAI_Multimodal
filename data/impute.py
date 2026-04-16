@@ -9,7 +9,7 @@ from sklearn.impute import KNNImputer, IterativeImputer
 
 def get_args_parser():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--excel',  type=str,   default="../../excel_data/Combined_Clinical_Lab.xlsx")
+    parser.add_argument('--excel',  type=str,   default="../../excel_data/filter_clinlab.xlsx")
     parser.add_argument('--out',    type=str,   default="../../excel_data/Imputed_ClinLab.xlsx")
 
     return parser
@@ -36,13 +36,17 @@ def main():
     args    = parser.parse_args()
 
     df = pd.read_excel(args.excel)
+    dropped_rows = df[df["Surgery"].astype(str).str.contains(r'[a-zA-Z]', na=False)]
+    df = df[~df["Surgery"].astype(str).str.contains(r'[a-zA-Z]', na=False)]
 
     df["AJCC Pathologic Stage Group"] = df["AJCC Pathologic Stage Group"].map(lambda x: int(str(x)[0]) if pd.notnull(x) else x)
     dropped = df[["Exclusion", "Vital Status", "Cancer Status"]]
-    df = df.drop(["Exclusion", "Vital Status", "Cancer Status"])
+    df = df.drop(columns=["Exclusion", "Vital Status", "Cancer Status"])
 
     imputed = impute(df)
     imputed[["Exclusion", "Vital Status", "Cancer Status"]] = dropped[["Exclusion", "Vital Status", "Cancer Status"]]
+    imputed = pd.concat([imputed, dropped_rows])
+    imputed = imputed.sort_values(by="Patient ID")
 
     imputed.to_excel(args.out, index=False)
 
