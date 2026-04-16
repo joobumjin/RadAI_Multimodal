@@ -317,9 +317,15 @@ def main(args):
         if run is not None: run.log(postfix)
         pbar.set_postfix(postfix)
 
-        if early_stopper is not None and early_stopper.update(postfix[stop_metric]): 
-            print("Early stopping triggered!")
-            return
+        if early_stopper is not None:
+            stop, best = early_stopper.update(postfix[stop_metric])
+            if best:
+                # save_model(model, args.save_path)
+                pass
+            elif stop:
+                print("Early stopping triggered!")
+                return
+                
        
 
 if __name__ == '__main__':

@@ -22,9 +22,9 @@ class EarlyStopper:
             self.early_stop_counter = 0
             if self.verb: print(f"New Best Model Performace and Epoch {self.epoch}")
             
-            return False
+            return False, True
 
         else:
             self.early_stop_counter += 1
             if self.verb: print(f"No improvement. Early stop counter = {self.early_stop_counter}")
-            return self.early_stop_counter >= self.patience
+            return self.early_stop_counter >= self.patience, False
