@@ -34,6 +34,7 @@ def get_args_parser():
     parser.add_argument('--patience',           type=int,   default=5)
 
     parser.add_argument('--clinical',           action="store_true")
+    parser.add_argument('--clin_imp',           action="store_true")
     parser.add_argument('--path_lang',          action="store_true")
     parser.add_argument('--rad_lang',           action="store_true")
     parser.add_argument('--path_img',           action="store_true")
@@ -95,12 +96,19 @@ def get_fusion_model(args):
         "bce": F.binary_cross_entropy_with_logits,
     }
 
+    get_enc_fns = {
+        "clinical": get_clinical_encoder, 
+        "clin_imp": get_clinical_encoder, 
+        "path_lang": get_path_lang_encoder, 
+        "rad_lang": get_rad_lang_encoder, 
+        "path_img": get_path_img_encoder, 
+    }
+
     encs, casts = {}, {}
     arg_dict = vars(args)
-    for mod, get_enc_fn in zip(["clinical", "path_lang", "rad_lang", "path_img"],
-                               [get_clinical_encoder, get_path_lang_encoder, get_rad_lang_encoder, get_path_img_encoder]):
+    for mod, fn in get_enc_fns.items():
         if arg_dict.get(mod, False): 
-            encs[mod], casts[mod] = get_enc_fn(args)
+            encs[mod], casts[mod] = fn(args)
 
     model = DenseFusion(encs, emb_dim=args.emb_dim, hidden_dims=[32], autocast=casts, loss_fn=losses[args.loss_fn], device=device)
     return model, device
@@ -121,20 +129,37 @@ def get_loaders(args):
         modalities.append("rad_lang")
         mod_inds.append(1)
 
+    extra_mod_keys = []
+
     label_mask = ~np.isnan(index[args.label_col])
     exclusion_mask = ~index["excluded"]
     mask = label_mask & exclusion_mask
-    if args.clinical: mask = mask & ~np.isnan(index['clinical']).any(axis=1)
+    if args.clinical: 
+        mask = mask & ~np.isnan(index['clinical']).any(axis=1)
+        extra_mod_keys.append('clinical')
+    elif args.clin_imp: 
+        mask = mask & ~np.isnan(index['clinical_imputed']).any(axis=1)
+        extra_mod_keys.append('clinical_imputed')
     if args.path_lang or args.rad_lang: mask = mask & np.prod(index['combined_lengths'][:, mod_inds], axis=1).astype(bool)
     if "indicator" in args.label_col: 
         for key in keys:
             mask = mask & (~np.isnan(index[key]))
 
-    valid_inds = inds[mask]
     num_train = int(len(valid_inds) * args.train_split)
-    
-    np.random.shuffle(valid_inds)
-    train_inds, test_inds = valid_inds[:num_train], valid_inds[num_train:]
+    if not args.clin_imp: #standard random shuffle and select
+        valid_inds = inds[mask]
+        np.random.shuffle(valid_inds)
+        
+        train_inds, test_inds = valid_inds[:num_train], valid_inds[num_train:]
+    else: #only test on real samples, but can train on imputed data
+        orig = inds[~np.isnan(index['clincal']).any(axis=1) & mask]
+        np.random.shuffle(orig)
+
+        imputed = inds[np.isnan(index['clincal']).any(axis=1) & mask]
+
+        num_test = len(inds) - num_train
+        train_inds, test_inds = np.hstack((orig[num_test:], imputed)), orig[:num_test]
+
 
     dataset_args = {
         "data_dir": args.data_path,
@@ -143,7 +168,7 @@ def get_loaders(args):
         "label_column": args.label_col,
         "label_dtype": np.float32,
         "bin_modality_keys": modalities,
-        "extra_modality_keys": ['clinical']
+        "extra_modality_keys": extra_mod_keys,
     }
     loader_args = {
         "batch_size": args.batch_size,

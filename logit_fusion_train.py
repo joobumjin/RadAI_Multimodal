@@ -35,6 +35,7 @@ def get_args_parser():
     parser.add_argument('--patience',           type=int,   default=5)
 
     parser.add_argument('--clinical',           action="store_true")
+    parser.add_argument('--clin_imp',           action="store_true")
     parser.add_argument('--path_lang',          action="store_true")
     parser.add_argument('--rad_lang',           action="store_true")
     parser.add_argument('--path_img',           action="store_true")
@@ -101,12 +102,19 @@ def get_fusion_model(args):
         "bce": F.binary_cross_entropy_with_logits,
     }
 
+    get_enc_fns = {
+        "clinical": get_clinical_encoder, 
+        "clin_imp": get_clinical_encoder, 
+        "path_lang": get_path_lang_encoder, 
+        "rad_lang": get_rad_lang_encoder, 
+        "path_img": get_path_img_encoder, 
+    }
+
     encs, casts = {}, {}
     arg_dict = vars(args)
-    for mod, get_enc_fn in zip(["clinical", "path_lang", "rad_lang", "path_img"],
-                               [get_clinical_encoder, get_path_lang_encoder, get_rad_lang_encoder, get_path_img_encoder]):
+    for mod, fn in get_enc_fns.items():
         if arg_dict.get(mod, False): 
-            encs[mod], casts[mod] = get_enc_fn(args)
+            encs[mod], casts[mod] = fn(args)
 
     model = LogitFusion(encs, casts, fusion_fn=fusion_fn, loss_fn=losses[args.loss_fn], device=device)
     return model, device
@@ -127,6 +135,81 @@ def get_metrics(split: str, args):
 
     return metrics, fns, torchmetrics
 
+# --------------------------------------------------------
+
+def get_loaders(args):
+    keys = ["slide_ids", "vital_status", "survival_months"]
+
+    index = np.load(f"{args.data_path}/index_arrays_labeled.npz", allow_pickle=True)
+    labels  = index['death_indicator_2yr'].astype(np.float32)
+    inds    = np.arange(len(labels))
+    modalities = []
+    mod_inds = []
+    if args.path_lang: 
+        modalities.append("path_lang")
+        mod_inds.append(0)
+    if args.rad_lang: 
+        modalities.append("rad_lang")
+        mod_inds.append(1)
+
+    label_mask = ~np.isnan(index[args.label_col])
+    exclusion_mask = ~index["excluded"]
+    mask = label_mask & exclusion_mask
+    if args.clinical: mask = mask & ~np.isnan(index['clinical']).any(axis=1)
+    if args.path_lang or args.rad_lang: mask = mask & np.prod(index['combined_lengths'][:, mod_inds], axis=1).astype(bool)
+    if "indicator" in args.label_col: 
+        for key in keys:
+            mask = mask & (~np.isnan(index[key]))
+
+    num_train = int(len(valid_inds) * args.train_split)
+    if not args.clin_imp: #standard random shuffle and select
+        valid_inds = inds[mask]
+        np.random.shuffle(valid_inds)
+        
+        train_inds, test_inds = valid_inds[:num_train], valid_inds[num_train:]
+    else: #only test on real samples, but can train on imputed data
+        orig = inds[~np.isnan(index['clincal']).any(axis=1) & mask]
+        np.random.shuffle(orig)
+
+        imputed = inds[np.isnan(index['clincal']).any(axis=1) & mask]
+
+        num_test = len(inds) - num_train
+        train_inds, test_inds = np.hstack((orig[num_test:], imputed)), orig[:num_test]
+
+    dataset_args = {
+        "data_dir": args.data_path,
+        "return_key": True,
+        "keys": ["slide_ids", "vital_status", "survival_months"],
+        "label_column": args.label_col,
+        "label_dtype": np.float32,
+        "bin_modality_keys": modalities,
+        "extra_modality_keys": ['clinical']
+    }
+    loader_args = {
+        "batch_size": args.batch_size,
+        "pin_memory": args.pin_mem,
+        "num_workers": args.num_workers,
+        "collate_fn": default_collate,
+        "persistent_workers": args.num_workers > 0,
+        "drop_last": False,
+    }
+
+    train_set = MemmapDatasetMultimodal(indices=train_inds, **dataset_args)
+    train_loader = DataLoader(train_set, shuffle=True, **loader_args)
+
+    test_set = MemmapDatasetMultimodal(indices=test_inds, **dataset_args)
+    test_loader = DataLoader(test_set, shuffle=False, **loader_args)
+
+    print(f"Found: {len(valid_inds)} valid samples split into "
+        f"\n{len(train_set)} train samples, {len(train_loader)} batches and "
+        f"\n{len(test_set)} validation samples, {len(test_loader)} batches"
+        f"\nTrain: under 2 year: {np.sum(index[args.label_col][train_inds] == 0)}, over 2 year: {np.sum(index[args.label_col][train_inds] == 1)}"
+        f"\nTest: under 2 year: {np.sum(index[args.label_col][test_inds] == 0)}, over 2 year: {np.sum(index[args.label_col][test_inds] == 1)}"
+    )
+
+    return train_loader, test_loader, num_train
+
+# --------------------------------------------------------
 
 def train_one_epoch(model: torch.nn.Module,
                     train_loader: Iterable,
@@ -183,72 +266,6 @@ def test(model: torch.nn.Module, data_loader: Iterable, device: str, args=None):
                 obj.update(preds.detach().squeeze(-1), batch["label"].detach().int().squeeze(-1))
 
     return {k: meter.avg for k, meter in metrics.items()}, torchmetrics
-
-# --------------------------------------------------------
-
-def get_loaders(args):
-    keys = ["slide_ids", "vital_status", "survival_months"]
-
-    index = np.load(f"{args.data_path}/index_arrays_labeled.npz", allow_pickle=True)
-    labels  = index['death_indicator_2yr'].astype(np.float32)
-    inds    = np.arange(len(labels))
-    modalities = []
-    mod_inds = []
-    if args.path_lang: 
-        modalities.append("path_lang")
-        mod_inds.append(0)
-    if args.rad_lang: 
-        modalities.append("rad_lang")
-        mod_inds.append(1)
-
-    label_mask = ~np.isnan(index[args.label_col])
-    exclusion_mask = ~index["excluded"]
-    mask = label_mask & exclusion_mask
-    if args.clinical: mask = mask & ~np.isnan(index['clinical']).any(axis=1)
-    if args.path_lang or args.rad_lang: mask = mask & np.prod(index['combined_lengths'][:, mod_inds], axis=1).astype(bool)
-    if "indicator" in args.label_col: 
-        for key in keys:
-            mask = mask & (~np.isnan(index[key]))
-
-    valid_inds = inds[mask]
-    num_train = int(len(valid_inds) * args.train_split)
-    
-    np.random.shuffle(valid_inds)
-    train_inds, test_inds = valid_inds[:num_train], valid_inds[num_train:]
-
-    dataset_args = {
-        "data_dir": args.data_path,
-        "return_key": True,
-        "keys": ["slide_ids", "vital_status", "survival_months"],
-        "label_column": args.label_col,
-        "label_dtype": np.float32,
-        "bin_modality_keys": modalities,
-        "extra_modality_keys": ['clinical']
-    }
-    loader_args = {
-        "batch_size": args.batch_size,
-        "pin_memory": args.pin_mem,
-        "num_workers": args.num_workers,
-        "collate_fn": default_collate,
-        "persistent_workers": args.num_workers > 0,
-        "drop_last": False,
-    }
-
-    train_set = MemmapDatasetMultimodal(indices=train_inds, **dataset_args)
-    train_loader = DataLoader(train_set, shuffle=True, **loader_args)
-
-    test_set = MemmapDatasetMultimodal(indices=test_inds, **dataset_args)
-    test_loader = DataLoader(test_set, shuffle=False, **loader_args)
-
-    print(f"Found: {len(valid_inds)} valid samples split into "
-        f"\n{len(train_set)} train samples, {len(train_loader)} batches and "
-        f"\n{len(test_set)} validation samples, {len(test_loader)} batches"
-        f"\nTrain: under 2 year: {np.sum(index[args.label_col][train_inds] == 0)}, over 2 year: {np.sum(index[args.label_col][train_inds] == 1)}"
-        f"\nTest: under 2 year: {np.sum(index[args.label_col][test_inds] == 0)}, over 2 year: {np.sum(index[args.label_col][test_inds] == 1)}"
-    )
-
-    return train_loader, test_loader, num_train
-
 
 # --------------------------------------------------------
 
