@@ -40,7 +40,11 @@ def main(args):
     dropped = df[["Exclusion", "Vital Status", "Cancer Status"]]
     df = df.drop(columns=["Exclusion", "Vital Status", "Cancer Status"])
 
-    imputed = impute(df)
+    df["2yr survival"] = df["survival in months"] < 24.0
+
+    # imputed = impute(df)
+    imputed = pd.concat([impute(group_df) for _, group_df in df.groupby("2yr survival")])
+
     imputed[["Exclusion", "Vital Status", "Cancer Status"]] = dropped[["Exclusion", "Vital Status", "Cancer Status"]]
     imputed = pd.concat([imputed, dropped_rows])
     imputed = imputed.sort_values(by="Patient ID")
