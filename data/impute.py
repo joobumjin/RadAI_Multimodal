@@ -40,10 +40,11 @@ def main(args):
     dropped = df[["Exclusion", "Vital Status", "Cancer Status"]]
     df = df.drop(columns=["Exclusion", "Vital Status", "Cancer Status"])
 
-    df["2yr survival"] = df["survival in months"] < 24.0
+    df["2yr survival"] = df["Survival in months"] < 24.0
 
     # imputed = impute(df)
     imputed = pd.concat([impute(group_df) for _, group_df in df.groupby("2yr survival")])
+    imputed = imputed.drop(columns=["2yr survival"])
 
     imputed[["Exclusion", "Vital Status", "Cancer Status"]] = dropped[["Exclusion", "Vital Status", "Cancer Status"]]
     imputed = pd.concat([imputed, dropped_rows])
@@ -55,4 +56,4 @@ if __name__ == '__main__':
     parser  = get_args_parser()
     args    = parser.parse_args()
 
-    main()
+    main(args)
