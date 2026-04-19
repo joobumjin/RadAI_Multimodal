@@ -188,6 +188,7 @@ class MemmapDatasetMultimodal(Dataset):
         bin_path: str = "path_rad_embs.dat",
         bin_modality_keys: Optional[List[str]] = ["path_lang", "rad_lang"],
         extra_modality_keys: Optional[List[str]] = [], #eg ['clinical']
+        allow_sparse_samples: bool = False
     ):
         """
         Args:
@@ -205,6 +206,7 @@ class MemmapDatasetMultimodal(Dataset):
         self.max_instances  = max_instances
         self.return_key     = return_key
         self.modality_inds  = {key: bin_inds[key] for key in bin_modality_keys}
+        self.sparse         = allow_sparse_samples
 
         # Load index
         index_path = os.path.join(data_dir, index_filename)
@@ -212,12 +214,10 @@ class MemmapDatasetMultimodal(Dataset):
             raise FileNotFoundError(f"Index file not found: {index_path}")
         
         index = np.load(index_path, allow_pickle=True)
-        # print(f"Index Files: {list(index.keys())}")
         
         self._offsets   = index['offsets']
         self._slide_ids = index['slide_ids']
-        self._lengths   = index['combined_lengths'].astype(int)
-        if len(self.modality_inds) is not None: self._lengths = self._lengths[..., [bin_inds[key] for key in bin_modality_keys]]
+        self._lengths   = index['combined_lengths'].astype(int)[..., [bin_inds[key] for key in bin_modality_keys]]
         self._labels    = index[label_column].astype(label_dtype) if label_column is not None else None
 
         #handle keys
@@ -226,7 +226,6 @@ class MemmapDatasetMultimodal(Dataset):
             self._keys = {col: index[col] for col in keys} if keys is not None else {'slide_ids': self._slide_ids}
 
         self.extras = {key: index[key] for key in extra_modality_keys} if extra_modality_keys is not None else {}
-
         
         # Handle different ways feat_dim might be stored
         feat_dim        = index['feat_dim']
@@ -243,11 +242,32 @@ class MemmapDatasetMultimodal(Dataset):
         total_patches = index['total_patches']
         self._total_patches = int(total_patches.item() if total_patches.ndim == 0 else total_patches)
         
-
-        # Filter valid indices (offset >= 0) and apply subset
-        all_valid = np.prod(self._lengths, axis=1)
-        # print(f"Valid Lengths: {len(np.flatnonzero(all_valid))}")
+        #Filtering
+        all_valid = np.zeros((len(self._slide_ids), )) if self.sparse else np.ones((len(self._slide_ids), ))
+        
+        #filter labels
         if self._labels is not None: all_valid *= (~np.isnan(self._labels))
+
+        #filter bin modalities
+        if self._lengths is not None:
+            if self.sparse:
+                all_valid += np.any(self._lengths > 0, axis=1)  
+            else:
+                all_valid *= np.all(self._lengths > 0, axis=1)
+                
+        #filter extras
+        if len(self.extras):
+            for feats in self.extras.values():
+                if self.sparse:
+                    valid += ~np.isnan(feats).any(axis=1)
+                else:
+                    valid *= ~np.isnan(feats).any(axis=1)
+        
+        #filter keys
+        if self.return_key:
+            for feats in self._keys.values():
+                valid *= ~np.isnan(feats)
+
         all_valid = np.flatnonzero(all_valid)
         
         if indices is not None:
@@ -287,27 +307,35 @@ class MemmapDatasetMultimodal(Dataset):
         """
         # Map to real index
         real_idx    = self.indices[idx]
-
-        offset      = int(self._offsets[real_idx])
-        lengths     = self._lengths[real_idx]
-        keys        = {key: self._keys[key][real_idx] for key in self._keys}
-
         label = self._labels[real_idx:real_idx+1]
         
         sample = {"label": label}
-        
-        ks = lengths
-        if self.max_instances:
-            ks = np.min(np.vstack((ks, [self.max_instances] * len(ks))), axis=0)
 
-        for (bin_name, bin_ind), k, length in zip(self.modality_inds.items(), list(ks), list(lengths)):
-            start = np.random.randint(0, length - k + 1) if k < length else 0
-            sample[bin_name] = np.array(self.data[offset + start : offset + start + k, :, bin_ind], copy=True).squeeze(0)
+        if self._lengths is not None:
+            offset      = int(self._offsets[real_idx])
+            lengths     = self._lengths[real_idx] 
+
+            ks = lengths
+            if self.max_instances:
+                ks = np.min(np.vstack((ks, [self.max_instances] * len(ks))), axis=0)
+
+            for (bin_name, bin_ind), k, length in zip(self.modality_inds.items(), list(ks), list(lengths)):
+                if self.sparse and length == 0:
+                    sample[bin_name] = None
+                else:
+                    start = np.random.randint(0, length - k + 1) if k < length else 0
+                    sample[bin_name] = np.array(self.data[offset + start : offset + start + k, :, bin_ind], copy=True).squeeze(0)
 
         for mod_name, mod_data in self.extras.items():
-            sample[mod_name] = mod_data[real_idx]
+            data = mod_data[real_idx]
+            if self.sparse and np.isnan(data).any():
+                sample[mod_name] = None
+            else:
+                sample[mod_name] = data
         
-        if self.return_key: sample = {**sample, **keys}
+        if self.return_key: 
+            keys    = {key: self._keys[key][real_idx] for key in self._keys}
+            sample  = {**sample, **keys}
 
         return sample
 

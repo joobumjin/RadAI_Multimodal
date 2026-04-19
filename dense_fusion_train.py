@@ -33,6 +33,7 @@ def get_args_parser():
     parser.add_argument('--early_stop',         type=bool,  default=True)
     parser.add_argument('--patience',           type=int,   default=5)
 
+    parser.add_argument('--sparse',             action="store_true")
     parser.add_argument('--clinical',           action="store_true")
     parser.add_argument('--clinical_imputed',   action="store_true")
     parser.add_argument('--path_lang',          action="store_true")
@@ -121,29 +122,29 @@ def get_loaders(args):
     index = np.load(f"{args.data_path}/index_arrays_labeled.npz", allow_pickle=True)
     labels  = index['death_indicator_2yr'].astype(np.float32)
     inds    = np.arange(len(labels))
-    modalities, mod_inds = [], []
-    if args.path_lang: 
-        modalities.append("path_lang")
-        mod_inds.append(0)
-    if args.rad_lang: 
-        modalities.append("rad_lang")
-        mod_inds.append(1)
-
-    extra_mod_keys = []
+    bin_mods, extra_mods = [], []
 
     label_mask = ~np.isnan(index[args.label_col])
     exclusion_mask = ~index["excluded"]
     mask = label_mask & exclusion_mask
-    if args.clinical: 
-        mask = mask & ~np.isnan(index['clinical']).any(axis=1)
-        extra_mod_keys.append('clinical')
-    elif args.clinical_imputed: 
-        mask = mask & ~np.isnan(index['clinical_imputed']).any(axis=1)
-        extra_mod_keys.append('clinical_imputed')
-    if args.path_lang or args.rad_lang: mask = mask & np.prod(index['combined_lengths'][:, mod_inds], axis=1).astype(bool)
     if "indicator" in args.label_col: 
         for key in keys:
             mask = mask & (~np.isnan(index[key]))
+
+    modality_mask = np.zeros_like(mask).astype(bool) if args.sparse else np.ones_like(mask).astype(bool)
+    combine_op = lambda x, y: x | y if args.sparse else lambda x, y: x & y
+
+    arg_dict = vars(args)
+    for mod in ["clinical", "clinical_imputed"]:
+        if arg_dict.get(mod, False): 
+            modality_mask = combine_op(modality_mask, ~np.isnan(index[mod]).any(axis=1))
+            extra_mods.append(mod)
+    for mod, ind in zip(["path_lang", "rad_lang"], [0,1]):
+        if arg_dict.get(mod, False): 
+            modality_mask = combine_op(modality_mask, index['combined_lengths'][:, ind].astype(bool))
+            bin_mods.append(mod)
+
+    mask = mask & modality_mask
 
     valid_inds = inds[mask]
     num_train = int(len(valid_inds) * args.train_split)
@@ -167,8 +168,9 @@ def get_loaders(args):
         "keys": ["slide_ids", "vital_status", "survival_months"],
         "label_column": args.label_col,
         "label_dtype": np.float32,
-        "bin_modality_keys": modalities,
-        "extra_modality_keys": extra_mod_keys,
+        "bin_modality_keys": bin_mods,
+        "extra_modality_keys": extra_mods,
+        "allow_sparse_samples": args.sparse
     }
     loader_args = {
         "batch_size": args.batch_size,

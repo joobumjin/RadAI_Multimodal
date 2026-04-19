@@ -14,6 +14,7 @@ class DenseFusion(nn.Module):
 
         self.autocast = autocast
         self.device = device
+        self.emb_dim = emb_dim
         self.loss_fn = loss_fn
         self.modality_order = list(encoders.keys())
 
@@ -23,10 +24,20 @@ class DenseFusion(nn.Module):
         self.pred = self.pred.to(device)
 
     def predict(self, x: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:            
+        batch_size = None
+        for modality in self.encoders:
+            if x[modality] is not None: 
+                batch_size = len(x[modality])
+                break
+            print(f"Dense Fusion: all None samples in batch")
+
         logits = {}
         for modality, enc in self.encoders.items():
-            with torch.autocast(device_type=self.device, dtype=torch.float16, enabled=self.autocast[modality]):
-                logits[modality] = enc(x[modality]).float()
+            if x[modality] is not None:
+                with torch.autocast(device_type=self.device, dtype=torch.float16, enabled=self.autocast[modality]):
+                    logits[modality] = enc(x[modality]).float()
+            else:
+                logits[modality] = torch.zeros((batch_size, self.emb_dim))
         
         catted = torch.cat([logits[mod] for mod in self.modality_order], dim=1)
         return self.pred.predict(catted)
