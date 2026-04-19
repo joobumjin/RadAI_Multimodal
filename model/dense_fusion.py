@@ -29,7 +29,8 @@ class DenseFusion(nn.Module):
             if x[modality] is not None:
                 with torch.autocast(device_type=self.device, dtype=torch.float16, enabled=self.autocast[modality]):
                     logits[modality] = enc(x[modality]).float()
-            if f"{modality} mask" in x: logits[modality] *= x[f"{modality} mask"]
+            if f"{modality} mask" in x: 
+                logits[modality] *= x[f"{modality} mask"].view((-1, 1))
         
         catted = torch.cat([logits[mod] for mod in self.modality_order], dim=1)
         return self.pred.predict(catted)
