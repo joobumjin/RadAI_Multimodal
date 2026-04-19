@@ -259,14 +259,14 @@ class MemmapDatasetMultimodal(Dataset):
         if len(self.extras):
             for feats in self.extras.values():
                 if self.sparse:
-                    valid += ~np.isnan(feats).any(axis=1)
+                    all_valid += ~np.isnan(feats).any(axis=1)
                 else:
-                    valid *= ~np.isnan(feats).any(axis=1)
+                    all_valid *= ~np.isnan(feats).any(axis=1)
         
         #filter keys
         if self.return_key:
             for feats in self._keys.values():
-                valid *= ~np.isnan(feats)
+                all_valid *= ~np.isnan(feats)
 
         all_valid = np.flatnonzero(all_valid)
         

@@ -132,7 +132,7 @@ def get_loaders(args):
             mask = mask & (~np.isnan(index[key]))
 
     modality_mask = np.zeros_like(mask).astype(bool) if args.sparse else np.ones_like(mask).astype(bool)
-    combine_op = lambda x, y: x | y if args.sparse else lambda x, y: x & y
+    combine_op = lambda x, y: x | y if args.sparse else x & y
 
     arg_dict = vars(args)
     for mod in ["clinical", "clinical_imputed"]:
