@@ -321,7 +321,7 @@ class MemmapDatasetMultimodal(Dataset):
 
             for (bin_name, bin_ind), k, length in zip(self.modality_inds.items(), list(ks), list(lengths)):
                 if self.sparse and length == 0:
-                    sample[bin_name] = None
+                    sample[bin_name] = [None]
                 else:
                     start = np.random.randint(0, length - k + 1) if k < length else 0
                     sample[bin_name] = np.array(self.data[offset + start : offset + start + k, :, bin_ind], copy=True).squeeze(0)
@@ -329,7 +329,7 @@ class MemmapDatasetMultimodal(Dataset):
         for mod_name, mod_data in self.extras.items():
             data = mod_data[real_idx]
             if self.sparse and np.isnan(data).any():
-                sample[mod_name] = None
+                sample[mod_name] = [None]
             else:
                 sample[mod_name] = data
         
