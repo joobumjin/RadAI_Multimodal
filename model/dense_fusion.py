@@ -26,9 +26,8 @@ class DenseFusion(nn.Module):
     def predict(self, x: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:            
         logits = {}
         for modality, enc in self.encoders.items():
-            if x[modality] is not None:
-                with torch.autocast(device_type=self.device, dtype=torch.float16, enabled=self.autocast[modality]):
-                    logits[modality] = enc(x[modality]).float()
+            with torch.autocast(device_type=self.device, dtype=torch.float16, enabled=self.autocast[modality]):
+                logits[modality] = enc(x[modality]).float()
             if f"{modality} mask" in x: 
                 logits[modality] *= x[f"{modality} mask"].view((-1, 1))
         
