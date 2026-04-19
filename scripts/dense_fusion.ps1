@@ -6,8 +6,8 @@ $loss = "bce"
 
 conda activate multi
 
-python .\dense_fusion_train.py --model $models --path_lang --clinical_imputed --rad_lang --label_col $target --loss_fn $loss --debug
-python .\dense_fusion_train.py --model $models --sparse --path_lang --clinical_imputed --rad_lang --label_col $target --loss_fn $loss --debug
+python .\dense_fusion_train.py --model $models --path_lang --clinical --rad_lang --label_col $target --loss_fn $loss --debug
+python .\dense_fusion_train.py --model $models --sparse --path_lang --clinical --rad_lang --label_col $target --loss_fn $loss --debug
 
 # # clinical only
 # foreach ($model in $models) {
@@ -33,6 +33,8 @@ python .\dense_fusion_train.py --model $models --sparse --path_lang --clinical_i
 # foreach ($model in $models) {
 #     python .\dense_fusion_train.py --model $model --clinical --path_lang --rad_lang --label_col $target --loss_fn $loss
 # }
+
+
 
 # # imputed clinical
 # foreach ($model in $models) {
