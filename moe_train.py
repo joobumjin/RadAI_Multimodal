@@ -11,12 +11,11 @@ from torch import nn
 from torch.utils.data import TensorDataset, DataLoader
 from torch.nn import functional as F
 from torch import optim
-from torch.optim.lr_scheduler import SequentialLR, LinearLR, CosineAnnealingLR
 
 from torchmetrics import ROC, AUROC
 
 from data import *
-from model import LinearModel, EmbPred, EmbMIL, LogitFusion, NaiveSum, NaiveAvg, LearnedWeightSum
+from model import create_mlp, EmbMIL, DenseFusion
 from util import *
 
 def get_args_parser():
@@ -40,7 +39,7 @@ def get_args_parser():
     parser.add_argument('--path_lang',          action="store_true")
     parser.add_argument('--rad_lang',           action="store_true")
     parser.add_argument('--path_img',           action="store_true")
-    parser.add_argument('--fusion',             type=str,   default="naive_sum", choices=["naive_sum", "naive_avg", "weighted_sum"])
+    parser.add_argument('--emb_dim',            type=int,   default=64)
     
     parser.add_argument('--prefetch_factor',    type=int,   default=2)
     parser.add_argument('--num_workers',        type=int,   default=1)
@@ -70,31 +69,26 @@ def get_args_parser():
 # --------------------------------------------------------
 
 def get_clinical_encoder(args):
-    hidden_dims = [64, 16]
-    clin_enc = LinearModel(input_dim=24, hidden_dims = hidden_dims, loss_fn=None, layer_norm=True)
+    # clin_enc = create_mlp(24, [128], args.emb_dim, act = nn.GELU(), dropout = 0.3, layer_norm = True)
+    clin_enc = create_mlp(1048, [128], args.emb_dim, act = nn.GELU(), dropout = 0.3, layer_norm = True)
     return clin_enc, False
 
 def get_path_lang_encoder(args):
-    path_lang_enc = EmbPred(loss_fn=None)
+    # path_lang_enc = create_mlp(512, [128], args.emb_dim, act = nn.GELU(), dropout = 0.3, layer_norm = True)
+    path_lang_enc = create_mlp(1048, [128], args.emb_dim, act = nn.GELU(), dropout = 0.3, layer_norm = True)
     return path_lang_enc, True
 
 def get_rad_lang_encoder(args):
-    rad_lang_enc = EmbPred(loss_fn=None)
+    # rad_lang_enc = create_mlp(512, [128], args.emb_dim, act = nn.GELU(), dropout = 0.3, layer_norm = True)
+    rad_lang_enc = create_mlp(1048, [128], args.emb_dim, act = nn.GELU(), dropout = 0.3, layer_norm = True)
     return rad_lang_enc, True
 
 def get_path_img_encoder(args):
-    mil = EmbMIL(loss_fn=None)
+    mil = EmbMIL(embed_dim=384, dropout=0.3, attn_dim = 256, proj_dim=args.emb_dim, loss_fn=None)
     return mil, True
 
 def get_fusion_model(args):
     device = "cuda" if torch.cuda.is_available() else "cpu"
-
-    fusers = {
-        "naive_sum": NaiveSum,
-        "naive_avg": NaiveAvg,
-        "weighted_sum": LearnedWeightSum
-    }
-    fusion_fn = fusers[args.fusion]
 
     losses = {
         "l1": F.l1_loss,
@@ -117,31 +111,15 @@ def get_fusion_model(args):
         if arg_dict.get(mod, False): 
             encs[mod], casts[mod] = fn(args)
 
-    model = LogitFusion(encs, casts, fusion_fn=fusion_fn, loss_fn=losses[args.loss_fn], device=device)
+    model = DenseFusion(encs, emb_dim=args.emb_dim, hidden_dims=[32], autocast=casts, loss_fn=losses[args.loss_fn], device=device)
     return model, device
-
-# --------------------------------------------------------
-
-def get_metrics(split: str, args):
-    bool_var = "indicator" in args.label_col
-
-    metrics = {f"{split} Loss": AverageMeter(), "lr": AverageMeter()}
-    fns = {"Acc": lambda p, l: acc(torch.sigmoid(p) > 0.5, l)} if bool_var else {"MSE": F.mse_loss, "L1": F.l1_loss, "2yr Acc": lambda p, l: acc(p > 24, l > 24)}
-    fns = {f"{split} {name}": fn for name, fn in fns.items()}
-    test_metrics = {f"{name}": AverageMeter() for name in fns}
-    metrics = {**metrics, **test_metrics}
-    
-    torchmetrics = {"ROC": ROC(task="binary"), "AUC": AUROC(task="binary")} if bool_var else {}
-    torchmetrics = {f"{split} {name}": obj for name, obj in torchmetrics.items()}
-
-    return metrics, fns, torchmetrics
 
 # --------------------------------------------------------
 
 def get_loaders(args):
     keys = ["slide_ids", "vital_status", "survival_months"]
 
-    index = np.load(f"{args.data_path}/index_arrays_labeled.npz", allow_pickle=True)
+    index   = np.load(f"{args.data_path}/index_arrays_labeled.npz", allow_pickle=True)
     labels  = index['death_indicator_2yr'].astype(np.float32)
     inds    = np.arange(len(labels))
     bin_mods, extra_mods = [], []
@@ -183,6 +161,7 @@ def get_loaders(args):
         num_test = len(inds) - num_train
         train_inds, test_inds = np.hstack((orig[num_test:], imputed)), orig[:num_test]
 
+
     dataset_args = {
         "data_dir": args.data_path,
         "return_key": True,
@@ -211,13 +190,29 @@ def get_loaders(args):
     print(f"Found: {len(valid_inds)} valid samples split into "
         f"\n{len(train_set)} train samples, {len(train_loader)} batches and "
         f"\n{len(test_set)} validation samples, {len(test_loader)} batches"
-        f"\nTrain: under 2 year: {np.sum(index[args.label_col][train_inds] == 0)}, over 2 year: {np.sum(index[args.label_col][train_inds] == 1)}"
-        f"\nTest: under 2 year: {np.sum(index[args.label_col][test_inds] == 0)}, over 2 year: {np.sum(index[args.label_col][test_inds] == 1)}"
+        f"\nTrain: under 2 year: {np.sum(index[args.label_col][train_inds] == 1)}, over 2 year: {np.sum(index[args.label_col][train_inds] == 0)}"
+        f"\nTest: under 2 year: {np.sum(index[args.label_col][test_inds] == 1)}, over 2 year: {np.sum(index[args.label_col][test_inds] == 0)}"
     )
 
     return train_loader, test_loader, num_train
 
 # --------------------------------------------------------
+
+def get_metrics(split: str, args):
+    bool_var = "indicator" in args.label_col
+
+    metrics = {f"{split} Loss": AverageMeter()}
+    if split == "Train": metrics["lr"] = AverageMeter()
+    fns = {"Acc": lambda p, l: acc(torch.sigmoid(p) > 0.5, l)} if bool_var else {"MSE": F.mse_loss, "L1": F.l1_loss, "2yr Acc": lambda p, l: acc(p > 24, l > 24)}
+    fns = {f"{split} {name}": fn for name, fn in fns.items()}
+    test_metrics = {f"{name}": AverageMeter() for name in fns}
+    metrics = {**metrics, **test_metrics}
+    
+    torchmetrics = {"ROC": ROC(task="binary"), "AUC": AUROC(task="binary")} if bool_var else {}
+    torchmetrics = {f"{split} {name}": obj for name, obj in torchmetrics.items()}
+
+    return metrics, fns, torchmetrics
+
 
 def train_one_epoch(model: torch.nn.Module,
                     train_loader: Iterable,
@@ -233,7 +228,7 @@ def train_one_epoch(model: torch.nn.Module,
         for key in batch:
             batch[key] = batch[key].to(device)
 
-        loss, preds = model(batch)
+        preds, loss = model(batch)
 
         with torch.inference_mode():
             metrics["Train Loss"].update(loss.detach().item())
@@ -263,7 +258,7 @@ def test(model: torch.nn.Module, data_loader: Iterable, device: str, args=None):
             batch[key] = batch[key].to(device)
 
         with torch.inference_mode():
-            loss, preds = model(batch)
+            preds, loss = model(batch)
             metrics["Test Loss"].update(loss.detach().item())
             for name, fn in fns.items():
                 metric_val = fn(preds, batch["label"])
@@ -274,6 +269,7 @@ def test(model: torch.nn.Module, data_loader: Iterable, device: str, args=None):
                 obj.update(preds.detach().squeeze(-1), batch["label"].detach().int().squeeze(-1))
 
     return {k: meter.avg for k, meter in metrics.items()}, torchmetrics
+
 
 # --------------------------------------------------------
 
@@ -301,7 +297,7 @@ def main(args):
             "Path Lang": args.path_lang,
             "Rad Lang": args.rad_lang,
             "Path Img": args.path_img,
-            "Fusion": args.fusion,
+            "Fusion": "Dense",
             "Model": args.model,
             "MLP Norm": "Layer Norm",
         }
@@ -313,11 +309,11 @@ def main(args):
         if args.rad_lang: mods.append("Rad Lang")
         if args.path_img: mods.append("Path Img")
 
-        name = "+".join(mods) + f" - {args.label_col} - {args.fusion} - {args.model}"
+        name = "+".join(mods) + f" - smaller, 64e - {args.label_col} - {args.model}"
 
         run = wandb.init(
             entity="bumjin_joo-brown-university", 
-            project=f"Panc MM Sparse Logit Fusion w Stage", 
+            project=f"Panc MM Cleanup Concat Fusion w Stage", 
             name=name,
             config=config
         )
@@ -350,9 +346,15 @@ def main(args):
         if run is not None: run.log(postfix)
         pbar.set_postfix(postfix)
 
-        if early_stopper is not None and early_stopper.update(postfix[stop_metric]): 
-            print("Early stopping triggered!")
-            return
+        if early_stopper is not None:
+            stop, best = early_stopper.update(postfix[stop_metric])
+            if best:
+                # save_model(model, args.save_path)
+                pass
+            elif stop:
+                print("Early stopping triggered!")
+                return
+                
        
 
 if __name__ == '__main__':
@@ -362,7 +364,7 @@ if __name__ == '__main__':
     args.data_path = args.data_path.format(model=args.model)
 
     if args.debug:
-        args.epochs = 1
+        args.epochs = 5
         args.disable_wandb = True
 
     main(args)
