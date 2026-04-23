@@ -11,23 +11,28 @@ class Fuser(nn.Module, ABC):
         self.modalities = modalities
     
     @abstractmethod
-    def forward(self, x: Dict[str, torch.Tensor]) -> torch.Tensor: ...
+    def forward(self, x: Dict[str, torch.Tensor], masked=False) -> torch.Tensor: 
+        ...
 
 class NaiveSum(Fuser):
-    def forward(self, x):
-        out =  torch.sum(torch.stack([x[mod] for mod in self.modalities]), axis=0)
+    def forward(self, x, masked=False):
+        out =  torch.sum(torch.stack([x[mod] for mod in self.modalities]), dim=0)
         return out
     
 class NaiveAvg(Fuser):
-    def forward(self, x):
-        return torch.sum(torch.stack([x[mod] for mod in self.modalities]), axis=0) / len(x)
+    def forward(self, x, masked=False):
+        modality_count = len(self.modalities)
+        if masked:
+            modality_count = torch.sum(torch.stack([x[f"{mod} mask"] for mod in self.modalities]), dim=0)
+
+        return torch.sum(torch.stack([x[mod] for mod in self.modalities]), dim=0) / modality_count
 
 class LearnedWeightSum(Fuser):
     def __init__(self, modalities: List[str]):
         super().__init__(modalities)
         self.weights = nn.Linear(len(modalities), 1, bias=False)
 
-    def forward(self, x: Dict[str, torch.Tensor]) -> torch.Tensor:
+    def forward(self, x: Dict[str, torch.Tensor], masked=False) -> torch.Tensor:
         x = torch.cat([x[mod] for mod in self.modalities], dim=1)
         return self.weights(x) #kind of a crude way to do it
     
@@ -51,11 +56,15 @@ class LogitFusion(nn.Module):
 
     def predict(self, x: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:            
         logits = {}
+        masked = False
         for modality, enc in self.encoders.items():
             with torch.autocast(device_type=self.device, dtype=torch.float16, enabled=self.autocast[modality]):
                 logits[modality] = enc.predict(x[modality]).float()
+            if f"{modality} mask" in x: 
+                masked = True
+                logits[f"{modality} mask"] *= x[f"{modality} mask"].view((-1, 1))
         
-        return self.fusion_fn(logits)
+        return self.fusion_fn(logits, masked=masked)
     
     def forward(self, x: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
         preds = self.predict(x)
