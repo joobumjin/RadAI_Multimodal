@@ -7,7 +7,7 @@ $loss = "bce"
 conda activate multi
 
 python .\dense_fusion_train.py --model $models --path_lang --clinical --rad_lang --label_col $target --loss_fn $loss --debug
-python .\dense_fusion_train.py --model $models --sparse --path_lang --clinical --rad_lang --label_col $target --loss_fn $loss --debug
+# python .\dense_fusion_train.py --model $models --sparse --path_lang --clinical --rad_lang --label_col $target --loss_fn $loss --debug
 
 # # clinical only
 # foreach ($model in $models) {
@@ -34,6 +34,32 @@ python .\dense_fusion_train.py --model $models --sparse --path_lang --clinical -
 #     python .\dense_fusion_train.py --model $model --clinical --path_lang --rad_lang --label_col $target --loss_fn $loss
 # }
 
+
+# #sparse 
+# # clinical only
+# foreach ($model in $models) {
+#     python .\dense_fusion_train.py --model $model --sparse --clinical  --label_col $target --loss_fn $loss
+# }
+
+# # langauge only
+# foreach ($model in $models) {
+#     python .\dense_fusion_train.py --model $model --sparse --path_lang --rad_lang --label_col $target --loss_fn $loss
+# }
+
+# # clin + path lang
+# foreach ($model in $models) {
+#     python .\dense_fusion_train.py --model $model --sparse --clinical --path_lang --label_col $target --loss_fn $loss
+# }
+
+# # clin + rad lang
+# foreach ($model in $models) {
+#     python .\dense_fusion_train.py --model $model --sparse --clinical --rad_lang --label_col $target --loss_fn $loss
+# }
+
+# #all 3
+# foreach ($model in $models) {
+#     python .\dense_fusion_train.py --model $model --sparse --clinical --path_lang --rad_lang --label_col $target --loss_fn $loss
+# }
 
 
 # # imputed clinical

@@ -280,7 +280,7 @@ class MemmapDatasetMultimodal(Dataset):
         if not os.path.exists(bin_path):
             raise FileNotFoundError(f"Features file not found: {bin_path}")
         
-        bin_shape = [self._total_patches, self._feat_dim, 2]
+        bin_shape = tuple([self._total_patches, self._feat_dim, 2])
         
         self.data = np.memmap(
             bin_path,

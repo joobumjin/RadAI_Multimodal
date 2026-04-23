@@ -118,7 +118,7 @@ def get_fusion_model(args):
 def get_inds(args):
     keys = ["slide_ids", "vital_status", "survival_months"]
 
-    index = np.load(f"{args.data_path}/index_arrays_labeled.npz", allow_pickle=True)
+    index   = np.load(f"{args.data_path}/index_arrays_labeled.npz", allow_pickle=True)
     labels  = index['death_indicator_2yr'].astype(np.float32)
     inds    = np.arange(len(labels))
     bin_mods, extra_mods = [], []
@@ -140,15 +140,17 @@ def get_inds(args):
             extra_mods.append(mod)
     for mod, ind in zip(["path_lang", "rad_lang"], [0,1]):
         if arg_dict.get(mod, False): 
-            modality_mask = combine_op(modality_mask, index['combined_lengths'][:, ind].astype(bool))
+            modality_mask = combine_op(modality_mask, index['combined_lengths'][:, ind] > 0)
             bin_mods.append(mod)
 
     mask = mask & modality_mask
 
     valid_inds = inds[mask]
+    print(f"Valid Shape {valid_inds.shape}")
     
-    kf = KFold(n_splits=args.splits, shuffle=True, random_state=args.seed)
-    return kf.split(valid_inds)
+    kf = KFold(n_splits=args.folds, shuffle=True, random_state=args.seed)
+    # kf = KFold(n_splits=args.folds)
+    return kf.split(X=valid_inds), valid_inds
 
 def get_loaders(args, train_inds, test_inds):
     labels = np.load(f"{args.data_path}/index_arrays_labeled.npz", allow_pickle=True)[args.label_col]
@@ -170,11 +172,11 @@ def get_loaders(args, train_inds, test_inds):
         "label_dtype": np.float32,
         "bin_modality_keys": bin_mods,
         "extra_modality_keys": extra_mods,
-        "allow_sparse_samples": args.sparse
+        "allow_sparse_samples": False
     }
     loader_args = {
         "batch_size": args.batch_size,
-        "pin_memory": args.pin_mem,
+        "pin_memory": args.pin_mem & torch.cuda.is_available(),
         "num_workers": args.num_workers,
         "collate_fn": default_collate,
         "persistent_workers": args.num_workers > 0,
@@ -187,7 +189,7 @@ def get_loaders(args, train_inds, test_inds):
     test_set = MemmapDatasetMultimodal(indices=test_inds, **dataset_args)
     test_loader = DataLoader(test_set, shuffle=False, **loader_args)
 
-    print(f""
+    print(f"{len(train_inds) + len(test_inds)} total samples"
         f"\n{len(train_set)} train samples, {len(train_loader)} batches and "
         f"\n{len(test_set)} validation samples, {len(test_loader)} batches"
         f"\nTrain: under 2 year: {np.sum(labels[train_inds] == 1)}, over 2 year: {np.sum(labels[train_inds] == 0)}"
@@ -279,8 +281,6 @@ def main(args):
 
     model, device = get_fusion_model(args)
 
-    optimizer, scheduler = get_opt_and_sched(model, args, iter_per_epoch=len(train_loader))
-
     early_stopper = EarlyStopper(args.patience, False) if args.early_stop else None
     stop_metric = "Test C-Index"
 
@@ -313,8 +313,11 @@ def main(args):
             config=config
         )
 
-    for split in get_inds(args):
-        train_loader, test_loader = get_loaders(args, *split)
+    splits, valid_inds = get_inds(args)
+    for (train_i, test_i) in splits:
+        train_inds, test_inds = valid_inds[train_i], valid_inds[test_i]
+        train_loader, test_loader = get_loaders(args, train_inds, test_inds)
+        optimizer, scheduler = get_opt_and_sched(model, args, iter_per_epoch=len(train_loader))
         print(f"Start training for {args.epochs} epochs")
         pbar = trange(0, args.epochs, desc="Training Epochs", postfix={})
         for e in pbar:
