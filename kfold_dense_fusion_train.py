@@ -146,10 +146,12 @@ def get_inds(args):
     mask = mask & modality_mask
 
     valid_inds = inds[mask]
+    np.random.shuffle(valid_inds)
+    # split into args.folds
     print(f"Valid Shape {valid_inds.shape}")
     
-    kf = KFold(n_splits=args.folds, shuffle=True, random_state=args.seed)
-    # kf = KFold(n_splits=args.folds)
+    # kf = KFold(n_splits=args.folds, shuffle=True, random_state=args.seed)
+    kf = KFold(n_splits=args.folds)
     return kf.split(X=valid_inds), valid_inds
 
 def get_loaders(args, train_inds, test_inds):
@@ -304,7 +306,7 @@ def main(args):
         if args.rad_lang: mods.append("Rad Lang")
         if args.path_img: mods.append("Path Img")
 
-        name = "+".join(mods) + f" - {args.label_col} - {args.model}"
+        name = "+".join(mods) + f" - np.shuff - {args.label_col} - {args.model}"
 
         run = wandb.init(
             entity="bumjin_joo-brown-university", 
