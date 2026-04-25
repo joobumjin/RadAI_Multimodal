@@ -40,7 +40,7 @@ def get_args_parser():
     parser.add_argument('--path_lang',          action="store_true")
     parser.add_argument('--rad_lang',           action="store_true")
     parser.add_argument('--path_img',           action="store_true")
-    parser.add_argument('--emb_dim',            type=int,   default=128)
+    parser.add_argument('--emb_dim',            type=int,   default=64)
     
     parser.add_argument('--prefetch_factor',    type=int,   default=2)
     parser.add_argument('--num_workers',        type=int,   default=1)
@@ -146,10 +146,10 @@ def get_inds(args):
     mask = mask & modality_mask
 
     valid_inds = inds[mask]
-    print(f"Valid Shape {valid_inds.shape}")
+    np.random.shuffle(valid_inds)
     
-    kf = KFold(n_splits=args.folds, shuffle=True, random_state=args.seed)
-    # kf = KFold(n_splits=args.folds)
+    # kf = KFold(n_splits=args.folds, shuffle=True, random_state=args.seed)
+    kf = KFold(n_splits=args.folds)
     return kf.split(X=valid_inds), valid_inds
 
 def get_loaders(args, train_inds, test_inds):
@@ -279,42 +279,44 @@ def main(args):
     torch.manual_seed(args.seed)
     np.random.seed(args.seed)
 
-    model, device = get_fusion_model(args)
+    
 
     early_stopper = EarlyStopper(args.patience, False) if args.early_stop else None
     stop_metric = "Test C-Index"
 
-    if args.disable_wandb: run = None
-    else:
-        config = {
-            "Loss": args.loss_fn,
-            "Seed": args.seed,
-            "Clinical": args.clinical,
-            "Path Lang": args.path_lang,
-            "Rad Lang": args.rad_lang,
-            "Path Img": args.path_img,
-            "Fusion": "Dense",
-            "Model": args.model,
-            "MLP Norm": "Layer Norm",
-        }
-
-        mods = []
-        if args.clinical: mods.append("Clinical")
-        if args.path_lang: mods.append("Path Lang")
-        if args.rad_lang: mods.append("Rad Lang")
-        if args.path_img: mods.append("Path Img")
-
-        name = "+".join(mods) + f" - {args.label_col} - {args.model}"
-
-        run = wandb.init(
-            entity="bumjin_joo-brown-university", 
-            project=f"Panc MM Fusion w Stage Cross Validation", 
-            name=name,
-            config=config
-        )
-
     splits, valid_inds = get_inds(args)
     for (train_i, test_i) in splits:
+        model, device = get_fusion_model(args)
+
+        if args.disable_wandb: run = None
+        else:
+            config = {
+                "Loss": args.loss_fn,
+                "Seed": args.seed,
+                "Clinical": args.clinical,
+                "Path Lang": args.path_lang,
+                "Rad Lang": args.rad_lang,
+                "Path Img": args.path_img,
+                "Fusion": "Dense",
+                "Model": args.model,
+                "MLP Norm": "Layer Norm",
+            }
+
+            mods = []
+            if args.clinical: mods.append("Clinical")
+            if args.path_lang: mods.append("Path Lang")
+            if args.rad_lang: mods.append("Rad Lang")
+            if args.path_img: mods.append("Path Img")
+
+            name = "+".join(mods) + f" - 64e - {args.label_col} - {args.model}"
+
+            run = wandb.init(
+                entity="bumjin_joo-brown-university", 
+                project=f"Panc MM Fusion Cross Validation", 
+                name=name,
+                config=config
+            )
+
         train_inds, test_inds = valid_inds[train_i], valid_inds[test_i]
         train_loader, test_loader = get_loaders(args, train_inds, test_inds)
         optimizer, scheduler = get_opt_and_sched(model, args, iter_per_epoch=len(train_loader))
@@ -354,6 +356,8 @@ def main(args):
                 elif stop:
                     print("Early stopping triggered!")
                     return
+                
+        run.finish()
                 
        
 
