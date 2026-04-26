@@ -140,9 +140,9 @@ def get_loaders(args):
         if arg_dict.get(mod, False): 
             modality_mask = combine_op(modality_mask, ~np.isnan(index[mod]).any(axis=1))
             extra_mods.append(mod)
-    for mod, ind in zip(["path_lang", "rad_lang"], [0,1]):
+    for mod in ["path_lang", "rad_lang", "path_img"]:
         if arg_dict.get(mod, False): 
-            modality_mask = combine_op(modality_mask, index['combined_lengths'][:, ind].astype(bool))
+            modality_mask = combine_op(modality_mask, (index[f'{mod}_lengths'] > 0).astype(bool))
             bin_mods.append(mod)
 
     mask = mask & modality_mask
