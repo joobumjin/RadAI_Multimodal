@@ -26,7 +26,8 @@ def get_args_parser():
     parser.add_argument('--batch_size',         type=int,   default=32)
     parser.add_argument('--loss_fn',            type=str,   default="bce")
     parser.add_argument('--model',              type=str,   default="conch", choices=['conch', 'biomedclip'])
-    parser.add_argument('--data_path',          type=str,   default="../{model}_path_rad_text_embs")
+    # parser.add_argument('--data_path',          type=str,   default="../{model}_path_rad_text_embs")
+    parser.add_argument('--data_path',          type=str,   default="../multimodal_bins")
     parser.add_argument('--epochs',             type=int,   default=200)
     parser.add_argument('--device',                         default='cuda')
     parser.add_argument('--float16',            type=bool,  default=True)
@@ -364,7 +365,7 @@ if __name__ == '__main__':
     parser  = get_args_parser()
     args    = parser.parse_args()
 
-    args.data_path = args.data_path.format(model=args.model)
+    # args.data_path = args.data_path.format(model=args.model)
 
     if args.debug:
         args.epochs = 5
