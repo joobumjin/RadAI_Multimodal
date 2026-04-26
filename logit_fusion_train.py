@@ -202,10 +202,10 @@ def get_loaders(args):
         "drop_last": False,
     }
 
-    train_set = MemmapDatasetMultimodal(indices=train_inds, **dataset_args)
+    train_set = MemmapDatasetMergedMultimodal(indices=train_inds, **dataset_args)
     train_loader = DataLoader(train_set, shuffle=True, **loader_args)
 
-    test_set = MemmapDatasetMultimodal(indices=test_inds, **dataset_args)
+    test_set = MemmapDatasetMergedMultimodal(indices=test_inds, **dataset_args)
     test_loader = DataLoader(test_set, shuffle=False, **loader_args)
 
     print(f"Found: {len(valid_inds)} valid samples split into "
