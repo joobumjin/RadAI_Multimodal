@@ -396,6 +396,7 @@ class MemmapDatasetMultimodal(Dataset):
         
         index = np.load(index_path, allow_pickle=True)
 
+        self._slide_ids = index['slide_ids']
         self._labels    = index[label_column].astype(label_dtype) if label_column is not None else None
 
         #each bin mod has a dtype, feat_dim, offsets, lengths, and total_patches
