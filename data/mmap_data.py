@@ -399,8 +399,8 @@ class MemmapDatasetMultimodal(Dataset):
         self._labels    = index[label_column].astype(label_dtype) if label_column is not None else None
 
         #each bin mod has a dtype, feat_dim, offsets, lengths, and total_patches
-        self._dtypes    = {mod: int(index[f'{mod}_dtype'])      for mod in self.bin_mods} if self.bin_mods is not None else None
-        self._feat_dims = {mod: int(index[f'{mod}_feat_dim'])   for mod in self.bin_mods} if self.bin_mods is not None else None
+        self._dtypes    = {mod: index[f'{mod}_dtype']           for mod in self.bin_mods} if self.bin_mods is not None else None
+        self._feat_dims = {mod: index[f'{mod}_feat_dim']        for mod in self.bin_mods} if self.bin_mods is not None else None
         self._offsets   = {mod: index[f'{mod}_offsets']         for mod in self.bin_mods} if self.bin_mods is not None else None
         self._lengths   = {mod: index[f'{mod}_lengths']         for mod in self.bin_mods} if self.bin_mods is not None else None #how many patches in the sample
         self._patches   = {mod: index[f'{mod}_total_patches']   for mod in self.bin_mods} if self.bin_mods is not None else None
