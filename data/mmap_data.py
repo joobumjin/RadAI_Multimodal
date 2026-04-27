@@ -400,11 +400,11 @@ class MemmapDatasetMultimodal(Dataset):
         self._labels    = index[label_column].astype(label_dtype) if label_column is not None else None
 
         #each bin mod has a dtype, feat_dim, offsets, lengths, and total_patches
-        self._dtypes    = {mod: index[f'{mod}_dtype']           for mod in self.bin_mods} if self.bin_mods is not None else None
-        self._feat_dims = {mod: index[f'{mod}_feat_dim']        for mod in self.bin_mods} if self.bin_mods is not None else None
-        self._offsets   = {mod: index[f'{mod}_offsets']         for mod in self.bin_mods} if self.bin_mods is not None else None
-        self._lengths   = {mod: index[f'{mod}_lengths']         for mod in self.bin_mods} if self.bin_mods is not None else None #how many patches in the sample
-        self._patches   = {mod: index[f'{mod}_total_patches']   for mod in self.bin_mods} if self.bin_mods is not None else None
+        self._dtypes    = {mod: str(index[f'{mod}_dtype'].item())           for mod in self.bin_mods} if self.bin_mods is not None else None
+        self._feat_dims = {mod: int(index[f'{mod}_feat_dim'].item())        for mod in self.bin_mods} if self.bin_mods is not None else None
+        self._offsets   = {mod: index[f'{mod}_offsets']                     for mod in self.bin_mods} if self.bin_mods is not None else None
+        self._lengths   = {mod: index[f'{mod}_lengths']                     for mod in self.bin_mods} if self.bin_mods is not None else None #how many patches in the sample
+        self._patches   = {mod: index[f'{mod}_total_patches']               for mod in self.bin_mods} if self.bin_mods is not None else None
 
         #handle keys
         self._keys = None
@@ -487,7 +487,8 @@ class MemmapDatasetMultimodal(Dataset):
         sample = {"label": label}
 
         if self._lengths is not None:
-            for mod, length in self._lengths.items():
+            for mod, lengths in self._lengths.items():
+                length = lengths[real_idx]
                 offset = int(self._offsets[mod][real_idx])
                 k = min(length, self.max_instances) if self.max_instances else length
 
@@ -497,7 +498,10 @@ class MemmapDatasetMultimodal(Dataset):
                 else:
                     sample[f"{mod} mask"] = 1
                     start = np.random.randint(0, length - k + 1) if k < length else 0
-                    sample[mod] = np.array(self.bin_data[mod][offset + start : offset + start + k, :], copy=True).squeeze(0)
+                    data = np.array(self.bin_data[mod][offset + start : offset + start + k, :], copy=True)
+                    if len(data) == 1:
+                        data = data[:].squeeze(0)
+                    sample[mod] = data
 
         for mod_name, mod_data in self.extras.items():
             data = mod_data[real_idx]
