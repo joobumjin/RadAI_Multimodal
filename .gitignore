@@ -1,6 +1,6 @@
 wandb/
 wandb.txt
-data/build*
+data/*build*
 .paquo*
 .vscode/
 
