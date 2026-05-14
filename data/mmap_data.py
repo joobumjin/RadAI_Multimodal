@@ -370,7 +370,8 @@ class MemmapDatasetMultimodal(Dataset):
         bin_modality_keys: Optional[List[str]] = ["path_lang", "rad_lang"],
         bin_paths: Optional[Dict[str,str]] = None,
         extra_modality_keys: Optional[List[str]] = [], #eg ['clinical']
-        allow_sparse_samples: bool = False
+        allow_sparse_samples: bool = False,
+        label_fn: Optional[callable] = None
     ):
         """
         Args:
@@ -397,7 +398,10 @@ class MemmapDatasetMultimodal(Dataset):
         index = np.load(index_path, allow_pickle=True)
 
         self._slide_ids = index['slide_ids']
-        self._labels    = index[label_column].astype(label_dtype) if label_column is not None else None
+        self._labels    = None
+        if label_column is not None:
+            self._labels = index[label_column].astype(label_dtype) 
+            if label_fn is not None: self._labels = label_fn(self._labels)
 
         #each bin mod has a dtype, feat_dim, offsets, lengths, and total_patches
         self._dtypes    = {mod: str(index[f'{mod}_dtype'].item())           for mod in self.bin_mods} if self.bin_mods is not None else None

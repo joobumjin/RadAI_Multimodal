@@ -28,7 +28,7 @@ def get_args_parser():
     parser.add_argument('--loss_fn',            type=str,   default="bce")
     parser.add_argument('--model',              type=str,   default="conch", choices=['conch', 'biomedclip'])
     # parser.add_argument('--data_path',          type=str,   default="../{model}_path_rad_text_embs")
-    parser.add_argument('--data_path',          type=str,   default="../multimodal_bins")
+    parser.add_argument('--data_path',          type=str,   default="../updated_multimodal_bins")
     parser.add_argument('--epochs',             type=int,   default=200)
     parser.add_argument('--device',                         default='cuda')
     parser.add_argument('--float16',            type=bool,  default=True)
@@ -48,8 +48,9 @@ def get_args_parser():
     parser.add_argument('--pin_mem',            type=bool,  default=True)
     parser.add_argument('--train_split',        type=float, default=.85)
 
-    parser.add_argument('--label_col',          type=str,   default="death_indicator_2yr")
-    parser.add_argument('--censor_col',         type=str,   default="survival_censor")
+    parser.add_argument('--label_col',          type=str,   default="survival_days")
+    parser.add_argument('--survival_years',     type=int,   default=2)
+    parser.add_argument('--censor_col',         type=str,   default="right_censor")
 
     # Optimizer parameters
     parser.add_argument('--lr',                 type=float, default=1e-4,   metavar='LR',
@@ -119,10 +120,10 @@ def get_fusion_model(args):
 # --------------------------------------------------------
 
 def get_loaders(args):
-    keys = ["slide_ids", "vital_status", "survival_months"]
+    keys = ["slide_ids", "survival_days"]
 
-    index = np.load(f"{args.data_path}/index_arrays_labeled.npz", allow_pickle=True)
-    labels  = index['death_indicator_2yr'].astype(np.float32)
+    index   = np.load(f"{args.data_path}/index_arrays_labeled.npz", allow_pickle=True)
+    labels  = index['survival_days'].astype(np.float32)
     inds    = np.arange(len(labels))
     bin_mods, extra_mods = [], []
 
@@ -167,12 +168,13 @@ def get_loaders(args):
     dataset_args = {
         "data_dir": args.data_path,
         "return_key": True,
-        "keys": ["slide_ids", "vital_status", "survival_months"],
+        "keys": keys,
         "label_column": args.label_col,
         "label_dtype": np.float32,
         "bin_modality_keys": bin_mods,
         "extra_modality_keys": extra_mods,
-        "allow_sparse_samples": args.sparse
+        "allow_sparse_samples": args.sparse,
+        "label_fn": lambda dates: dates < (365.0 * args.survival_years) #predict if the patient will die in x years
     }
     loader_args = {
         "batch_size": args.batch_size,
