@@ -523,8 +523,17 @@ class MemmapDatasetMultimodal(Dataset):
 
 
 # =============================================================================
-# Collate Functions (unchanged)
+# Collate Functions
 # =============================================================================
+
+def collate_dict_to_list(batch: List[Dict]):
+    return {key: [d[key] for d in batch] for key in batch[0]}
+
+def collate_mixed(batch: List[Dict], list_keys: List[str]):
+    list_batch = {key: [sample.pop(key) for sample in batch] for key in list_keys}
+    dict_batch = default_collate(batch)
+    return {**dict_batch, **list_batch}
+
 def collate_bags(
     batch: List[Union[
         Tuple[torch.Tensor, np.float64, int],

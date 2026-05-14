@@ -1,5 +1,6 @@
 import os
 import argparse
+from argparse import Namespace
 from typing import Iterable, Optional
 from collections import defaultdict
 
@@ -177,7 +178,7 @@ def get_loaders(args):
         "batch_size": args.batch_size,
         "pin_memory": args.pin_mem,
         "num_workers": args.num_workers,
-        "collate_fn": default_collate,
+        "collate_fn": default_collate if not args.path_img else lambda batch: collate_mixed(batch, ["label", *bin_mods, *extra_mods]),
         "persistent_workers": args.num_workers > 0,
         "drop_last": False,
     }
@@ -222,7 +223,7 @@ def train_one_epoch(model: torch.nn.Module,
                     train_loader: Iterable,
                     optimizer: optim.Optimizer, scheduler: optim.lr_scheduler.LRScheduler,
                     device: str,
-                    args=None):
+                    args: Namespace):
     model.train(True)
     optimizer.zero_grad()
 
@@ -252,7 +253,44 @@ def train_one_epoch(model: torch.nn.Module,
 
     return {k: meter.avg for k, meter in metrics.items()}, torchmetrics
 
-def test(model: torch.nn.Module, data_loader: Iterable, device: str, args=None):
+def train_one_epoch_list(model: torch.nn.Module, 
+                         train_loader: Iterable, 
+                         optimizer: optim.Optimizer, scheduler: optim.lr_scheduler.LRScheduler, 
+                         device: str, 
+                         args: Namespace):
+    model.train(True)
+    optimizer.zero_grad()
+
+    metrics, fns, torchmetrics = get_metrics("Train", args)
+    
+    for batch in train_loader:
+        for key in batch:
+            batch[key] = batch[key].to(device)
+
+        preds, loss = model(batch)
+
+        with torch.inference_mode():
+            metrics["Train Loss"].update(loss.detach().item())
+            metrics["lr"].update(optimizer.param_groups[0]["lr"])
+            for name, fn in fns.items():
+                metric_val = fn(preds, batch["label"])
+                metrics[name].update(metric_val.detach().item())
+
+            preds = torch.sigmoid(preds)
+            for obj in torchmetrics.values():
+                obj.update(preds.detach().squeeze(-1), batch["label"].detach().int().squeeze(-1))
+
+        loss.backward()
+        optimizer.step()
+        optimizer.zero_grad()
+        scheduler.step()
+
+    return {k: meter.avg for k, meter in metrics.items()}, torchmetrics
+
+def test(model: torch.nn.Module, 
+         data_loader: Iterable, 
+         device: str, 
+         args: Namespace):
     model.eval()
 
     metrics, fns, torchmetrics = get_metrics("Test", args)
