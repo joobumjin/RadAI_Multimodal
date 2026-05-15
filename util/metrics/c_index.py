@@ -12,9 +12,9 @@ def calculate_c_indices(model: torch.nn.Module, train_loader, val_loader, test_l
     test_preds, test_deaths, test_times = [], [], []
 
     for batch in train_loader:
-        vitals = batch["vital_status"].numpy().astype(bool)
+        surviving = batch["survival_right_censor"].numpy().astype(bool)
         times = batch["survival_months"].numpy()
-        train_deaths.append(~vitals)
+        train_deaths.append(~surviving)
         train_times.append(times)
 
         for key in batch: batch[key] = batch[key].to(device)
@@ -27,9 +27,9 @@ def calculate_c_indices(model: torch.nn.Module, train_loader, val_loader, test_l
     train = [np.concatenate(l) for l in [train_deaths, train_times, train_preds]]
 
     for batch in val_loader:
-        vitals = batch["vital_status"].numpy().astype(bool)
+        surviving = batch["survival_right_censor"].numpy().astype(bool)
         times = batch["survival_months"].numpy()
-        val_deaths.append(~vitals)
+        val_deaths.append(~surviving)
         val_times.append(times)
 
         for key in batch: batch[key] = batch[key].to(device)
@@ -42,9 +42,9 @@ def calculate_c_indices(model: torch.nn.Module, train_loader, val_loader, test_l
     val = [np.concatenate(l) for l in [val_deaths, val_times, val_preds]]
 
     for batch in test_loader:
-        vitals = batch["vital_status"].numpy().astype(bool)
+        surviving = batch["survival_right_censor"].numpy().astype(bool)
         times = batch["survival_months"].numpy()
-        test_deaths.append(~vitals)
+        test_deaths.append(~surviving)
         test_times.append(times)
 
         for key in batch: batch[key] = batch[key].to(device)
