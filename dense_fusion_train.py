@@ -364,7 +364,7 @@ def main(args):
 
         run = wandb.init(
             entity="bumjin_joo-brown-university", 
-            project=f"Panc MM Sparse Concat Fusion w Stage", 
+            project=f"Panc MM External Test", 
             name=name,
             config=config
         )

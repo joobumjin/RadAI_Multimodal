@@ -201,7 +201,7 @@ def get_loaders(args, train_inds, validation_inds):
     train_loader = DataLoader(train_set, shuffle=True, **loader_args)
     val_loader = DataLoader(val_set, shuffle=False, **loader_args)
 
-    print(f"Found: {len(valid_inds)} valid samples split into "
+    print(
         f"\n{len(train_set)} train samples, {len(train_loader)} batches and "
         f"\n{len(val_set)} validation samples, {len(val_loader)} batches"
         f"\nTrain: under {args.survival_year} year: {np.sum(index[args.label_col][train_inds] < args.survival_year * 365.0)}, over {args.survival_year} year: {np.sum(index[args.label_col][train_inds] >= args.survival_year * 365.0)}"
@@ -214,7 +214,8 @@ def get_loaders(args, train_inds, validation_inds):
     test_set = MemmapDataset(**test_args)
     test_loader = DataLoader(test_set, shuffle=False, **loader_args)
 
-    print(f"Found: {len(test_set)} valid test samples acorss {len(test_loader)} batches "
+    print(
+        f"{len(test_set)} test samples across {len(test_loader)} batches "
         f"\nTest: under {args.survival_year} year: {np.sum(test_index[args.label_col] < args.survival_year * 365.0)}, over {args.survival_year} year: {np.sum(test_index[args.label_col] >= args.survival_year * 365.0)}"
         f"\n\n\n"
         "---" * 10
@@ -370,7 +371,7 @@ def main(args):
 
             run = wandb.init(
                 entity="bumjin_joo-brown-university", 
-                project=f"Panc MM Fusion Cross Validation", 
+                project=f"Panc MM Fusion Cross Validation External Test", 
                 name=name,
                 config=config
             )
