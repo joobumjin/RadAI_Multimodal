@@ -29,6 +29,7 @@ def get_args_parser():
     parser.add_argument('--model',              type=str,   default="conch", choices=['conch', 'biomedclip'])
     # parser.add_argument('--data_path',          type=str,   default="../{model}_path_rad_text_embs")
     parser.add_argument('--data_path',          type=str,   default="../updated_multimodal_bins")
+    parser.add_argument('--test_path',          type=str,   default="../multimodal_bins_rw")
     parser.add_argument('--epochs',             type=int,   default=200)
     parser.add_argument('--device',                         default='cuda')
     parser.add_argument('--float16',            type=bool,  default=True)
@@ -120,7 +121,7 @@ def get_fusion_model(args):
 # --------------------------------------------------------
 
 def get_loaders(args):
-    keys = ["slide_ids", "survival_days"]
+    keys = ["slide_ids", "survival_days", "survival_right_censor"]
 
     index   = np.load(f"{args.data_path}/index_arrays_labeled.npz", allow_pickle=True)
     labels  = index['survival_days'].astype(np.float32)
@@ -130,9 +131,8 @@ def get_loaders(args):
     label_mask = ~np.isnan(index[args.label_col])
     exclusion_mask = ~index["excluded"]
     mask = label_mask & exclusion_mask
-    if "indicator" in args.label_col: 
-        for key in keys:
-            mask = mask & (~np.isnan(index[key]))
+    for key in keys:
+        mask = mask & (~np.isnan(index[key]))
 
     modality_mask = np.zeros_like(mask).astype(bool) if args.sparse else np.ones_like(mask).astype(bool)
     combine_op = lambda x, y: x | y if args.sparse else x & y
@@ -140,11 +140,11 @@ def get_loaders(args):
     arg_dict = vars(args)
     for mod in ["clinical", "clinical_imputed"]:
         if arg_dict.get(mod, False): 
-            modality_mask = combine_op(modality_mask, ~np.isnan(index[mod]).any(axis=1))
+            modality_mask = combine_op(modality_mask, ~index[f'{mod}_mask'])
             extra_mods.append(mod)
     for mod in ["path_lang", "rad_lang", "path_img"]:
         if arg_dict.get(mod, False): 
-            modality_mask = combine_op(modality_mask, (index[f'{mod}_lengths'] > 0).astype(bool))
+            modality_mask = combine_op(modality_mask, ~(index[f'{mod}_mask']))
             bin_mods.append(mod)
 
     mask = mask & modality_mask
@@ -154,7 +154,7 @@ def get_loaders(args):
     if not args.clinical_imputed: #standard random shuffle and select
         np.random.shuffle(valid_inds)
         
-        train_inds, test_inds = valid_inds[:num_train], valid_inds[num_train:]
+        train_inds, validation_inds = valid_inds[:num_train], valid_inds[num_train:]
     else: #only test on real samples, but can train on imputed data
         orig = inds[~np.isnan(index['clinical']).any(axis=1) & mask]
         np.random.shuffle(orig)
@@ -162,7 +162,7 @@ def get_loaders(args):
         imputed = inds[np.isnan(index['clinical']).any(axis=1) & mask]
 
         num_test = len(inds) - num_train
-        train_inds, test_inds = np.hstack((orig[num_test:], imputed)), orig[:num_test]
+        train_inds, validation_inds = np.hstack((orig[num_test:], imputed)), orig[:num_test]
 
 
     dataset_args = {
@@ -189,33 +189,42 @@ def get_loaders(args):
     # test_set = MemmapDatasetMergedMultimodal(indices=test_inds, **dataset_args)
 
     train_set = MemmapDatasetMultimodal(indices=train_inds, **dataset_args)
-    test_set = MemmapDatasetMultimodal(indices=test_inds, **dataset_args)
+    val_set = MemmapDatasetMultimodal(indices=validation_inds, **dataset_args)
     train_loader = DataLoader(train_set, shuffle=True, **loader_args)
-    test_loader = DataLoader(test_set, shuffle=False, **loader_args)
-
+    val_loader = DataLoader(val_set, shuffle=False, **loader_args)
 
     print(f"Found: {len(valid_inds)} valid samples split into "
         f"\n{len(train_set)} train samples, {len(train_loader)} batches and "
-        f"\n{len(test_set)} validation samples, {len(test_loader)} batches"
-        f"\nTrain: under 2 year: {np.sum(index[args.label_col][train_inds] == 1)}, over 2 year: {np.sum(index[args.label_col][train_inds] == 0)}"
-        f"\nTest: under 2 year: {np.sum(index[args.label_col][test_inds] == 1)}, over 2 year: {np.sum(index[args.label_col][test_inds] == 0)}"
+        f"\n{len(val_set)} validation samples, {len(val_loader)} batches"
+        f"\nTrain: under {args.survival_year} year: {np.sum(index[args.label_col][train_inds] < args.survival_year * 365.0)}, over {args.survival_year} year: {np.sum(index[args.label_col][train_inds] >= args.survival_year * 365.0)}"
+        f"\nValidation: under {args.survival_year} year: {np.sum(index[args.label_col][validation_inds] < args.survival_year * 365.0)}, over {args.survival_year} year: {np.sum(index[args.label_col][validation_inds] >= args.survival_year * 365.0)}"
     )
 
-    return train_loader, test_loader, num_train
+    test_index   = np.load(f"{args.test_path}/index_arrays_labeled.npz", allow_pickle=True)
+    test_args = {**dataset_args}
+    test_args["data_dir"] = args.test_path
+    test_set = MemmapDataset(**test_args)
+    test_loader = DataLoader(test_set, shuffle=False, **loader_args)
+
+    print(f"Found: {len(test_set)} valid test samples acorss {len(test_loader)} batches "
+        f"\nTest: under {args.survival_year} year: {np.sum(test_index[args.label_col] < args.survival_year * 365.0)}, over {args.survival_year} year: {np.sum(test_index[args.label_col] >= args.survival_year * 365.0)}"
+        f"\n\n\n"
+        "---" * 10
+    )
+
+    return train_loader, val_loader, test_loader, num_train
 
 # --------------------------------------------------------
 
 def get_metrics(split: str, args):
-    bool_var = "indicator" in args.label_col
-
     metrics = {f"{split} Loss": AverageMeter()}
     if split == "Train": metrics["lr"] = AverageMeter()
-    fns = {"Acc": lambda p, l: acc(torch.sigmoid(p) > 0.5, l)} if bool_var else {"MSE": F.mse_loss, "L1": F.l1_loss, "2yr Acc": lambda p, l: acc(p > 24, l > 24)}
+    fns = {"Acc": lambda p, l: acc(torch.sigmoid(p) > 0.5, l)} #if bool_var else {"MSE": F.mse_loss, "L1": F.l1_loss, "2yr Acc": lambda p, l: acc(p > 24, l > 24)}
     fns = {f"{split} {name}": fn for name, fn in fns.items()}
     test_metrics = {f"{name}": AverageMeter() for name in fns}
     metrics = {**metrics, **test_metrics}
     
-    torchmetrics = {"ROC": ROC(task="binary"), "AUC": AUROC(task="binary")} if bool_var else {}
+    torchmetrics = {"ROC": ROC(task="binary"), "AUC": AUROC(task="binary")} #if bool_var else {}
     torchmetrics = {f"{split} {name}": obj for name, obj in torchmetrics.items()}
 
     return metrics, fns, torchmetrics
@@ -292,10 +301,11 @@ def train_one_epoch_list(model: torch.nn.Module,
 def test(model: torch.nn.Module, 
          data_loader: Iterable, 
          device: str, 
-         args: Namespace):
+         args: Namespace,
+         split: str = "Test"):
     model.eval()
 
-    metrics, fns, torchmetrics = get_metrics("Test", args)
+    metrics, fns, torchmetrics = get_metrics(split, args)
 
     for batch in data_loader:
         for key in batch:
@@ -303,7 +313,7 @@ def test(model: torch.nn.Module,
 
         with torch.inference_mode():
             preds, loss = model(batch)
-            metrics["Test Loss"].update(loss.detach().item())
+            metrics[f"{split} Loss"].update(loss.detach().item())
             for name, fn in fns.items():
                 metric_val = fn(preds, batch["label"])
                 metrics[name].update(metric_val.detach().item())
@@ -322,7 +332,7 @@ def main(args):
     torch.manual_seed(seed)
     np.random.seed(seed)
 
-    train_loader, test_loader, _ = get_loaders(args)
+    train_loader, valid_loader, test_loader, _ = get_loaders(args)
 
     model, device = get_fusion_model(args)
 
@@ -366,27 +376,27 @@ def main(args):
     pbar = trange(0, args.epochs, desc="Training Epochs", postfix={})
     for e in pbar:
         train_stats, train_tm = train_one_epoch(model, train_loader, optimizer, scheduler, device, args)
-        test_stats, test_tm = test(model, test_loader, device, args=args)
+        valid_stats, valid_tm = test(model, valid_loader, device, args=args, split="Valid")
+        test_stats, test_tm = test(model, test_loader, device, args=args, split="Test")
 
         tm = {}
         if len(train_tm) > 0:
             if e == args.epochs - 1:
                 if run is not None: 
-                    fig, (ax1, ax2) = plt.subplots(1, 2)
-                    fig.suptitle('Train and Test ROC Curves')
+                    fig, (ax1, ax2, ax3) = plt.subplots(1, 3)
+                    fig.suptitle('ROC Performance Curves')
                     train_tm["Train ROC"].plot(ax=ax1)
-                    test_tm["Test ROC"].plot(ax=ax2)
+                    valid_tm["Valid ROC"].plot(ax=ax2)
+                    test_tm["Test ROC"].plot(ax=ax3)
                     run.log({"ROC": fig})
-            del train_tm["Train ROC"], test_tm["Test ROC"]
+            del train_tm["Train ROC"], valid_tm["Valid ROC"], test_tm["Test ROC"]
 
-            tm = {**train_tm, **test_tm}
+            tm = {**train_tm, **valid_tm}
             tm = {name: obj.compute() for name, obj in tm.items()}
 
-        c_indices = {}
-        if "indicator" in args.label_col:
-            c_indices = calculate_c_indices(model, train_loader, test_loader, device)
+        c_indices = calculate_c_indices(model, train_loader, valid_loader, test_loader, device)
 
-        postfix = {**train_stats, **test_stats, **c_indices, **tm}
+        postfix = {**train_stats, **valid_stats, **test_stats, **c_indices, **tm}
         if run is not None: run.log(postfix)
         pbar.set_postfix(postfix)
 
