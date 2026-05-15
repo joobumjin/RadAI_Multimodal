@@ -205,7 +205,7 @@ def get_loaders(args):
 
     print(f"Found: {len(test_set)} valid test samples acorss {len(test_loader)} batches "
         f"\nTest: under {args.survival_years} year: {np.sum(test_index[args.label_col] < args.survival_years * 365.0)}, over {args.survival_years} year: {np.sum(test_index[args.label_col] >= args.survival_years * 365.0)}"
-        "------------------"
+        "\n------------------"
         f"\n\n\n"
     )
 

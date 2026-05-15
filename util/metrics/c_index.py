@@ -13,7 +13,7 @@ def calculate_c_indices(model: torch.nn.Module, train_loader, val_loader, test_l
 
     for batch in train_loader:
         surviving = batch["survival_right_censor"].numpy().astype(bool)
-        times = batch["survival_months"].numpy()
+        times = batch["survival_days"].numpy()
         train_deaths.append(~surviving)
         train_times.append(times)
 
@@ -28,7 +28,7 @@ def calculate_c_indices(model: torch.nn.Module, train_loader, val_loader, test_l
 
     for batch in val_loader:
         surviving = batch["survival_right_censor"].numpy().astype(bool)
-        times = batch["survival_months"].numpy()
+        times = batch["survival_days"].numpy()
         val_deaths.append(~surviving)
         val_times.append(times)
 
@@ -43,7 +43,7 @@ def calculate_c_indices(model: torch.nn.Module, train_loader, val_loader, test_l
 
     for batch in test_loader:
         surviving = batch["survival_right_censor"].numpy().astype(bool)
-        times = batch["survival_months"].numpy()
+        times = batch["survival_days"].numpy()
         test_deaths.append(~surviving)
         test_times.append(times)
 
