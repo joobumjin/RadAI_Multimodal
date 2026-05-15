@@ -196,8 +196,8 @@ def get_loaders(args):
     print(f"Found: {len(valid_inds)} valid samples split into "
         f"\n{len(train_set)} train samples, {len(train_loader)} batches and "
         f"\n{len(val_set)} validation samples, {len(val_loader)} batches"
-        f"\nTrain: under {args.survival_year} year: {np.sum(index[args.label_col][train_inds] < args.survival_year * 365.0)}, over {args.survival_year} year: {np.sum(index[args.label_col][train_inds] >= args.survival_year * 365.0)}"
-        f"\nValidation: under {args.survival_year} year: {np.sum(index[args.label_col][validation_inds] < args.survival_year * 365.0)}, over {args.survival_year} year: {np.sum(index[args.label_col][validation_inds] >= args.survival_year * 365.0)}"
+        f"\nTrain: under {args.survival_years} year: {np.sum(index[args.label_col][train_inds] < args.survival_years * 365.0)}, over {args.survival_years} year: {np.sum(index[args.label_col][train_inds] >= args.survival_year * 365.0)}"
+        f"\nValidation: under {args.survival_years} year: {np.sum(index[args.label_col][validation_inds] < args.survival_years * 365.0)}, over {args.survival_years} year: {np.sum(index[args.label_col][validation_inds] >= args.survival_year * 365.0)}"
     )
 
     test_index   = np.load(f"{args.test_path}/index_arrays_labeled.npz", allow_pickle=True)

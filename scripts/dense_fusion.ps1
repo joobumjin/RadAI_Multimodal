@@ -7,8 +7,9 @@ $loss = "bce"
 conda activate multi
 
 # python .\dense_fusion_train.py --model $models --path_lang --clinical --rad_lang --label_col $target --loss_fn $loss --debug
-python .\dense_fusion_train.py --model $models --path_img --path_lang --clinical --rad_lang --label_col $target --loss_fn $loss --debug
-python .\dense_fusion_train.py --data_path ../multimodal_bins_rw --model $models --path_img --path_lang --clinical --rad_lang --label_col $target --loss_fn $loss --debug
+# python .\dense_fusion_train.py --model $models --path_img --path_lang --clinical --rad_lang --label_col $target --loss_fn $loss --debug
+python .\dense_fusion_train.py --model $models --path_lang --clinical --rad_lang --label_col $target --loss_fn $loss --debug
+# python .\dense_fusion_train.py --data_path ../multimodal_bins_rw --model $models --path_img --path_lang --clinical --rad_lang --label_col $target --loss_fn $loss --debug
 # python .\dense_fusion_train.py --model $models --sparse --path_lang --clinical --rad_lang --label_col $target --loss_fn $loss --debug
 
 # # clinical only
