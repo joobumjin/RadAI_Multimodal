@@ -1,7 +1,7 @@
 $models = "biomedclip"
 # $models = "conch", "biomedclip"
 # $fusions = "weighted_sum"
-$target = "death_indicator_2yr"
+$target = "survival_days"
 $loss = "bce"
 
 conda activate multi

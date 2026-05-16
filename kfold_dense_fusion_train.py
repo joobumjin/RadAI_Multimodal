@@ -36,6 +36,7 @@ def get_args_parser():
     parser.add_argument('--float16',            type=bool,  default=True)
     parser.add_argument('--early_stop',         type=bool,  default=True)
     parser.add_argument('--patience',           type=int,   default=5)
+    parser.add_argument('--folds',              type=int,   default=5)
 
     parser.add_argument('--sparse',             action="store_true")
     parser.add_argument('--clinical',           action="store_true")
@@ -182,7 +183,7 @@ def get_loaders(args, train_inds, validation_inds):
         "bin_modality_keys": bin_mods,
         "extra_modality_keys": extra_mods,
         "allow_sparse_samples": args.sparse,
-        "label_fn": lambda dates: dates < (365.0 * args.survival_years) #predict if the patient will die in x years
+        "label_fn": lambda dates: (dates < (365.0 * args.survival_years)).astype(np.float32) #predict if the patient will die in x years
     }
     loader_args = {
         "batch_size": args.batch_size,
@@ -204,21 +205,21 @@ def get_loaders(args, train_inds, validation_inds):
     print(
         f"\n{len(train_set)} train samples, {len(train_loader)} batches and "
         f"\n{len(val_set)} validation samples, {len(val_loader)} batches"
-        f"\nTrain: under {args.survival_year} year: {np.sum(index[args.label_col][train_inds] < args.survival_year * 365.0)}, over {args.survival_year} year: {np.sum(index[args.label_col][train_inds] >= args.survival_year * 365.0)}"
-        f"\nValidation: under {args.survival_year} year: {np.sum(index[args.label_col][validation_inds] < args.survival_year * 365.0)}, over {args.survival_year} year: {np.sum(index[args.label_col][validation_inds] >= args.survival_year * 365.0)}"
+        f"\nTrain: under {args.survival_years} year: {np.sum(index[args.label_col][train_inds] < args.survival_years * 365.0)}, over {args.survival_years} year: {np.sum(index[args.label_col][train_inds] >= args.survival_years * 365.0)}"
+        f"\nValidation: under {args.survival_years} year: {np.sum(index[args.label_col][validation_inds] < args.survival_years * 365.0)}, over {args.survival_years} year: {np.sum(index[args.label_col][validation_inds] >= args.survival_years * 365.0)}"
     )
 
     test_index   = np.load(f"{args.test_path}/index_arrays_labeled.npz", allow_pickle=True)
     test_args = {**dataset_args}
     test_args["data_dir"] = args.test_path
-    test_set = MemmapDataset(**test_args)
+    test_set = MemmapDatasetMultimodal(**test_args)
     test_loader = DataLoader(test_set, shuffle=False, **loader_args)
 
     print(
         f"{len(test_set)} test samples across {len(test_loader)} batches "
-        f"\nTest: under {args.survival_year} year: {np.sum(test_index[args.label_col] < args.survival_year * 365.0)}, over {args.survival_year} year: {np.sum(test_index[args.label_col] >= args.survival_year * 365.0)}"
+        f"\nTest: under {args.survival_years} year: {np.sum(test_index[args.label_col] < args.survival_years * 365.0)}, over {args.survival_years} year: {np.sum(test_index[args.label_col] >= args.survival_years * 365.0)}"
+        "\n------------------" 
         f"\n\n\n"
-        "---" * 10
     )
 
     return train_loader, val_loader, test_loader
