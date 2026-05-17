@@ -78,7 +78,7 @@ def get_inds(args):
     keys = ["slide_ids", "survival_days", "survival_right_censor"]
 
     index   = np.load(f"{args.data_path}/index_arrays_labeled.npz", allow_pickle=True)
-    inds    = np.arange(index['survival_days'])
+    inds    = np.arange(len(index['survival_days']))
 
     label_mask = ~np.isnan(index[args.label_col])
     exclusion_mask = ~index["excluded"]
