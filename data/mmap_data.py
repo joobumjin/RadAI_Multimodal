@@ -473,7 +473,7 @@ class MemmapDatasetMultimodal(Dataset):
     
     @property
     def feature_dim(self) -> int:
-        return self._feat_dim
+        return self._feat_dims
     
     def __getitem__(self, idx: int) -> Union[
         Tuple[list[torch.Tensor], np.float64],
@@ -498,7 +498,7 @@ class MemmapDatasetMultimodal(Dataset):
 
                 if self.sparse and length == 0: #if length == 0 but not self.sparse, then it wont be a valid index anyways
                     sample[f"{mod} mask"] = 0
-                    sample[mod] = np.zeros((self._feat_dim), dtype=self.data.dtype)
+                    sample[mod] = np.zeros((self._feat_dims[mod]), dtype=self.data.dtype)
                 else:
                     sample[f"{mod} mask"] = 1
                     start = np.random.randint(0, length - k + 1) if k < length else 0

@@ -1,6 +1,17 @@
 import torch
 import torch.nn as nn
 
+class MLP(nn.Module):
+    def __init__(self, seq):
+        super().__init__()
+        self.seq = seq
+
+    def forward(self, x):
+        return self.seq(x)
+    
+    def predict(self, x):
+        return self.seq(x)
+
 def create_mlp(
         in_dim=768, 
         hid_dims=[512, 512], 
@@ -34,7 +45,7 @@ def create_mlp(
     if end_with_dropout:
         layers.append(nn.Dropout(dropout))
 
-    mlp = nn.Sequential(*layers)
+    mlp = MLP(nn.Sequential(*layers))
 
     return mlp
 

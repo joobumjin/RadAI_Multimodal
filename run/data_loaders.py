@@ -1,7 +1,7 @@
 from argparse import Namespace
 
 import numpy as np
-import tabulate
+from tabulate import tabulate
 
 from data import *
 
@@ -79,8 +79,7 @@ def get_loaders(args: Namespace, train_inds, validation_inds):
             ]
     headers = ["Split", "# Samples", "# Batches", f"# Living < {args.survival_years}", f"# Living >= {args.survival_years}"]
     print(tabulate(stats, headers=headers, tablefmt="grid"),
-          "\n------------------" 
-          f"\n\n\n")
+          "\n")
     
 
     return train_loader, val_loader, test_loader
