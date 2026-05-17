@@ -62,9 +62,9 @@ class LogitFusion(nn.Module):
         for modality, enc in self.encoders.items():
             with torch.autocast(device_type=self.device, dtype=torch.float16, enabled=self.autocast[modality]):
                 logits[modality] = enc.predict(x[modality]).float()
-            if f"{modality} mask" in x: 
+            if f"{modality}_mask" in x: 
                 masked = True
-                logits[f"{modality} mask"] *= x[f"{modality} mask"].view((-1, 1))
+                logits[modality] *= x[f"{modality}_mask"].view((-1, 1))
         
         return self.fusion_fn(logits, masked=masked)
     
@@ -100,9 +100,9 @@ class EmbFusion(nn.Module):
         for modality, enc in self.encoders.items():
             with torch.autocast(device_type=self.device, dtype=torch.float16, enabled=self.autocast[modality]):
                 logits[modality] = enc.predict(x[modality]).float()
-            if f"{modality} mask" in x: 
+            if f"{modality}_mask" in x: 
                 masked = True
-                logits[f"{modality} mask"] *= x[f"{modality} mask"].view((-1, 1))
+                logits[modality] *= x[f"{modality}_mask"].view((-1, 1))
         
         return self.fusion_fn(logits, masked=masked)
     

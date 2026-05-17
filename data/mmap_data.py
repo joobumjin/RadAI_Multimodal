@@ -404,11 +404,11 @@ class MemmapDatasetMultimodal(Dataset):
             if label_fn is not None: self._labels = label_fn(self._labels)
 
         #each bin mod has a dtype, feat_dim, offsets, lengths, and total_patches
-        self._dtypes    = {mod: str(index[f'{mod}_dtype'].item())           for mod in self.bin_mods} if self.bin_mods is not None else None
-        self._feat_dims = {mod: int(index[f'{mod}_feat_dim'].item())        for mod in self.bin_mods} if self.bin_mods is not None else None
-        self._offsets   = {mod: index[f'{mod}_offsets']                     for mod in self.bin_mods} if self.bin_mods is not None else None
-        self._lengths   = {mod: index[f'{mod}_lengths']                     for mod in self.bin_mods} if self.bin_mods is not None else None #how many patches in the sample
-        self._patches   = {mod: index[f'{mod}_total_patches']               for mod in self.bin_mods} if self.bin_mods is not None else None
+        self._dtypes    = {mod: str(index[f'{mod}_dtype'].item())           for mod in self.bin_mods} if self.bin_mods is not None else {}
+        self._feat_dims = {mod: int(index[f'{mod}_feat_dim'].item())        for mod in self.bin_mods} if self.bin_mods is not None else {}
+        self._offsets   = {mod: index[f'{mod}_offsets']                     for mod in self.bin_mods} if self.bin_mods is not None else {}
+        self._lengths   = {mod: index[f'{mod}_lengths']                     for mod in self.bin_mods} if self.bin_mods is not None else {} #how many patches in the sample
+        self._patches   = {mod: index[f'{mod}_total_patches']               for mod in self.bin_mods} if self.bin_mods is not None else {}
 
         #handle keys
         self._keys = None
@@ -418,6 +418,11 @@ class MemmapDatasetMultimodal(Dataset):
         #prep extra modalities
         self.extras = {key: index[key] for key in extra_modality_keys} if extra_modality_keys is not None else {}
         
+        #masking
+        bin_mask   = {mod: index[f'{mod}_mask'] for mod in self.bin_mods} if self.bin_mods is not None else {}
+        extra_mask = {mod: index[f'{mod}_mask'] for mod in self.extras}
+        self._masks = {**bin_mask, **extra_mask}
+        
         #Filtering
         all_valid = np.zeros((len(self._slide_ids), )) if self.sparse else np.ones((len(self._slide_ids), ))
         
@@ -425,20 +430,18 @@ class MemmapDatasetMultimodal(Dataset):
         if self._labels is not None: all_valid *= (~np.isnan(self._labels))
 
         #filter bin modalities
-        if self._lengths is not None:
-            for lengths in self._lengths.values():
-                if self.sparse:
-                    all_valid += (lengths > 0)  
-                else:
-                    all_valid *= (lengths > 0)
+        for lengths in self._lengths.values():
+            if self.sparse:
+                all_valid += (lengths > 0)  
+            else:
+                all_valid *= (lengths > 0)
                 
         #filter extras
-        if len(self.extras):
-            for feats in self.extras.values():
-                if self.sparse:
-                    all_valid += ~np.isnan(feats).any(axis=1)
-                else:
-                    all_valid *= ~np.isnan(feats).any(axis=1)
+        for feats in self.extras.values():
+            if self.sparse:
+                all_valid += ~np.isnan(feats).any(axis=1)
+            else:
+                all_valid *= ~np.isnan(feats).any(axis=1)
         
         #filter keys
         if self.return_key:
@@ -486,37 +489,35 @@ class MemmapDatasetMultimodal(Dataset):
         """
         # Map to real index
         real_idx    = self.indices[idx]
-        label       = self._labels[real_idx:real_idx+1]
-        
-        sample = {"label": label}
+        sample = {}
 
-        if self._lengths is not None:
-            for mod, lengths in self._lengths.items():
-                length = lengths[real_idx]
-                offset = int(self._offsets[mod][real_idx])
-                k = min(length, self.max_instances) if self.max_instances else length
+        if self._labels is not None:
+            sample["label"] = self._labels[real_idx:real_idx+1]
 
-                if self.sparse and length == 0: #if length == 0 but not self.sparse, then it wont be a valid index anyways
-                    sample[f"{mod} mask"] = 0
-                    sample[mod] = np.zeros((self._feat_dims[mod]), dtype=self.data.dtype)
-                else:
-                    sample[f"{mod} mask"] = 1
-                    start = np.random.randint(0, length - k + 1) if k < length else 0
-                    data = np.array(self.bin_data[mod][offset + start : offset + start + k, :], copy=True)
-                    if len(data) == 1:
-                        data = data[:].squeeze(0)
-                    sample[mod] = data
+        for mod, lengths in self._lengths.items():
+            sample[f"{mod}_mask"] = self._masks[mod][real_idx]
+            length = lengths[real_idx]
+            offset = int(self._offsets[mod][real_idx])
+            k = min(length, self.max_instances) if self.max_instances else length
+
+            if self.sparse and length == 0: #if length == 0 but not self.sparse, then it wont be a valid index anyways
+                sample[mod] = np.zeros((self._feat_dims[mod]), dtype=self.data.dtype)
+            else:
+                start = np.random.randint(0, length - k + 1) if k < length else 0
+                data = np.array(self.bin_data[mod][offset + start : offset + start + k, :], copy=True)
+                if len(data) == 1:
+                    data = data[:].squeeze(0)
+                sample[mod] = data
 
         for mod_name, mod_data in self.extras.items():
+            sample[f"{mod}_mask"] = self._masks[mod][real_idx]
             data = mod_data[real_idx]
             if self.sparse and np.isnan(data).any():
-                sample[f"{mod_name} mask"] = 0
                 if len(mod_data.shape) == 1:
                     sample[mod_name] = 0
                 else:
                     sample[mod_name] = np.zeros((mod_data.shape[1:]), dtype=mod_data.dtype)
             else:
-                sample[f"{mod_name} mask"] = 1
                 sample[mod_name] = data
         
         if self.return_key: 

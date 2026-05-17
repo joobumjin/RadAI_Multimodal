@@ -93,10 +93,10 @@ def get_inds(args):
     arg_dict = vars(args)
     for mod in ["clinical", "clinical_imputed"]:
         if arg_dict.get(mod, False): 
-            modality_mask = combine_op(modality_mask, ~index[f'{mod}_mask'])
+            modality_mask = combine_op(modality_mask, index[f'{mod}_mask'])
     for mod in ["path_lang", "rad_lang", "path_img"]:
         if arg_dict.get(mod, False): 
-            modality_mask = combine_op(modality_mask, ~(index[f'{mod}_mask']))
+            modality_mask = combine_op(modality_mask, (index[f'{mod}_mask']))
 
     mask = mask & modality_mask
 
