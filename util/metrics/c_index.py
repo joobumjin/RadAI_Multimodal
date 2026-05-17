@@ -3,8 +3,14 @@ import torch
 
 from sksurv.metrics import concordance_index_censored
 
-
 def calculate_c_indices(model: torch.nn.Module, train_loader, val_loader, test_loader, device):
+    """
+    Required Loader Batch Keys:
+    - "survival_right_censor": Right censor on event date
+    - "survival_days"
+    - Whatever else the model needs
+    """
+
     model.eval()
 
     train_preds, train_deaths, train_times = [], [], []

@@ -16,7 +16,7 @@ from torch import optim
 from torchmetrics import ROC, AUROC
 
 from data import *
-from model import create_mlp, EmbMIL, DenseFusion
+from model import *
 from util import *
 from run import *
 
@@ -38,6 +38,7 @@ def get_args_parser():
     parser.add_argument('--patience',           type=int,   default=5)
 
     parser.add_argument('--sparse',             action="store_true")
+    parser.add_argument('--fusion',             type=str,   default="naive_sum", choices=["naive_sum", "naive_avg", "weighted_sum"])
     parser.add_argument('--clinical',           action="store_true")
     parser.add_argument('--clinical_imputed',   action="store_true")
     parser.add_argument('--path_lang',          action="store_true")
@@ -68,7 +69,7 @@ def get_args_parser():
                         help="directory to which the pretrained model weights should be saved")
 
     parser.add_argument('--disable_wandb',      action="store_true")
-    parser.add_argument('--wb_proj',            type=str,   default="Panc MM External Test")
+    parser.add_argument('--wb_proj',            type=str,   default="Panc MM Emb Fusion External Test")
     parser.add_argument('--debug',              action="store_true")
     return parser
 
@@ -148,6 +149,12 @@ def get_dense_fusion_model(args):
         "bce": F.binary_cross_entropy_with_logits,
     }
 
+    fusers = {
+        "naive_sum": NaiveSum,
+        "naive_avg": NaiveAvg,
+        "weighted_sum": LearnedWeightSum
+    }
+
     get_enc_fns = {
         "clinical": get_clinical_encoder, 
         "clinical_imputed": get_clinical_encoder, 
@@ -162,7 +169,7 @@ def get_dense_fusion_model(args):
         if arg_dict.get(mod, False): 
             encs[mod], casts[mod] = fn(args)
 
-    model = DenseFusion(encs, emb_dim=args.emb_dim, hidden_dims=[32], autocast=casts, loss_fn=losses[args.loss_fn], device=device)
+    model = EmbFusion(encs, emb_dim=args.emb_dim, hidden_dims=[32], autocast=casts, fusion_fn=fusers[args.fusion], loss_fn=losses[args.loss_fn], device=device)
     return model, device
 
 # --------------------------------------------------------
@@ -181,8 +188,6 @@ def main(args):
 if __name__ == '__main__':
     parser  = get_args_parser()
     args    = parser.parse_args()
-
-    # args.data_path = args.data_path.format(model=args.model)
 
     if args.debug:
         args.epochs = 5

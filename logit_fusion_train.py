@@ -18,6 +18,7 @@ from torchmetrics import ROC, AUROC
 from data import *
 from model import LinearModel, EmbPred, EmbMIL, LogitFusion, NaiveSum, NaiveAvg, LearnedWeightSum
 from util import *
+from run import *
 
 def get_args_parser():
     parser = argparse.ArgumentParser('Supervised Panc Training', add_help=False)
@@ -64,8 +65,54 @@ def get_args_parser():
                         help="directory to which the pretrained model weights should be saved")
 
     parser.add_argument('--disable_wandb',      action="store_true")
+    parser.add_argument('--wb_proj',            type=str,   default="Panc MM External Test")
     parser.add_argument('--debug',              action="store_true")
     return parser
+
+# --------------------------------------------------------
+
+def get_inds(args):
+    keys = ["slide_ids", "survival_days", "survival_right_censor"]
+
+    index   = np.load(f"{args.data_path}/index_arrays_labeled.npz", allow_pickle=True)
+    inds    = np.arange(index['survival_days'])
+
+    label_mask = ~np.isnan(index[args.label_col])
+    exclusion_mask = ~index["excluded"]
+    mask = label_mask & exclusion_mask
+    if "indicator" in args.label_col: 
+        for key in keys:
+            mask = mask & (~np.isnan(index[key]))
+
+    modality_mask = np.zeros_like(mask).astype(bool) if args.sparse else np.ones_like(mask).astype(bool)
+    combine_op = lambda x, y: x | y if args.sparse else x & y
+
+    arg_dict = vars(args)
+    for mod in ["clinical", "clinical_imputed"]:
+        if arg_dict.get(mod, False): 
+            modality_mask = combine_op(modality_mask, ~index[f'{mod}_mask'])
+    for mod in ["path_lang", "rad_lang", "path_img"]:
+        if arg_dict.get(mod, False): 
+            modality_mask = combine_op(modality_mask, ~(index[f'{mod}_mask']))
+
+    mask = mask & modality_mask
+
+    valid_inds = inds[mask]
+    num_train = int(len(valid_inds) * args.train_split)
+    if not args.clinical_imputed: #standard random shuffle and select
+        np.random.shuffle(valid_inds)
+        
+        train_inds, validation_inds = valid_inds[:num_train], valid_inds[num_train:]
+    else: #only test on real samples, but can train on imputed data
+        orig = inds[~np.isnan(index['clinical']).any(axis=1) & mask]
+        np.random.shuffle(orig)
+
+        imputed = inds[np.isnan(index['clinical']).any(axis=1) & mask]
+
+        num_test = len(inds) - num_train
+        train_inds, validation_inds = np.hstack((orig[num_test:], imputed)), orig[:num_test]
+
+    return train_inds, validation_inds
 
 # --------------------------------------------------------
 
@@ -86,7 +133,7 @@ def get_path_img_encoder(args):
     mil = EmbMIL(loss_fn=None)
     return mil, True
 
-def get_fusion_model(args):
+def get_logit_fusion_model(args):
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
     fusers = {
@@ -120,160 +167,6 @@ def get_fusion_model(args):
     model = LogitFusion(encs, casts, fusion_fn=fusion_fn, loss_fn=losses[args.loss_fn], device=device)
     return model, device
 
-# --------------------------------------------------------
-
-def get_metrics(split: str, args):
-    bool_var = "indicator" in args.label_col
-
-    metrics = {f"{split} Loss": AverageMeter(), "lr": AverageMeter()}
-    fns = {"Acc": lambda p, l: acc(torch.sigmoid(p) > 0.5, l)} if bool_var else {"MSE": F.mse_loss, "L1": F.l1_loss, "2yr Acc": lambda p, l: acc(p > 24, l > 24)}
-    fns = {f"{split} {name}": fn for name, fn in fns.items()}
-    test_metrics = {f"{name}": AverageMeter() for name in fns}
-    metrics = {**metrics, **test_metrics}
-    
-    torchmetrics = {"ROC": ROC(task="binary"), "AUC": AUROC(task="binary")} if bool_var else {}
-    torchmetrics = {f"{split} {name}": obj for name, obj in torchmetrics.items()}
-
-    return metrics, fns, torchmetrics
-
-# --------------------------------------------------------
-
-def get_loaders(args):
-    keys = ["slide_ids", "vital_status", "survival_months"]
-
-    index = np.load(f"{args.data_path}/index_arrays_labeled.npz", allow_pickle=True)
-    labels  = index['death_indicator_2yr'].astype(np.float32)
-    inds    = np.arange(len(labels))
-    bin_mods, extra_mods = [], []
-
-    label_mask = ~np.isnan(index[args.label_col])
-    exclusion_mask = ~index["excluded"]
-    mask = label_mask & exclusion_mask
-    if "indicator" in args.label_col: 
-        for key in keys:
-            mask = mask & (~np.isnan(index[key]))
-
-    modality_mask = np.zeros_like(mask).astype(bool) if args.sparse else np.ones_like(mask).astype(bool)
-    combine_op = lambda x, y: x | y if args.sparse else x & y
-
-    arg_dict = vars(args)
-    for mod in ["clinical", "clinical_imputed"]:
-        if arg_dict.get(mod, False): 
-            modality_mask = combine_op(modality_mask, ~np.isnan(index[mod]).any(axis=1))
-            extra_mods.append(mod)
-    for mod, ind in zip(["path_lang", "rad_lang"], [0,1]):
-        if arg_dict.get(mod, False): 
-            modality_mask = combine_op(modality_mask, index['combined_lengths'][:, ind].astype(bool))
-            bin_mods.append(mod)
-
-    mask = mask & modality_mask
-
-    valid_inds = inds[mask]
-    num_train = int(len(valid_inds) * args.train_split)
-    if not args.clinical_imputed: #standard random shuffle and select
-        np.random.shuffle(valid_inds)
-        
-        train_inds, test_inds = valid_inds[:num_train], valid_inds[num_train:]
-    else: #only test on real samples, but can train on imputed data
-        orig = inds[~np.isnan(index['clinical']).any(axis=1) & mask]
-        np.random.shuffle(orig)
-
-        imputed = inds[np.isnan(index['clinical']).any(axis=1) & mask]
-
-        num_test = len(inds) - num_train
-        train_inds, test_inds = np.hstack((orig[num_test:], imputed)), orig[:num_test]
-
-    dataset_args = {
-        "data_dir": args.data_path,
-        "return_key": True,
-        "keys": ["slide_ids", "vital_status", "survival_months"],
-        "label_column": args.label_col,
-        "label_dtype": np.float32,
-        "bin_modality_keys": bin_mods,
-        "extra_modality_keys": extra_mods,
-        "allow_sparse_samples": args.sparse
-    }
-    loader_args = {
-        "batch_size": args.batch_size,
-        "pin_memory": args.pin_mem,
-        "num_workers": args.num_workers,
-        "collate_fn": default_collate,
-        "persistent_workers": args.num_workers > 0,
-        "drop_last": False,
-    }
-
-    train_set = MemmapDatasetMergedMultimodal(indices=train_inds, **dataset_args)
-    train_loader = DataLoader(train_set, shuffle=True, **loader_args)
-
-    test_set = MemmapDatasetMergedMultimodal(indices=test_inds, **dataset_args)
-    test_loader = DataLoader(test_set, shuffle=False, **loader_args)
-
-    print(f"Found: {len(valid_inds)} valid samples split into "
-        f"\n{len(train_set)} train samples, {len(train_loader)} batches and "
-        f"\n{len(test_set)} validation samples, {len(test_loader)} batches"
-        f"\nTrain: under 2 year: {np.sum(index[args.label_col][train_inds] == 0)}, over 2 year: {np.sum(index[args.label_col][train_inds] == 1)}"
-        f"\nTest: under 2 year: {np.sum(index[args.label_col][test_inds] == 0)}, over 2 year: {np.sum(index[args.label_col][test_inds] == 1)}"
-    )
-
-    return train_loader, test_loader, num_train
-
-# --------------------------------------------------------
-
-def train_one_epoch(model: torch.nn.Module,
-                    train_loader: Iterable,
-                    optimizer: optim.Optimizer, scheduler: optim.lr_scheduler.LRScheduler,
-                    device: str,
-                    args=None):
-    model.train(True)
-    optimizer.zero_grad()
-
-    metrics, fns, torchmetrics = get_metrics("Train", args)
-    
-    for batch in train_loader:
-        for key in batch:
-            batch[key] = batch[key].to(device)
-
-        loss, preds = model(batch)
-
-        with torch.inference_mode():
-            metrics["Train Loss"].update(loss.detach().item())
-            metrics["lr"].update(optimizer.param_groups[0]["lr"])
-            for name, fn in fns.items():
-                metric_val = fn(preds, batch["label"])
-                metrics[name].update(metric_val.detach().item())
-
-            preds = torch.sigmoid(preds)
-            for obj in torchmetrics.values():
-                obj.update(preds.detach().squeeze(-1), batch["label"].detach().int().squeeze(-1))
-
-        loss.backward()
-        optimizer.step()
-        optimizer.zero_grad()
-        scheduler.step()
-
-    return {k: meter.avg for k, meter in metrics.items()}, torchmetrics
-
-def test(model: torch.nn.Module, data_loader: Iterable, device: str, args=None):
-    model.eval()
-
-    metrics, fns, torchmetrics = get_metrics("Test", args)
-
-    for batch in data_loader:
-        for key in batch:
-            batch[key] = batch[key].to(device)
-
-        with torch.inference_mode():
-            loss, preds = model(batch)
-            metrics["Test Loss"].update(loss.detach().item())
-            for name, fn in fns.items():
-                metric_val = fn(preds, batch["label"])
-                metrics[name].update(metric_val.detach().item())
-
-            preds = torch.sigmoid(preds)
-            for obj in torchmetrics.values():
-                obj.update(preds.detach().squeeze(-1), batch["label"].detach().int().squeeze(-1))
-
-    return {k: meter.avg for k, meter in metrics.items()}, torchmetrics
 
 # --------------------------------------------------------
 
@@ -282,77 +175,10 @@ def main(args):
     torch.manual_seed(seed)
     np.random.seed(seed)
 
-    train_loader, test_loader, _ = get_loaders(args)
+    train_loader, valid_loader, test_loader = get_loaders(args, *get_inds(args))
 
-    model, device = get_fusion_model(args)
-
-    optimizer, scheduler = get_opt_and_sched(model, args, iter_per_epoch=len(train_loader))
-
-    early_stopper = EarlyStopper(args.patience, False) if args.early_stop else None
-    stop_metric = "Test C-Index"
-
-    if args.disable_wandb: run = None
-    else:
-        config = {
-            "Loss": args.loss_fn,
-            "Seed": args.seed,
-            "Clinical": args.clinical,
-            "Clinical Imputed": args.clinical_imputed,
-            "Path Lang": args.path_lang,
-            "Rad Lang": args.rad_lang,
-            "Path Img": args.path_img,
-            "Fusion": args.fusion,
-            "Model": args.model,
-            "MLP Norm": "Layer Norm",
-        }
-
-        mods = []
-        if args.clinical: mods.append("Clinical")
-        if args.clinical_imputed: mods.append("ClinImp")
-        if args.path_lang: mods.append("Path Lang")
-        if args.rad_lang: mods.append("Rad Lang")
-        if args.path_img: mods.append("Path Img")
-
-        name = "+".join(mods) + f" - {args.label_col} - {args.fusion} - {args.model}"
-
-        run = wandb.init(
-            entity="bumjin_joo-brown-university", 
-            project=f"Panc MM Sparse Logit Fusion w Stage", 
-            name=name,
-            config=config
-        )
-
-    print(f"Start training for {args.epochs} epochs")
-    pbar = trange(0, args.epochs, desc="Training Epochs", postfix={})
-    for e in pbar:
-        train_stats, train_tm = train_one_epoch(model, train_loader, optimizer, scheduler, device, args)
-        test_stats, test_tm = test(model, test_loader, device, args=args)
-
-        tm = {}
-        if len(train_tm) > 0:
-            if e == args.epochs - 1:
-                if run is not None: 
-                    fig, (ax1, ax2) = plt.subplots(1, 2)
-                    fig.suptitle('Train and Test ROC Curves')
-                    train_tm["Train ROC"].plot(ax=ax1)
-                    test_tm["Test ROC"].plot(ax=ax2)
-                    run.log({"ROC": fig})
-            del train_tm["Train ROC"], test_tm["Test ROC"]
-
-            tm = {**train_tm, **test_tm}
-            tm = {name: obj.compute() for name, obj in tm.items()}
-
-        c_indices = {}
-        if "indicator" in args.label_col:
-            c_indices = calculate_c_indices(model, train_loader, test_loader, device)
-
-        postfix = {**train_stats, **test_stats, **c_indices, **tm}
-        if run is not None: run.log(postfix)
-        pbar.set_postfix(postfix)
-
-        if early_stopper is not None and early_stopper.update(postfix[stop_metric]): 
-            print("Early stopping triggered!")
-            return
+    run_setup(args, get_logit_fusion_model, train_loader, valid_loader, test_loader, 
+              run_name = " - ".join([args.label_col, args.fusion, args.model]))
        
 
 if __name__ == '__main__':
