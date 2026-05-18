@@ -90,7 +90,7 @@ def train_one_epoch_list(model: torch.nn.Module,
     model.train(True)
     optimizer.zero_grad()
 
-    metrics, fns, torchmetrics = get_bool_metrics("Train", args)
+    metrics, fns, torchmetrics = get_bool_metrics("Train")
     
     for batch in train_loader:
         for key in batch:
@@ -123,7 +123,7 @@ def test(model: torch.nn.Module,
          split: str = "Test"):
     model.eval()
 
-    metrics, fns, torchmetrics = get_bool_metrics(split, args)
+    metrics, fns, torchmetrics = get_bool_metrics(split)
 
     for batch in data_loader:
         for key in batch:

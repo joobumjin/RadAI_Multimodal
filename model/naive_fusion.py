@@ -91,7 +91,7 @@ class EmbFusion(nn.Module):
         self.fusion_fn = fusion_fn(self.modality_order, out_dim=emb_dim)
         self.fusion_fn = self.fusion_fn.to(device)
 
-        self.pred = LinearModel(emb_dim * len(encoders), hidden_dims=hidden_dims, layer_norm=True, loss_fn=None)
+        self.pred = LinearModel(emb_dim, hidden_dims=hidden_dims, layer_norm=True, loss_fn=None)
         self.pred = self.pred.to(device)
 
     def predict(self, x: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:            
@@ -104,7 +104,8 @@ class EmbFusion(nn.Module):
                 masked = True
                 logits[modality] *= x[f"{modality}_mask"].view((-1, 1))
         
-        return self.fusion_fn(logits, masked=masked)
+        fused = self.fusion_fn(logits, masked=masked)
+        return self.pred.predict(fused)
     
     def forward(self, x: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
         preds = self.predict(x)
