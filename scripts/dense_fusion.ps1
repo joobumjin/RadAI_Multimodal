@@ -10,7 +10,7 @@ conda activate multi
 # python .\dense_fusion_train.py --model $models --path_img --path_lang --clinical --rad_lang --label_col $target --loss_fn $loss --debug
 # python .\dense_fusion_train.py --model $models --path_lang --clinical --rad_lang --label_col $target --loss_fn $loss --debug
 # python .\dense_fusion_train.py --model $models --sparse --path_lang --clinical --rad_lang --label_col $target --loss_fn $loss --debug
-python .\emb_fusion_train.py --model $models --sparse --path_lang --clinical --rad_lang --label_col $target --loss_fn $loss --debug
+# python .\emb_fusion_train.py --model $models --sparse --path_lang --clinical --rad_lang --label_col $target --loss_fn $loss --debug
 
 # # clinical only
 # foreach ($model in $models) {
@@ -36,6 +36,12 @@ python .\emb_fusion_train.py --model $models --sparse --path_lang --clinical --r
 # foreach ($model in $models) {
 #     python .\dense_fusion_train.py --model $model --clinical --path_lang --rad_lang --label_col $target --loss_fn $loss
 # }
+
+foreach ($model in $models) {
+    python .\dense_fusion_train.py  --model $model --sparse --clinical --path_lang --rad_lang --label_col $target --loss_fn $loss
+    python .\emb_fusion_train.py    --model $model --sparse --clinical --path_lang --rad_lang --label_col $target --loss_fn $loss
+}
+
 
 
 # #sparse 

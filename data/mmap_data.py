@@ -501,7 +501,7 @@ class MemmapDatasetMultimodal(Dataset):
             k = min(length, self.max_instances) if self.max_instances else length
 
             if self.sparse and length == 0: #if length == 0 but not self.sparse, then it wont be a valid index anyways
-                sample[mod] = np.zeros((self._feat_dims[mod]), dtype=self.data.dtype)
+                sample[mod] = np.zeros((self._feat_dims[mod]), dtype=self._dtypes[mod])
             else:
                 start = np.random.randint(0, length - k + 1) if k < length else 0
                 data = np.array(self.bin_data[mod][offset + start : offset + start + k, :], copy=True)
@@ -516,7 +516,7 @@ class MemmapDatasetMultimodal(Dataset):
                 if len(mod_data.shape) == 1:
                     sample[mod_name] = 0
                 else:
-                    sample[mod_name] = np.zeros((mod_data.shape[1:]), dtype=mod_data.dtype)
+                    sample[mod_name] = np.zeros((mod_data.shape[1:]), dtype=self._dtypes[mod])
             else:
                 sample[mod_name] = data
         
