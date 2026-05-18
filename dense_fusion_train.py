@@ -126,12 +126,12 @@ def get_clinical_encoder(args):
 
 def get_path_lang_encoder(args):
     # path_lang_enc = create_mlp(512, [128], args.emb_dim, act = nn.GELU(), dropout = 0.3, layer_norm = True)
-    path_lang_enc = create_mlp(512, [128], args.emb_dim, act = nn.GELU(), dropout = 0.3, layer_norm = True)
+    path_lang_enc = create_mlp(512, [64], args.emb_dim, act = nn.GELU(), dropout = 0.3, layer_norm = True)
     return path_lang_enc, True
 
 def get_rad_lang_encoder(args):
     # rad_lang_enc = create_mlp(512, [128], args.emb_dim, act = nn.GELU(), dropout = 0.3, layer_norm = True)
-    rad_lang_enc = create_mlp(512, [128], args.emb_dim, act = nn.GELU(), dropout = 0.3, layer_norm = True)
+    rad_lang_enc = create_mlp(512, [64], args.emb_dim, act = nn.GELU(), dropout = 0.3, layer_norm = True)
     return rad_lang_enc, True
 
 def get_path_img_encoder(args):
@@ -175,7 +175,7 @@ def main(args):
     train_loader, valid_loader, test_loader = get_loaders(args, *get_inds(args))
 
     run_setup(args, get_dense_fusion_model, train_loader, valid_loader, test_loader, 
-              run_name = " - ".join([f"smaller, 64e{", sparse" if args.sparse else ""}", f"{args.label_col}", f"{args.model}"]))
+              run_name = " - ".join([f"smallest, 64e{", sparse" if args.sparse else ""}", f"{args.label_col}", f"{args.model}"]))
        
 
 if __name__ == '__main__':
