@@ -5,7 +5,7 @@ from tabulate import tabulate
 
 from data import *
 
-def get_loaders(args: Namespace, train_inds, validation_inds):
+def get_loaders(args: Namespace, train_inds, validation_inds, keys: list[str] = ["slide_ids", "survival_days", "survival_right_censor"]):
     """
     Required Args: 
     parser.add_argument('--data_path',          type=str,   default="../updated_multimodal_bins")
@@ -23,8 +23,6 @@ def get_loaders(args: Namespace, train_inds, validation_inds):
     parser.add_argument('--num_workers',        type=int,   default=1)
     parser.add_argument('--pin_mem',            type=bool,  default=True)
     """
-
-    keys = ["slide_ids", "survival_days", "survival_right_censor"]
 
     index   = np.load(f"{args.data_path}/index_arrays_labeled.npz", allow_pickle=True)
     bin_mods, extra_mods = [], []
