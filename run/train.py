@@ -1,22 +1,16 @@
-import os
-import argparse
 from argparse import Namespace
-from typing import Iterable, Optional
-from collections import defaultdict
+from typing import Iterable
 
 import wandb
 from tqdm import trange
 import numpy as np
 import matplotlib.pyplot as plt
-from torch import nn
-from torch.utils.data import TensorDataset, DataLoader
 from torch.nn import functional as F
 from torch import optim
 
 from torchmetrics import ROC, AUROC
 
 from data import *
-from model import create_mlp, EmbMIL, DenseFusion
 from util import *
 
 # --------------------------------------------------------
@@ -209,7 +203,7 @@ def run_setup(args, model_constructor, train_loader, valid_loader, test_loader, 
                     run.log({"ROC": fig})
             del train_tm["Train ROC"], valid_tm["Valid ROC"], test_tm["Test ROC"]
 
-            tm = {**train_tm, **valid_tm}
+            tm = {**train_tm, **valid_tm, **test_tm}
             tm = {name: obj.compute() for name, obj in tm.items()}
 
         c_indices = calculate_c_indices(model, train_loader, valid_loader, test_loader, device)

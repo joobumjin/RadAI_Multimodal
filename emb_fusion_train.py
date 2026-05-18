@@ -122,17 +122,17 @@ def get_inds(args):
 
 def get_clinical_encoder(args):
     # clin_enc = create_mlp(24, [128], args.emb_dim, act = nn.GELU(), dropout = 0.3, layer_norm = True)
-    clin_enc = create_mlp(24, [128], args.emb_dim, act = nn.GELU(), dropout = 0.3, layer_norm = True)
+    clin_enc = create_mlp(24, [64], args.emb_dim, act = nn.GELU(), dropout = 0.3, layer_norm = True)
     return clin_enc, False
 
 def get_path_lang_encoder(args):
     # path_lang_enc = create_mlp(512, [128], args.emb_dim, act = nn.GELU(), dropout = 0.3, layer_norm = True)
-    path_lang_enc = create_mlp(512, [128], args.emb_dim, act = nn.GELU(), dropout = 0.3, layer_norm = True)
+    path_lang_enc = create_mlp(512, [64], args.emb_dim, act = nn.GELU(), dropout = 0.3, layer_norm = True)
     return path_lang_enc, True
 
 def get_rad_lang_encoder(args):
     # rad_lang_enc = create_mlp(512, [128], args.emb_dim, act = nn.GELU(), dropout = 0.3, layer_norm = True)
-    rad_lang_enc = create_mlp(512, [128], args.emb_dim, act = nn.GELU(), dropout = 0.3, layer_norm = True)
+    rad_lang_enc = create_mlp(512, [64], args.emb_dim, act = nn.GELU(), dropout = 0.3, layer_norm = True)
     return rad_lang_enc, True
 
 def get_path_img_encoder(args):

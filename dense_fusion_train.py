@@ -175,7 +175,7 @@ def main(args):
     train_loader, valid_loader, test_loader = get_loaders(args, *get_inds(args))
 
     run_setup(args, get_dense_fusion_model, train_loader, valid_loader, test_loader, 
-              run_name = " - ".join([f"smallest, 64e{", sparse" if args.sparse else ""}", f"{args.label_col}", f"{args.model}"]))
+              run_name = " - ".join([f"smallest, {args.emb_dim}e{", sparse" if args.sparse else ""}", f"{args.label_col}", f"{args.model}"]))
        
 
 if __name__ == '__main__':
