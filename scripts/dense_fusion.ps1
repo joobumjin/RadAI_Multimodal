@@ -38,10 +38,10 @@ conda activate multi
 # }
 
 foreach ($model in $models) {
-    python .\dense_fusion_train.py  --model $model --sparse --clinical --path_lang --rad_lang --label_col $target --loss_fn $loss
+    # python .\dense_fusion_train.py  --model $model --sparse --clinical --path_lang --rad_lang --label_col $target --loss_fn $loss
     $fusions = "naive_sum", "naive_avg", "weighted_sum"
     foreach ($fusion in $fusions) {   
-        python .\emb_fusion_train.py --model $model --fusion fusion --sparse --clinical --path_lang --rad_lang --label_col $target --loss_fn $loss
+        python .\emb_fusion_train.py --model $model --debug --fusion $fusion --sparse --clinical --path_lang --rad_lang --label_col $target --loss_fn $loss
     }
 }
 

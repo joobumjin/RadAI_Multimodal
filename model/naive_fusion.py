@@ -25,14 +25,14 @@ class NaiveAvg(Fuser):
     def forward(self, x, masked=False):
         modality_count = len(self.modalities)
         if masked:
-            modality_count = torch.sum(torch.stack([x[f"{mod} mask"] for mod in self.modalities]), dim=0)
-
+            modality_count = torch.sum(torch.stack([x[f"{mod}_mask"] for mod in self.modalities]), dim=0).view((-1, 1))
+           
         return torch.sum(torch.stack([x[mod] for mod in self.modalities]), dim=0) / modality_count
 
 class LearnedWeightSum(Fuser):
-    def __init__(self, modalities: List[str], out_dim: int = 1, **kwargs):
+    def __init__(self, modalities: List[str], mod_dim: int = 1, out_dim: int = 1, **kwargs):
         super().__init__(modalities)
-        self.weights = nn.Linear(len(modalities), out_dim, bias=False)
+        self.weights = nn.Linear(len(modalities) * mod_dim, out_dim, bias=False)
 
     def forward(self, x: Dict[str, torch.Tensor], masked=False) -> torch.Tensor:
         x = torch.cat([x[mod] for mod in self.modalities], dim=1)
@@ -65,6 +65,7 @@ class LogitFusion(nn.Module):
             if f"{modality}_mask" in x: 
                 masked = True
                 logits[modality] *= x[f"{modality}_mask"].view((-1, 1))
+                logits[f"{modality}_mask"] = x[f"{modality}_mask"]
         
         return self.fusion_fn(logits, masked=masked)
     
@@ -88,7 +89,7 @@ class EmbFusion(nn.Module):
 
         self.encoders = {mod: encoders[mod].to(device) for mod in encoders}
 
-        self.fusion_fn = fusion_fn(self.modality_order, out_dim=emb_dim)
+        self.fusion_fn = fusion_fn(self.modality_order, mod_dim=emb_dim, out_dim=emb_dim)
         self.fusion_fn = self.fusion_fn.to(device)
 
         self.pred = LinearModel(emb_dim, hidden_dims=hidden_dims, layer_norm=True, loss_fn=None)
@@ -103,6 +104,7 @@ class EmbFusion(nn.Module):
             if f"{modality}_mask" in x: 
                 masked = True
                 logits[modality] *= x[f"{modality}_mask"].view((-1, 1))
+                logits[f"{modality}_mask"] = x[f"{modality}_mask"]
         
         fused = self.fusion_fn(logits, masked=masked)
         return self.pred.predict(fused)
