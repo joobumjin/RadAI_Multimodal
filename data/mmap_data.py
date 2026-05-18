@@ -403,13 +403,6 @@ class MemmapDatasetMultimodal(Dataset):
             self._labels = index[label_column].astype(label_dtype) 
             if label_fn is not None: self._labels = label_fn(self._labels)
 
-        #each bin mod has a dtype, feat_dim, offsets, lengths, and total_patches
-        self._dtypes    = {mod: str(index[f'{mod}_dtype'].item())           for mod in self.bin_mods} if self.bin_mods is not None else {}
-        self._feat_dims = {mod: int(index[f'{mod}_feat_dim'].item())        for mod in self.bin_mods} if self.bin_mods is not None else {}
-        self._offsets   = {mod: index[f'{mod}_offsets']                     for mod in self.bin_mods} if self.bin_mods is not None else {}
-        self._lengths   = {mod: index[f'{mod}_lengths']                     for mod in self.bin_mods} if self.bin_mods is not None else {} #how many patches in the sample
-        self._patches   = {mod: index[f'{mod}_total_patches']               for mod in self.bin_mods} if self.bin_mods is not None else {}
-
         #handle keys
         self._keys = None
         if self.return_key:
@@ -417,11 +410,22 @@ class MemmapDatasetMultimodal(Dataset):
 
         #prep extra modalities
         self.extras = {key: index[key] for key in extra_modality_keys} if extra_modality_keys is not None else {}
-        
+
+        #all modalities have a dtype and masks
+        #dtypes
+        bin_dtypes = {mod: str(index[f'{mod}_dtype'].item()) for mod in self.bin_mods} if self.bin_mods is not None else {}
+        mod_dtypes = {mod: str(index[f'{mod}_dtype'].item()) for mod in self.extras}
+        self._dtypes = {**bin_dtypes, **mod_dtypes}
         #masking
         bin_mask   = {mod: index[f'{mod}_mask'] for mod in self.bin_mods} if self.bin_mods is not None else {}
         extra_mask = {mod: index[f'{mod}_mask'] for mod in self.extras}
         self._masks = {**bin_mask, **extra_mask}
+
+        #each bin mod has a dtype, feat_dim, offsets, lengths, and total_patches
+        self._feat_dims = {mod: int(index[f'{mod}_feat_dim'].item())        for mod in self.bin_mods} if self.bin_mods is not None else {}
+        self._offsets   = {mod: index[f'{mod}_offsets']                     for mod in self.bin_mods} if self.bin_mods is not None else {}
+        self._lengths   = {mod: index[f'{mod}_lengths']                     for mod in self.bin_mods} if self.bin_mods is not None else {} #how many patches in the sample
+        self._patches   = {mod: index[f'{mod}_total_patches']               for mod in self.bin_mods} if self.bin_mods is not None else {}
         
         #Filtering
         all_valid = np.zeros((len(self._slide_ids), )) if self.sparse else np.ones((len(self._slide_ids), ))
@@ -509,16 +513,16 @@ class MemmapDatasetMultimodal(Dataset):
                     data = data[:].squeeze(0)
                 sample[mod] = data
 
-        for mod_name, mod_data in self.extras.items():
+        for mod, mod_data in self.extras.items():
             sample[f"{mod}_mask"] = self._masks[mod][real_idx]
             data = mod_data[real_idx]
             if self.sparse and np.isnan(data).any():
                 if len(mod_data.shape) == 1:
-                    sample[mod_name] = 0
+                    sample[mod] = 0
                 else:
-                    sample[mod_name] = np.zeros((mod_data.shape[1:]), dtype=self._dtypes[mod])
+                    sample[mod] = np.zeros((mod_data.shape[1:]), dtype=self._dtypes[mod])
             else:
-                sample[mod_name] = data
+                sample[mod] = data
         
         if self.return_key: 
             keys    = {key: self._keys[key][real_idx] for key in self._keys}

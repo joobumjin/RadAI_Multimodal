@@ -45,8 +45,6 @@ foreach ($model in $models) {
     }
 }
 
-
-
 # #sparse 
 # # clinical only
 # foreach ($model in $models) {
