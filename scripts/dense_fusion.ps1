@@ -42,8 +42,6 @@ foreach ($model in $models) {
     python .\emb_fusion_train.py    --model $model --sparse --clinical --path_lang --rad_lang --label_col $target --loss_fn $loss
 }
 
-
-
 # #sparse 
 # # clinical only
 # foreach ($model in $models) {
