@@ -142,22 +142,8 @@ def get_path_img_encoder(args):
 def get_dense_fusion_model(args):
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
-    losses = {
-        "l1": F.l1_loss,
-        "smooth_l1": F.smooth_l1_loss,
-        "mse": F.mse_loss,
-        "bce": F.binary_cross_entropy_with_logits,
-    }
-
-    fusers = {
-        "naive_sum": NaiveSum,
-        "naive_avg": NaiveAvg,
-        "weighted_sum": LearnedWeightSum
-    }
-
     get_enc_fns = {
         "clinical": get_clinical_encoder, 
-        "clinical_imputed": get_clinical_encoder, 
         "path_lang": get_path_lang_encoder, 
         "rad_lang": get_rad_lang_encoder, 
         "path_img": get_path_img_encoder, 
@@ -169,8 +155,221 @@ def get_dense_fusion_model(args):
         if arg_dict.get(mod, False): 
             encs[mod], casts[mod] = fn(args)
 
-    model = EmbFusion(encs, emb_dim=args.emb_dim, hidden_dims=[32], autocast=casts, fusion_fn=fusers[args.fusion], loss_fn=losses[args.loss_fn], device=device)
+    #add decoders
+    decoders = {
+        "survival_days", #-> single regression value
+        "survival_2yr" #-> single probability
+        "recur_free_days", #-> single regression value
+        "clinical", #-> 24dim
+        "path_lang", #-> 512 dim
+        "rad_lang" #-> 512 dim
+    }
+
+    model = DenseFusionMulti(encs, emb_dim=args.emb_dim, hidden_dims=[32], autocast=casts, loss_fn=None, device=device)
     return model, device
+
+class MultiLossF(nn.Module):
+    def __init__(self, bool_targets: list[str], regr_targets: list[str]):
+        super(MultiLossF, self).__init__()
+        self.bool_targets = bool_targets
+        self.bool_fn = F.binary_cross_entropy_with_logits
+        self.mask_names = {
+
+        }
+
+        self.regr_targets = regr_targets
+        self.regr_fn = F.smooth_l1_loss
+    
+    def forward(self, predictions, targets):
+        loss = {}
+        for target in self.bool_targets:
+            loss[target] = self.bool_fn(predictions[target], targets[target])
+        for target in self.regr_targets:
+            loss[target] = self.regr_fn(predictions[target], targets[target])
+        
+        return loss
+
+# --------------------------------------------------------
+
+def get_metrics(split: str, bool_targets: list[str], regr_targets: list[str]):
+    metrics = {f"{split} Loss": AverageMeter()}
+    if split == "Train": metrics["lr"] = AverageMeter()
+
+    fns, torchmetrics = {}, {}
+
+    #maybe split into bool and regression metric dicts
+    for target in bool_targets:
+        fns[target] = {
+            f"{split} Acc": lambda p, l: acc(torch.sigmoid(p) > 0.5, l)
+        }
+        torchmetrics[target] = {
+            f"{split} ROC": ROC(task="binary"),
+            f"{split} AUC": AUROC(task="binary")
+        }
+        metrics[f"{target} {split} Acc"] = AverageMeter()
+
+    for target in regr_targets:
+        fns[target] = {
+            fns[f"{split} MSE"]: F.mse_loss,
+            fns[f"{split} L1"]: F.l1_loss
+        }
+        metrics[f"{target} {split} MSE"] = AverageMeter()
+        metrics[f"{target} {split} L1"] = AverageMeter()
+
+    return metrics, fns, torchmetrics
+
+def train_one_epoch(model: torch.nn.Module,
+                    train_loader: Iterable,
+                    bool_targets: list[str], regr_targets: list[str],
+                    optimizer: optim.Optimizer, scheduler: optim.lr_scheduler.LRScheduler,
+                    device: str,
+                    args: Namespace):
+    model.train(True)
+    optimizer.zero_grad()
+
+    metrics, fns, torchmetrics = get_metrics("Train", bool_targets, regr_targets)
+    
+    for batch in train_loader:
+        for key in batch:
+            batch[key] = batch[key].to(device)
+
+        preds, loss = model(batch)
+
+        #need to convert preds to a dict
+        with torch.inference_mode():
+            metrics["Train Loss"].update(loss.detach().item())
+            metrics["lr"].update(optimizer.param_groups[0]["lr"])
+            for target in bool_targets:
+                for name, fn in fns[target].items():
+                    metric_val = fn(preds, batch[target])
+                    metrics[name].update(metric_val.detach().item())
+            for target in regr_targets:
+                for name, fn in fns[target].items():
+                    metric_val = fn(preds, batch[target])
+                    metrics[name].update(metric_val.detach().item())
+
+            preds = torch.sigmoid(preds["survival_2yr"])
+            for obj in torchmetrics.values():
+                obj.update(preds.detach().squeeze(-1), batch["label"].detach().int().squeeze(-1))
+
+        loss.backward()
+        optimizer.step()
+        optimizer.zero_grad()
+        scheduler.step()
+
+    return {k: meter.avg for k, meter in metrics.items()}, torchmetrics
+
+def test(model: torch.nn.Module, 
+         data_loader: Iterable, 
+         bool_targets: list[str], regr_targets: list[str],
+         device: str, 
+         args: Namespace,
+         split: str = "Test"):
+    model.eval()
+
+    metrics, fns, torchmetrics = get_metrics(split, bool_targets, regr_targets)
+
+    for batch in data_loader:
+        for key in batch:
+            batch[key] = batch[key].to(device)
+
+        with torch.inference_mode():
+            preds, loss = model(batch)
+            metrics[f"{split} Loss"].update(loss.detach().item())
+            for name, fn in fns.items():
+                metric_val = fn(preds, batch["label"])
+                metrics[name].update(metric_val.detach().item())
+
+            preds = torch.sigmoid(preds["survival_2yr"])
+            for obj in torchmetrics.values():
+                obj.update(preds.detach().squeeze(-1), batch["label"].detach().int().squeeze(-1))
+
+    return {k: meter.avg for k, meter in metrics.items()}, torchmetrics
+
+def run_setup(args, model_constructor, train_loader, valid_loader, test_loader, run_name = None):
+    seed = args.seed
+    torch.manual_seed(seed)
+    np.random.seed(seed)
+
+    model, device = model_constructor(args)
+
+    optimizer, scheduler = get_opt_and_sched(model, args, iter_per_epoch=len(train_loader))
+
+    early_stopper = EarlyStopper(args.patience, False) if args.early_stop else None
+    stop_metric = "Test C-Index"
+
+    if args.disable_wandb: run = None
+    else:
+        config = {
+            "Loss": args.loss_fn,
+            "Seed": args.seed,
+            "Clinical": args.clinical,
+            "Clinical Imputed": args.clinical_imputed,
+            "Path Lang": args.path_lang,
+            "Rad Lang": args.rad_lang,
+            "Path Img": args.path_img,
+            "Fusion": "Dense",
+            "Model": args.model,
+            "MLP Norm": "Layer Norm",
+        }
+
+        mods = [mod for mod, used 
+                        in zip(["Clinical", "Path Lang", "Rad Lang", "Path Img"], 
+                               [args.clinical, args.path_lang, args.rad_lang, args.path_img]) 
+                        if used]
+
+        if run_name is None:
+            run_name =  " - ".join([f"{args.label_col}", f"{args.model}"]) + "+".join(mods)
+        else:
+            run_name += "+".join(mods)
+
+        run = wandb.init(
+            entity="bumjin_joo-brown-university", 
+            project=args.wb_proj, 
+            name=run_name,
+            config=config
+        )
+
+    print(f"Start training for {args.epochs} epochs")
+    pbar = trange(0, args.epochs, desc="Training Epochs", postfix={})
+    for e in pbar:
+        train_stats, train_tm = train_one_epoch(model, train_loader, optimizer, scheduler, device, args)
+        valid_stats, valid_tm = test(model, valid_loader, device, args=args, split="Valid")
+        test_stats, test_tm = test(model, test_loader, device, args=args, split="Test")
+
+        tm = {}
+        if len(train_tm) > 0:
+            if e == args.epochs - 1:
+                if run is not None: 
+                    fig, (ax1, ax2, ax3) = plt.subplots(1, 3)
+                    fig.suptitle('ROC Performance Curves')
+                    train_tm["Train ROC"].plot(ax=ax1)
+                    valid_tm["Valid ROC"].plot(ax=ax2)
+                    test_tm["Test ROC"].plot(ax=ax3)
+                    run.log({"ROC": fig})
+            del train_tm["Train ROC"], valid_tm["Valid ROC"], test_tm["Test ROC"]
+
+            tm = {**train_tm, **valid_tm, **test_tm}
+            tm = {name: obj.compute() for name, obj in tm.items()}
+
+        #need to adjust this
+        c_indices = calculate_c_indices(model, train_loader, valid_loader, test_loader, device)
+
+        postfix = {**train_stats, **valid_stats, **test_stats, **c_indices, **tm}
+        if run is not None: run.log(postfix)
+        pbar.set_postfix(postfix)
+
+        if early_stopper is not None:
+            stop, best = early_stopper.update(postfix[stop_metric])
+            if best:
+                # save_model(model, args.save_path)
+                pass
+            elif stop:
+                print("Early stopping triggered!")
+                return
+            
+    if run is not None:
+        run.finish()
 
 # --------------------------------------------------------
 
@@ -179,9 +378,14 @@ def main(args):
     torch.manual_seed(seed)
     np.random.seed(seed)
 
-    train_loader, valid_loader, test_loader = get_loaders(args, *get_inds(args))
-
     ## reconstruction loss, recurrence regression loss, survival regression loss?, survival binary loss
+    #reconstruction: batch[modality]
+    #recurrence key: "recur_free_days", "recur_mask", 
+    #
+    # want to load sparsely available labels?
+    train_loader, valid_loader, test_loader = get_loaders(args, 
+                                                          *get_inds(args),
+                                                          keys = ["slide_ids", "survival_days", "survival_right_censor", "recur_free_days", "recur_mask"])
 
     run_setup(args, get_dense_fusion_model, train_loader, valid_loader, test_loader, 
               run_name = " - ".join([f"smaller, 64e", f"{args.label_col}", f"{args.model}"]))

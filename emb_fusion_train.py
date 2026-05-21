@@ -44,6 +44,7 @@ def get_args_parser():
     parser.add_argument('--path_lang',          action="store_true")
     parser.add_argument('--rad_lang',           action="store_true")
     parser.add_argument('--path_img',           action="store_true")
+    parser.add_argument('--enc_dim',            type=int,   default=512)
     parser.add_argument('--emb_dim',            type=int,   default=64)
     
     parser.add_argument('--prefetch_factor',    type=int,   default=2)
@@ -126,13 +127,13 @@ def get_clinical_encoder(args):
     return clin_enc, False
 
 def get_path_lang_encoder(args):
-    # path_lang_enc = create_mlp(512, [128], args.emb_dim, act = nn.GELU(), dropout = 0.3, layer_norm = True)
-    path_lang_enc = create_mlp(512, [64], args.emb_dim, act = nn.GELU(), dropout = 0.3, layer_norm = True)
+    path_lang_enc = create_mlp(args.enc_dim, [128], args.emb_dim, act = nn.GELU(), dropout = 0.3, layer_norm = True)
+    # path_lang_enc = create_mlp(512, [64], args.emb_dim, act = nn.GELU(), dropout = 0.3, layer_norm = True)
     return path_lang_enc, True
 
 def get_rad_lang_encoder(args):
-    # rad_lang_enc = create_mlp(512, [128], args.emb_dim, act = nn.GELU(), dropout = 0.3, layer_norm = True)
-    rad_lang_enc = create_mlp(512, [64], args.emb_dim, act = nn.GELU(), dropout = 0.3, layer_norm = True)
+    rad_lang_enc = create_mlp(args.enc_dim, [128], args.emb_dim, act = nn.GELU(), dropout = 0.3, layer_norm = True)
+    # rad_lang_enc = create_mlp(512, [64], args.emb_dim, act = nn.GELU(), dropout = 0.3, layer_norm = True)
     return rad_lang_enc, True
 
 def get_path_img_encoder(args):

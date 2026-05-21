@@ -37,11 +37,21 @@ conda activate multi
 #     python .\dense_fusion_train.py --model $model --clinical --path_lang --rad_lang --label_col $target --loss_fn $loss
 # }
 
-foreach ($model in $models) {
-    python .\dense_fusion_train.py --model $model --emb_dim 32 --sparse --clinical --path_lang --rad_lang --label_col $target --loss_fn $loss
+# foreach ($model in $models) {
+#     python .\dense_fusion_train.py --model $model --emb_dim 32 --sparse --clinical --path_lang --rad_lang --label_col $target --loss_fn $loss
+#     $fusions = "naive_sum", "naive_avg", "weighted_sum"
+#     foreach ($fusion in $fusions) {   
+#         python .\emb_fusion_train.py --model $model --fusion $fusion --sparse --clinical --path_lang --rad_lang --label_col $target --loss_fn $loss
+#     }
+# }
+
+$models = "gemma", "qwen"
+$enc_dims = 768, 1024
+foreach ($model, $enc_dim in $models, $enc_dims) {
+    python .\dense_fusion_train.py --model $model --data_path "../${model}_multimodal_bins" --test_path "../${model}_multimodal_bins_rw" --enc_dim $enc_dim --sparse --clinical --path_lang --rad_lang --label_col $target --loss_fn $loss
     $fusions = "naive_sum", "naive_avg", "weighted_sum"
     foreach ($fusion in $fusions) {   
-        python .\emb_fusion_train.py --model $model --fusion $fusion --sparse --clinical --path_lang --rad_lang --label_col $target --loss_fn $loss
+        python .\emb_fusion_train.py --model $model --data_path "../${model}_multimodal_bins" --test_path "../${model}_multimodal_bins_rw" --enc_dim $enc_dim --fusion $fusion --sparse --clinical --path_lang --rad_lang --label_col $target --loss_fn $loss
     }
 }
 
