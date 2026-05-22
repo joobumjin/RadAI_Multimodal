@@ -27,7 +27,7 @@ def get_args_parser():
       
     parser.add_argument('--batch_size',         type=int,   default=16)
     parser.add_argument('--loss_fn',            type=str,   default="bce")
-    parser.add_argument('--model',              type=str,   default="conch", choices=['conch', 'biomedclip'])
+    parser.add_argument('--model',              type=str,   default="conch", choices=['conch', 'biomedclip', 'gemma', 'qwen'])
     # parser.add_argument('--data_path',          type=str,   default="../{model}_path_rad_text_embs")
     parser.add_argument('--data_path',          type=str,   default="../updated_multimodal_bins")
     parser.add_argument('--test_path',          type=str,   default="../multimodal_bins_rw")
