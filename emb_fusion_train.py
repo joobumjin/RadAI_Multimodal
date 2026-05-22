@@ -71,6 +71,7 @@ def get_args_parser():
 
     parser.add_argument('--disable_wandb',      action="store_true")
     parser.add_argument('--wb_proj',            type=str,   default="Panc MM Emb Fusion External Test")
+    parser.add_argument('--run_name')
     parser.add_argument('--debug',              action="store_true")
     return parser
 
@@ -182,8 +183,8 @@ def main(args):
 
     train_loader, valid_loader, test_loader = get_loaders(args, *get_inds(args))
 
-    run_setup(args, get_dense_fusion_model, train_loader, valid_loader, test_loader, 
-              run_name = " - ".join([f"smaller, 64e{", sparse" if args.sparse else ""}", f"{args.fusion}", f"{args.label_col}", f"{args.model}"]))
+    run_name = args.run_name if args.run_name is not None else " - ".join([f"{args.emb_dim}e{", sparse" if args.sparse else ""}", f"{args.label_col}", f"{args.model}"])
+    run_setup(args, get_dense_fusion_model, train_loader, valid_loader, test_loader, run_name = run_name)
        
 
 if __name__ == '__main__':

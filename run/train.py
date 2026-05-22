@@ -188,7 +188,10 @@ def run_setup(args, model_constructor, train_loader, valid_loader, test_loader, 
     pbar = trange(0, args.epochs, desc="Training Epochs", postfix={})
     for e in pbar:
         train_stats, train_tm = train_one_epoch(model, train_loader, optimizer, scheduler, device, args)
-        valid_stats, valid_tm = test(model, valid_loader, device, args=args, split="Valid")
+        if valid_loader is not None:
+            valid_stats, valid_tm = test(model, valid_loader, device, args=args, split="Valid") 
+        else:
+            valid_stats, valid_tm = {}, {}
         test_stats, test_tm = test(model, test_loader, device, args=args, split="Test")
 
         tm = {}
@@ -198,10 +201,11 @@ def run_setup(args, model_constructor, train_loader, valid_loader, test_loader, 
                     fig, (ax1, ax2, ax3) = plt.subplots(1, 3)
                     fig.suptitle('ROC Performance Curves')
                     train_tm["Train ROC"].plot(ax=ax1)
-                    valid_tm["Valid ROC"].plot(ax=ax2)
+                    if "Valid ROC" in valid_tm: valid_tm["Valid ROC"].plot(ax=ax2)
                     test_tm["Test ROC"].plot(ax=ax3)
                     run.log({"ROC": fig})
-            del train_tm["Train ROC"], valid_tm["Valid ROC"], test_tm["Test ROC"]
+            del train_tm["Train ROC"], test_tm["Test ROC"]
+            if "Valid ROC" in valid_tm: del valid_tm["Valid ROC"]
 
             tm = {**train_tm, **valid_tm, **test_tm}
             tm = {name: obj.compute() for name, obj in tm.items()}

@@ -47,14 +47,36 @@ conda activate multi
 
 $models = "gemma", "qwen"
 $enc_dims = 768, 1024
-for ($i = 1; $i -lt $models.Count; $i++){
+for ($i = 0; $i -lt $models.Count; $i++){
     $model, $enc_dim = $models[$i], $enc_dims[$i] 
-    python .\dense_fusion_train.py --model $model --data_path "../${model}_multimodal_bins" --test_path "../${model}_multimodal_bins_rw" --enc_dim $enc_dim --path_lang --rad_lang --label_col $target --loss_fn $loss
+    python .\dense_fusion_train.py --model $model --data_path "../${model}_multimodal_bins" --test_path "../${model}_multimodal_bins_rw" --enc_dim $enc_dim --clinical --path_lang --rad_lang --label_col $target --loss_fn $loss
     $fusions = "naive_sum", "naive_avg", "weighted_sum"
     foreach ($fusion in $fusions) {   
-        python .\emb_fusion_train.py --model $model --data_path "../${model}_multimodal_bins" --test_path "../${model}_multimodal_bins_rw" --enc_dim $enc_dim --fusion $fusion --path_lang --rad_lang --label_col $target --loss_fn $loss
+        python .\emb_fusion_train.py --model $model --data_path "../${model}_multimodal_bins" --test_path "../${model}_multimodal_bins_rw" --enc_dim $enc_dim --fusion $fusion --clinical --path_lang --rad_lang --label_col $target --loss_fn $loss
     }
 }
+
+for ($i = 0; $i -lt $models.Count; $i++){
+    $model, $enc_dim = $models[$i], $enc_dims[$i] 
+    python .\dense_fusion_train.py --model $model --data_path "../${model}_multimodal_bins" --test_path "../${model}_multimodal_bins_rw" --enc_dim $enc_dim --sparse --clinical --path_lang --rad_lang --label_col $target --loss_fn $loss
+    $fusions = "naive_sum", "naive_avg", "weighted_sum"
+    foreach ($fusion in $fusions) {   
+        python .\emb_fusion_train.py --model $model --data_path "../${model}_multimodal_bins" --test_path "../${model}_multimodal_bins_rw" --enc_dim $enc_dim --fusion $fusion --sparse --clinical --path_lang --rad_lang --label_col $target --loss_fn $loss
+    }
+}
+
+# #train on RW
+# $models = "gemma", "qwen"
+# $enc_dims = 768, 1024
+# for ($i = 1; $i -lt $models.Count; $i++){
+#     $model, $enc_dim = $models[$i], $enc_dims[$i] 
+#     python .\dense_fusion_train.py --model $model --emb_dim 128 --test_path "../${model}_multimodal_bins" --train_split 1.0 --run_name "RWTrain-dense-${model}"--data_path "../${model}_multimodal_bins_rw" --enc_dim $enc_dim --path_lang --rad_lang --label_col $target --loss_fn $loss
+#     $fusions = "naive_sum", "naive_avg", "weighted_sum"
+#     foreach ($fusion in $fusions) {   
+#         python .\emb_fusion_train.py --model $model --emb_dim 128 --test_path "../${model}_multimodal_bins" --train_split 1.0 --run_name "RWTrain-emb_naive-${model}-${fusion}" --data_path "../${model}_multimodal_bins_rw" --enc_dim $enc_dim --fusion $fusion --path_lang --rad_lang --label_col $target --loss_fn $loss
+#     }
+# }
+
 
 # #sparse 
 # # clinical only

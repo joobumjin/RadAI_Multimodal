@@ -57,9 +57,12 @@ def get_loaders(args: Namespace, train_inds, validation_inds, keys: list[str] = 
     }
 
     train_set = MemmapDatasetMultimodal(indices=train_inds, **dataset_args)
-    val_set = MemmapDatasetMultimodal(indices=validation_inds, **dataset_args)
     train_loader = DataLoader(train_set, shuffle=True, **loader_args)
-    val_loader = DataLoader(val_set, shuffle=False, **loader_args)
+    if len(validation_inds):
+        val_set = MemmapDatasetMultimodal(indices=validation_inds, **dataset_args)
+        val_loader = DataLoader(val_set, shuffle=False, **loader_args)
+    else:
+        val_set, val_loader = None, None
 
     test_index = np.load(f"{args.test_path}/index_arrays_labeled.npz", allow_pickle=True)
     test_args = {**dataset_args}
@@ -70,20 +73,19 @@ def get_loaders(args: Namespace, train_inds, validation_inds, keys: list[str] = 
     combine = (lambda x, y: x & y) if not args.sparse else (lambda x, y: x | y)
     test_mask = ~test_index["excluded"] & reduce(combine, [test_index["path_lang_mask"], test_index["rad_lang_mask"], test_index["survival_mask"], test_index["clinical_mask"]])
 
-    # test_mask = ~test_index["excluded"] & test_index["path_lang_mask"] & test_index["rad_lang_mask"]  & test_index["survival_mask"] & test_index["clinical_mask"]
-
     stats = [[split, len(dset), len(loader), under, over] 
              for (split, dset, loader, under, over) 
-             in zip(["Train", "Valid", "Test"], 
-                    [train_set, val_set, test_set], 
-                    [train_loader, val_loader, test_loader],
-                    [np.sum(index[args.label_col][train_inds] < (args.survival_years * 365.0)), np.sum(index[args.label_col][validation_inds] < (args.survival_years * 365.0)), np.sum(test_index[args.label_col][test_mask] < (args.survival_years * 365.0))],
-                    [np.sum(index[args.label_col][train_inds] >= (args.survival_years * 365.0)), np.sum(index[args.label_col][validation_inds] >= (args.survival_years * 365.0)), np.sum(test_index[args.label_col][test_mask] >= (args.survival_years * 365.0))]
-             )
+             in zip(["Train", "Test"], 
+                    [train_set, test_set], 
+                    [train_loader, test_loader],
+                    [np.sum(index[args.label_col][train_inds] < (args.survival_years * 365.0)), np.sum(test_index[args.label_col][test_mask] < (args.survival_years * 365.0))],
+                    [np.sum(index[args.label_col][train_inds] >= (args.survival_years * 365.0)), np.sum(test_index[args.label_col][test_mask] >= (args.survival_years * 365.0))])
             ]
+    if len(validation_inds):
+        valid_stats = ["Valid", len(val_set), len(val_loader), np.sum(index[args.label_col][validation_inds] < (args.survival_years * 365.0)), np.sum(index[args.label_col][validation_inds] >= (args.survival_years * 365.0))] 
+        stats = [stats[0], valid_stats, stats[1]]
+
     headers = ["Split", "# Samples", "# Batches", f"# Living < {args.survival_years}yr", f"# Living >= {args.survival_years} yr"]
-    print(tabulate(stats, headers=headers, tablefmt="grid"),
-          "\n")
-    
+    print(tabulate(stats, headers=headers, tablefmt="grid"), "\n")
 
     return train_loader, val_loader, test_loader
