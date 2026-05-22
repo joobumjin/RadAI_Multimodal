@@ -45,7 +45,7 @@ def get_args_parser():
     parser.add_argument('--rad_lang',           action="store_true")
     parser.add_argument('--path_img',           action="store_true")
     parser.add_argument('--enc_dim',            type=int,   default=512)
-    parser.add_argument('--emb_dim',            type=int,   default=64)
+    parser.add_argument('--emb_dim',            type=int,   default=256)
     
     parser.add_argument('--prefetch_factor',    type=int,   default=2)
     parser.add_argument('--num_workers',        type=int,   default=1)
@@ -124,18 +124,19 @@ def get_inds(args):
 
 def get_clinical_encoder(args):
     # clin_enc = create_mlp(24, [128], args.emb_dim, act = nn.GELU(), dropout = 0.3, layer_norm = True)
-    clin_enc = create_mlp(24, [64], args.emb_dim, act = nn.GELU(), dropout = 0.3, layer_norm = True)
+    clin_enc = create_mlp(24, [], args.emb_dim, act = nn.GELU(), dropout = 0.3, end_with_fc=False, end_with_dropout=True, rms_norm = True, end_with_norm=True)
     return clin_enc, False
 
 def get_path_lang_encoder(args):
-    path_lang_enc = create_mlp(args.enc_dim, [128], args.emb_dim, act = nn.GELU(), dropout = 0.3, layer_norm = True)
-    # path_lang_enc = create_mlp(512, [64], args.emb_dim, act = nn.GELU(), dropout = 0.3, layer_norm = True)
+    # path_lang_enc = create_mlp(args.enc_dim, [128], args.emb_dim, act = nn.GELU(), dropout = 0.4, layer_norm = True)
+    path_lang_enc = create_mlp(args.enc_dim, [], args.emb_dim, act = nn.GELU(), dropout = 0.3, end_with_fc=False, end_with_dropout=True, rms_norm = True, end_with_norm=True)
     return path_lang_enc, True
 
 def get_rad_lang_encoder(args):
-    rad_lang_enc = create_mlp(args.enc_dim, [128], args.emb_dim, act = nn.GELU(), dropout = 0.3, layer_norm = True)
-    # rad_lang_enc = create_mlp(512, [64], args.emb_dim, act = nn.GELU(), dropout = 0.3, layer_norm = True)
+    # rad_lang_enc = create_mlp(args.enc_dim, [128], args.emb_dim, act = nn.GELU(), dropout = 0.4, layer_norm = True)
+    rad_lang_enc = create_mlp(args.enc_dim, [], args.emb_dim, act = nn.GELU(), dropout = 0.3, end_with_fc=False, end_with_dropout=True, rms_norm = True, end_with_norm=True)
     return rad_lang_enc, True
+
 
 def get_path_img_encoder(args):
     mil = EmbMIL(embed_dim=384, dropout=0.3, attn_dim = 256, proj_dim=args.emb_dim, loss_fn=None)
@@ -183,7 +184,7 @@ def main(args):
 
     train_loader, valid_loader, test_loader = get_loaders(args, *get_inds(args))
 
-    run_name = args.run_name if args.run_name is not None else " - ".join([f"{args.emb_dim}e{", sparse" if args.sparse else ""}", f"{args.label_col}", f"{args.model}"])
+    run_name = args.run_name if args.run_name is not None else " - ".join([f"{args.emb_dim}e{", sparse" if args.sparse else ""}", f"{args.label_col}", f"{args.model} - "])
     run_setup(args, get_dense_fusion_model, train_loader, valid_loader, test_loader, run_name = run_name)
        
 

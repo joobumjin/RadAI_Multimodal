@@ -56,6 +56,7 @@ for ($i = 0; $i -lt $models.Count; $i++){
     }
 }
 
+#sparse
 for ($i = 0; $i -lt $models.Count; $i++){
     $model, $enc_dim = $models[$i], $enc_dims[$i] 
     python .\dense_fusion_train.py --model $model --data_path "../${model}_multimodal_bins" --test_path "../${model}_multimodal_bins_rw" --enc_dim $enc_dim --sparse --clinical --path_lang --rad_lang --label_col $target --loss_fn $loss

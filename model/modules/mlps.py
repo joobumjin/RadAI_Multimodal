@@ -33,6 +33,8 @@ def create_mlp(
         bias=True,
         batch_norm=False,
         layer_norm=False,
+        rms_norm=False,
+        end_with_norm=False,
     ):
 
     layers = []
@@ -40,17 +42,21 @@ def create_mlp(
     for hid_dim in hid_dims:
         layers.append(nn.Linear(in_dim, hid_dim, bias=bias))
         if batch_norm: layers.append(nn.BatchNorm1d(hid_dim))
-        if layer_norm: layers.append(nn.LayerNorm(hid_dim))
+        elif layer_norm: layers.append(nn.LayerNorm(hid_dim))
+        elif rms_norm: layers.append(nn.RMSNorm(hid_dim))
         layers.append(act)
         layers.append(nn.Dropout(dropout))
         in_dim = hid_dim
 
     layers.append(nn.Linear(in_dim, out_dim))
-    # if batch_norm: layers.append(nn.BatchNorm1d(out_dim))
-    # if layer_norm: layers.append(nn.LayerNorm(out_dim))
 
     if not end_with_fc:
         layers.append(act)
+
+    if end_with_norm:
+        if batch_norm: layers.append(nn.BatchNorm1d(out_dim))
+        elif layer_norm: layers.append(nn.LayerNorm(out_dim))
+        elif rms_norm: layers.append(nn.RMSNorm(out_dim))
     
     if end_with_dropout:
         layers.append(nn.Dropout(dropout))
