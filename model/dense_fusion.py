@@ -22,6 +22,16 @@ class DenseFusion(nn.Module):
 
         self.pred = LinearModel(emb_dim * len(encoders), hidden_dims=hidden_dims, layer_norm=True, loss_fn=None)
         self.pred = self.pred.to(device)
+        self.apply(self._init_weights)
+
+    def _init_weights(self, m):
+        if isinstance(m, nn.Linear):
+            torch.nn.init.xavier_uniform_(m.weight)
+            if isinstance(m, nn.Linear) and m.bias is not None:
+                nn.init.constant_(m.bias, 0)
+        elif isinstance(m, nn.LayerNorm):
+            nn.init.constant_(m.bias, 0)
+            nn.init.constant_(m.weight, 1.0)
 
     def predict(self, x: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:            
         logits = {}
@@ -47,6 +57,7 @@ class DenseFusionMulti(nn.Module):
     def __init__(self, 
                  encoders: Dict[str, nn.Module], 
                  emb_dim: int, 
+                 hidden_dims: List[int],
                  decoders: Dict[str, nn.Module], 
                  autocast: Dict[str, bool], 
                  loss_fn: Optional[nn.Module], 
@@ -60,7 +71,20 @@ class DenseFusionMulti(nn.Module):
         self.modality_order = list(encoders.keys())
 
         self.encoders = {mod: encoders[mod].to(device) for mod in encoders}
+        self.merge = LinearModel(emb_dim * len(encoders), hidden_dims=hidden_dims, layer_norm=True, loss_fn=None)
+        self.merge = self.merge.to(device)
+
         self.pred = {target: decoders[target].to(device) for target in decoders}
+        self.apply(self._init_weights)
+
+    def _init_weights(self, m):
+        if isinstance(m, nn.Linear):
+            torch.nn.init.xavier_uniform_(m.weight)
+            if isinstance(m, nn.Linear) and m.bias is not None:
+                nn.init.constant_(m.bias, 0)
+        elif isinstance(m, nn.LayerNorm):
+            nn.init.constant_(m.bias, 0)
+            nn.init.constant_(m.weight, 1.0)
 
     def predict(self, x: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:            
         logits = {}
@@ -74,7 +98,11 @@ class DenseFusionMulti(nn.Module):
 
         preds = {}
         for target, dec in self.pred.items():
-            preds[target] = dec.predict(catted)
+            with torch.autocast(device_type=self.device, dtype=torch.float16, enabled=self.autocast[target]):
+                preds[target] = dec.predict(catted)
+            if f"{target}_mask" in x: 
+                preds[target] *= x[f"{target}_mask"].view((-1, 1))
+            
         return preds
     
     def forward(self, x: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:

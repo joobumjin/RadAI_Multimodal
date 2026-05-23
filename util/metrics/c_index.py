@@ -21,7 +21,7 @@ def compile_split(model, loader, device):
     return [np.concatenate(l) for l in [split_deaths, split_times, split_preds]]
 
 
-def calculate_c_indices(model: torch.nn.Module, train_loader, val_loader, test_loader, device):
+def calculate_c_indices(model: torch.nn.Module, train_loader, val_loader, test_loader, device, compile = None):
     """
     Required Loader Batch Keys:
     - "survival_right_censor": Right censor on event date
@@ -30,15 +30,17 @@ def calculate_c_indices(model: torch.nn.Module, train_loader, val_loader, test_l
     """
 
     model.eval()
+
+    compile_fn = compile if compile is not None else compile_split
   
-    train = compile_split(model, train_loader, device)
+    train = compile_fn(model, train_loader, device)
 
     if val_loader is not None:        
-        val = compile_split(model, val_loader, device)
+        val = compile_fn(model, val_loader, device)
     else:
         val = []
 
-    test = compile_split(model, test_loader, device)
+    test = compile_fn(model, test_loader, device)
 
     train_c, _, _, _, _ = concordance_index_censored(*train)
     val_c = concordance_index_censored(*val)[0] if len(val) else None
