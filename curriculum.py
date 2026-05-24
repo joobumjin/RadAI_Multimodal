@@ -141,27 +141,27 @@ def get_path_img_encoder(args):
     return mil, True
 
 def get_surv_day_decoder(args):
-    dec = create_mlp(args.emb_dim, [128], 1, act = nn.GELU(), dropout = 0.3, rms_norm = True, end_with_norm=True)
+    dec = create_mlp(args.emb_dim, [128], 1, act = nn.GELU(), dropout = 0.3, layer_norm = True, end_with_norm=True)
     return dec, False
 
 def get_surv_indic_decoder(args):
-    dec = create_mlp(args.emb_dim, [128], 1, act = nn.GELU(), dropout = 0.3, rms_norm = True, end_with_norm=True)
+    dec = create_mlp(args.emb_dim, [128], 1, act = nn.GELU(), dropout = 0.3, layer_norm = True, end_with_norm=True)
     return dec, False
 
 def get_recur_day_decoder(args):
-    dec = create_mlp(args.emb_dim, [128], 1, act = nn.GELU(), dropout = 0.3, rms_norm = True, end_with_norm=True)
+    dec = create_mlp(args.emb_dim, [128], 1, act = nn.GELU(), dropout = 0.3, layer_norm = True, end_with_norm=True)
     return dec, False
 
 def get_clin_decoder(args):
-    dec = create_mlp(args.emb_dim, [128], 24, act = nn.GELU(), dropout = 0.3, rms_norm = True, end_with_norm=True)
+    dec = create_mlp(args.emb_dim, [128], 24, act = nn.GELU(), dropout = 0.3, layer_norm = True, end_with_norm=True)
     return dec, False
 
 def get_path_lang_decoder(args):
-    dec = create_mlp(args.emb_dim, [128], args.enc_dim, act = nn.GELU(), dropout = 0.3, rms_norm = True, end_with_norm=True)
+    dec = create_mlp(args.emb_dim, [128], args.enc_dim, act = nn.GELU(), dropout = 0.3, layer_norm = True, end_with_norm=True)
     return dec, True
 
 def get_rad_lang_decoder(args):
-    dec = create_mlp(args.emb_dim, [128], args.enc_dim, act = nn.GELU(), dropout = 0.3, rms_norm = True, end_with_norm=True)
+    dec = create_mlp(args.emb_dim, [128], args.enc_dim, act = nn.GELU(), dropout = 0.3, layer_norm = True, end_with_norm=True)
     return dec, True
 
 def get_dense_fusion_model(args, bool_targets: list[str], regr_targets: list[str], recon_targets: list[str]):
