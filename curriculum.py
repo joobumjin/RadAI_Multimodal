@@ -228,23 +228,14 @@ class MultiLossFn(nn.Module):
     def forward(self, predictions, targets):
         total_loss, loss = 0.0, {}
 
-        for target in self.bool_targets:
-            with torch.autocast(device_type=self.device, dtype=torch.float16, enabled=self.autocast[target]):
-                l = self.bool_fn(predictions[target], targets[target]).float()
-            total_loss += self.weights[target] *  l
-            loss[target] = l.detach().cpu().numpy()
+        for target_split, loss_fn in zip([self.bool_targets, self.regr_targets, self.recon_targets], [self.bool_fn, self.regr_fn, self.recon_fn]):
+            for target in target_split:
+                with torch.autocast(device_type=self.device, dtype=torch.float16, enabled=self.autocast[target]):
+                    l = loss_fn(predictions[target], targets[target], reduction="none").float()
+                loss_value = (l * targets[f"{target}_mask"]).sum() / targets[f"{target}_mask"].sum()
 
-        for target in self.regr_targets:
-            with torch.autocast(device_type=self.device, dtype=torch.float16, enabled=self.autocast[target]):
-                l = self.regr_fn(predictions[target], targets[target])
-            total_loss += self.weights[target] * l
-            loss[target] = l.detach().cpu().numpy()
-
-        for target in self.recon_targets:
-            with torch.autocast(device_type=self.device, dtype=torch.float16, enabled=self.autocast[target]):
-                l = self.recon_fn(predictions[target], targets[target])
-            total_loss += self.weights[target] * l
-            loss[target] = l.detach().cpu().numpy()
+                total_loss += self.weights[target] * loss_value
+                loss[target] = loss_value.detach().cpu().numpy()
 
         loss["total_loss"] = total_loss
 
