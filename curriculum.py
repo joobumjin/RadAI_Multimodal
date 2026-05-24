@@ -196,12 +196,12 @@ def get_dense_fusion_model(args, bool_targets: list[str], regr_targets: list[str
             decs[target], casts[target] = fn(args)
 
     loss_weights = {
-        "survival_2yr": .5, 
-        "survival_days": .5, 
-        "recur_free_days": .3, 
-        "clinical": .2, 
-        "path_lang": .2, 
-        "rad_lang": .2
+        "survival_2yr": 10, 
+        "survival_days": .05, 
+        "recur_free_days": .03, 
+        "clinical": .0002, 
+        "path_lang": .0002, 
+        "rad_lang": .0002
     }
     loss_fn = MultiLossFn(bool_targets, regr_targets, recon_targets, weights=loss_weights, autocast=casts, device=device)
 
@@ -230,9 +230,14 @@ class MultiLossFn(nn.Module):
 
         for target_split, loss_fn in zip([self.bool_targets, self.regr_targets, self.recon_targets], [self.bool_fn, self.regr_fn, self.recon_fn]):
             for target in target_split:
+                if len(targets[f"{target}_mask"].shape) == 1: targets[f"{target}_mask"] = targets[f"{target}_mask"].view((-1, 1))
+                
                 with torch.autocast(device_type=self.device, dtype=torch.float16, enabled=self.autocast[target]):
                     l = loss_fn(predictions[target], targets[target], reduction="none").float()
-                loss_value = (l * targets[f"{target}_mask"]).sum() / targets[f"{target}_mask"].sum()
+
+                unmasked_samples = targets[f"{target}_mask"].sum()
+                loss_value = (l * targets[f"{target}_mask"]).sum() / unmasked_samples if unmasked_samples > 0 else torch.tensor(0.0, dtype=torch.float32, device=l.device)
+                # loss_value = (l * targets[f"{target}_mask"]).mean()
 
                 total_loss += self.weights[target] * loss_value
                 loss[target] = loss_value.detach().cpu().numpy()
@@ -255,7 +260,7 @@ def get_metrics(split: str, bool_targets: list[str], regr_targets: list[str], re
             f"{target} {split} Acc": lambda p, l: acc(torch.sigmoid(p) > 0.5, l)
         }
         torchmetrics[target] = {
-            # f"{target} {split} ROC": ROC(task="binary"),
+            f"{target} {split} ROC": ROC(task="binary"),
             f"{target} {split} AUC": AUROC(task="binary")
         }
         
@@ -413,15 +418,16 @@ def run_setup(args, model_constructor, train_loader, valid_loader, test_loader, 
 
         tm = {}
         if len(train_tm) > 0:
-            # if e == args.epochs - 1:
-            #     if run is not None: 
-            #         fig, (ax1, ax2, ax3) = plt.subplots(1, 3)
-            #         fig.suptitle('ROC Performance Curves')
-            #         train_tm["Train ROC"].plot(ax=ax1)
-            #         valid_tm["Valid ROC"].plot(ax=ax2)
-            #         test_tm["Test ROC"].plot(ax=ax3)
-            #         run.log({"ROC": fig})
-            # del train_tm["Train ROC"], valid_tm["Valid ROC"], test_tm["Test ROC"]
+            if e == args.epochs - 1:
+                for target in bool_targets:
+                    if run is not None: 
+                        fig, (ax1, ax2, ax3) = plt.subplots(1, 3)
+                        fig.suptitle('ROC Performance Curves')
+                        train_tm[target][f"{target} Train ROC"].plot(ax=ax1)
+                        valid_tm[target][f"{target} Valid ROC"].plot(ax=ax2)
+                        test_tm[target][f"{target} Test ROC"].plot(ax=ax3)
+                        run.log({f"{target} ROC": fig})
+                del train_tm[target][f"{target} Train ROC"], valid_tm[target][f"{target} Valid ROC"], test_tm[target][f"{target} Test ROC"]
 
             tms = {**train_tm, **valid_tm, **test_tm}
             for t_d in tms.values():
@@ -459,13 +465,11 @@ def main(args):
     #
     # want to load sparsely available labels?
     train_loader, valid_loader, test_loader = get_loaders(args, 
-                                                          *get_inds(args),
-                                                          keys = ["survival_days", "survival_days_mask", "survival_right_censor", "recur_free_days", "recur_free_days_mask"],
-                                                          label_key="survival_2yr")
-
+                                                        *get_inds(args),
+                                                        keys = ["survival_days", "survival_days_mask", "survival_right_censor", "recur_free_days", "recur_free_days_mask"],
+                                                        label_key="survival_2yr")
     run_setup(args, get_dense_fusion_model, train_loader, valid_loader, test_loader, 
-              run_name = " - ".join([f"smaller, 64e", f"{args.label_col}", f"{args.model}"]))
-       
+            run_name = " - ".join([f"smaller, 64e", f"{args.label_col}", f"{args.model}"]))
 
 if __name__ == '__main__':
     parser  = get_args_parser()
