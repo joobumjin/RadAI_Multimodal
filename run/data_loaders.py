@@ -6,7 +6,11 @@ from tabulate import tabulate
 
 from data import *
 
-def get_loaders(args: Namespace, train_inds, validation_inds, keys: list[str] = ["slide_ids", "survival_days", "survival_right_censor"]):
+def get_loaders(args: Namespace, 
+                train_inds, 
+                validation_inds, 
+                keys: list[str] = ["slide_ids", "survival_days", "survival_right_censor"],
+                label_key = "label"):
     """
     Required Args: 
     parser.add_argument('--data_path',          type=str,   default="../updated_multimodal_bins")
@@ -45,7 +49,8 @@ def get_loaders(args: Namespace, train_inds, validation_inds, keys: list[str] = 
         "bin_modality_keys": bin_mods,
         "extra_modality_keys": extra_mods,
         "allow_sparse_samples": args.sparse,
-        "label_fn": lambda dates: (dates < (365.0 * args.survival_years)).astype(np.float32) #predict if the patient will die in x years
+        "label_fn": lambda dates: (dates < (365.0 * args.survival_years)).astype(np.float32), #predict if the patient will die in x years,
+        "label_key": label_key
     }
     loader_args = {
         "batch_size": args.batch_size,
@@ -71,7 +76,7 @@ def get_loaders(args: Namespace, train_inds, validation_inds, keys: list[str] = 
     test_loader = DataLoader(test_set, shuffle=False, **loader_args)
 
     combine = (lambda x, y: x & y) if not args.sparse else (lambda x, y: x | y)
-    test_mask = ~test_index["excluded"] & reduce(combine, [test_index["path_lang_mask"], test_index["rad_lang_mask"], test_index["survival_mask"], test_index["clinical_mask"]])
+    test_mask = ~test_index["excluded"] & reduce(combine, [test_index["path_lang_mask"], test_index["rad_lang_mask"], test_index["survival_days_mask"], test_index["clinical_mask"]])
 
     stats = [[split, len(dset), len(loader), under, over] 
              for (split, dset, loader, under, over) 

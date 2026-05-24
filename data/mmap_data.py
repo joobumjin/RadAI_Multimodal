@@ -371,7 +371,8 @@ class MemmapDatasetMultimodal(Dataset):
         bin_paths: Optional[Dict[str,str]] = None,
         extra_modality_keys: Optional[List[str]] = [], #eg ['clinical']
         allow_sparse_samples: bool = False,
-        label_fn: Optional[callable] = None
+        label_fn: Optional[callable] = None,
+        label_key: str = "label"
     ):
         """
         Args:
@@ -383,6 +384,7 @@ class MemmapDatasetMultimodal(Dataset):
             return_key: Whether to return slide ID with each sample
         """
 
+        self.label_key      = label_key
         self.data_dir       = data_dir
         self.max_instances  = max_instances
         self.return_key     = return_key
@@ -397,16 +399,24 @@ class MemmapDatasetMultimodal(Dataset):
         
         index = np.load(index_path, allow_pickle=True)
 
-        self._slide_ids = index['slide_ids']
-        self._labels    = None
+        self._slide_ids     = index['slide_ids']
+        self._labels        = None
+        self._label_mask    = None
         if label_column is not None:
             self._labels = index[label_column].astype(label_dtype) 
             if label_fn is not None: self._labels = label_fn(self._labels)
+            self._label_mask = index[f"{label_column}_mask"]
+            if len(self._labels.shape) == 1: 
+                self._labels = self._labels[:, None]
+            if len(self._label_mask.shape) == 1: self._label_mask = self._label_mask[:, None]
+
 
         #handle keys
         self._keys = None
         if self.return_key:
             self._keys = {col: index[col] for col in keys} if keys is not None else {'slide_ids': index['slide_ids']}
+            for key in self._keys:
+                if len(self._keys[key].shape) == 1: self._keys[key] = self._keys[key][:, None]
 
         #prep extra modalities
         self.extras = {key: index[key] for key in extra_modality_keys} if extra_modality_keys is not None else {}
@@ -428,7 +438,7 @@ class MemmapDatasetMultimodal(Dataset):
         self._patches   = {mod: index[f'{mod}_total_patches']               for mod in self.bin_mods} if self.bin_mods is not None else {}
         
         #Filtering
-        all_valid = np.zeros((len(self._slide_ids), )) if self.sparse else np.ones((len(self._slide_ids), ))
+        all_valid = np.zeros((len(self._slide_ids), 1)) if self.sparse else np.ones((len(self._slide_ids), 1))
         
         #filter labels
         if self._labels is not None: all_valid *= (~np.isnan(self._labels))
@@ -436,16 +446,16 @@ class MemmapDatasetMultimodal(Dataset):
         #filter bin modalities
         for lengths in self._lengths.values():
             if self.sparse:
-                all_valid += (lengths > 0)  
+                all_valid += (lengths[:, None] > 0)  
             else:
-                all_valid *= (lengths > 0)
+                all_valid *= (lengths[:, None] > 0)
                 
         #filter extras
         for feats in self.extras.values():
             if self.sparse:
-                all_valid += ~np.isnan(feats).any(axis=1)
+                all_valid += ~np.isnan(feats).any(axis=1, keepdims=True)
             else:
-                all_valid *= ~np.isnan(feats).any(axis=1)
+                all_valid *= ~np.isnan(feats).any(axis=1, keepdims=True)
         
         #filter keys
         if self.return_key:
@@ -496,7 +506,8 @@ class MemmapDatasetMultimodal(Dataset):
         sample = {}
 
         if self._labels is not None:
-            sample["label"] = self._labels[real_idx:real_idx+1]
+            sample[self.label_key] = self._labels[real_idx]
+            sample[f"{self.label_key}_mask"] = self._label_mask[real_idx]
 
         for mod, lengths in self._lengths.items():
             sample[f"{mod}_mask"] = self._masks[mod][real_idx]

@@ -27,7 +27,7 @@ def get_args_parser():
       
     parser.add_argument('--batch_size',         type=int,   default=16)
     parser.add_argument('--loss_fn',            type=str,   default="bce")
-    parser.add_argument('--model',              type=str,   default="conch", choices=['conch', 'biomedclip'])
+    parser.add_argument('--model',              type=str,   default="conch", choices=['conch', 'biomedclip', 'gemma', 'qwen'])
     # parser.add_argument('--data_path',          type=str,   default="../{model}_path_rad_text_embs")
     parser.add_argument('--data_path',          type=str,   default="../updated_multimodal_bins")
     parser.add_argument('--test_path',          type=str,   default="../multimodal_bins_rw")
@@ -44,7 +44,8 @@ def get_args_parser():
     parser.add_argument('--path_lang',          action="store_true")
     parser.add_argument('--rad_lang',           action="store_true")
     parser.add_argument('--path_img',           action="store_true")
-    parser.add_argument('--emb_dim',            type=int,   default=64)
+    parser.add_argument('--enc_dim',            type=int,   default=512)
+    parser.add_argument('--emb_dim',            type=int,   default=256)
     
     parser.add_argument('--prefetch_factor',    type=int,   default=2)
     parser.add_argument('--num_workers',        type=int,   default=1)
@@ -69,7 +70,7 @@ def get_args_parser():
                         help="directory to which the pretrained model weights should be saved")
 
     parser.add_argument('--disable_wandb',      action="store_true")
-    parser.add_argument('--wb_proj',            type=str,   default="Panc MM External Test")
+    parser.add_argument('--wb_proj',            type=str,   default="Panc MultiLoss")
     parser.add_argument('--debug',              action="store_true")
     return parser
 
@@ -79,14 +80,13 @@ def get_inds(args):
     keys = ["slide_ids", "survival_days", "survival_right_censor"]
 
     index   = np.load(f"{args.data_path}/index_arrays_labeled.npz", allow_pickle=True)
-    inds    = np.arange(index['survival_days'])
+    inds    = np.arange(len(index['survival_days']))
 
-    label_mask = ~np.isnan(index[args.label_col])
+    label_mask = index[f"{args.label_col}_mask"]
     exclusion_mask = ~index["excluded"]
     mask = label_mask & exclusion_mask
-    if "indicator" in args.label_col: 
-        for key in keys:
-            mask = mask & (~np.isnan(index[key]))
+    for key in keys:
+        mask = mask & (~np.isnan(index[key]))
 
     modality_mask = np.zeros_like(mask).astype(bool) if args.sparse else np.ones_like(mask).astype(bool)
     combine_op = lambda x, y: x | y if args.sparse else x & y
@@ -94,10 +94,10 @@ def get_inds(args):
     arg_dict = vars(args)
     for mod in ["clinical", "clinical_imputed"]:
         if arg_dict.get(mod, False): 
-            modality_mask = combine_op(modality_mask, ~index[f'{mod}_mask'])
+            modality_mask = combine_op(modality_mask, index[f'{mod}_mask'])
     for mod in ["path_lang", "rad_lang", "path_img"]:
         if arg_dict.get(mod, False): 
-            modality_mask = combine_op(modality_mask, ~(index[f'{mod}_mask']))
+            modality_mask = combine_op(modality_mask, (index[f'{mod}_mask']))
 
     mask = mask & modality_mask
 
@@ -195,17 +195,22 @@ def get_dense_fusion_model(args, bool_targets: list[str], regr_targets: list[str
         if target in bool_targets + regr_targets + recon_targets:
             decs[target], casts[target] = fn(args)
 
-    loss_fn = MultiLossFn(bool_targets, regr_targets, recon_targets, {})
+    loss_weights = {
+        "survival_2yr": .5, 
+        "survival_days": .5, 
+        "recur_free_days": .3, 
+        "clinical": .2, 
+        "path_lang": .2, 
+        "rad_lang": .2
+    }
+    loss_fn = MultiLossFn(bool_targets, regr_targets, recon_targets, weights=loss_weights, autocast=casts, device=device)
 
     model = DenseFusionMulti(encs, emb_dim=args.emb_dim, hidden_dims=[32], decoders=decs, autocast=casts, loss_fn=loss_fn, device=device)
     return model, device
 
 class MultiLossFn(nn.Module):
-    def __init__(self, bool_targets: list[str], regr_targets: list[str], recon_targets: list[str], weights: dict[str, int]):
+    def __init__(self, bool_targets: list[str], regr_targets: list[str], recon_targets: list[str], weights: dict[str, int], autocast: dict[str, bool], device):
         super(MultiLossFn, self).__init__()
-        self.mask_names = {
-
-        }
 
         self.bool_targets = bool_targets
         self.bool_fn = F.binary_cross_entropy_with_logits
@@ -217,22 +222,27 @@ class MultiLossFn(nn.Module):
         self.recon_fn = F.mse_loss
 
         self.weights = weights
+        self.autocast = autocast
+        self.device = device
     
     def forward(self, predictions, targets):
         total_loss, loss = 0.0, {}
 
         for target in self.bool_targets:
-            l = self.bool_fn(predictions[target], targets[target])
+            with torch.autocast(device_type=self.device, dtype=torch.float16, enabled=self.autocast[target]):
+                l = self.bool_fn(predictions[target], targets[target]).float()
             total_loss += self.weights[target] *  l
             loss[target] = l.detach().cpu().numpy()
 
         for target in self.regr_targets:
-            l = self.regr_fn(predictions[target], targets[target])
+            with torch.autocast(device_type=self.device, dtype=torch.float16, enabled=self.autocast[target]):
+                l = self.regr_fn(predictions[target], targets[target])
             total_loss += self.weights[target] * l
             loss[target] = l.detach().cpu().numpy()
 
         for target in self.recon_targets:
-            l = self.recon_fn(predictions[target], targets[target])
+            with torch.autocast(device_type=self.device, dtype=torch.float16, enabled=self.autocast[target]):
+                l = self.recon_fn(predictions[target], targets[target])
             total_loss += self.weights[target] * l
             loss[target] = l.detach().cpu().numpy()
 
@@ -251,21 +261,24 @@ def get_metrics(split: str, bool_targets: list[str], regr_targets: list[str], re
     #maybe split into bool and regression metric dicts
     for target in bool_targets:
         fns[target] = {
-            f"{split} Acc": lambda p, l: acc(torch.sigmoid(p) > 0.5, l)
+            f"{target} {split} Acc": lambda p, l: acc(torch.sigmoid(p) > 0.5, l)
         }
         torchmetrics[target] = {
-            f"{split} ROC": ROC(task="binary"),
-            f"{split} AUC": AUROC(task="binary")
+            # f"{target} {split} ROC": ROC(task="binary"),
+            f"{target} {split} AUC": AUROC(task="binary")
         }
+        
         metrics[f"{target} {split} Acc"] = AverageMeter()
+        metrics[f"{target} {split} Loss"] = AverageMeter()
 
     for target in regr_targets + recon_targets:
-        fns[target] = {
-            fns[f"{split} MSE"]: F.mse_loss,
-            fns[f"{split} L1"]: F.l1_loss
-        }
-        metrics[f"{target} {split} MSE"] = AverageMeter()
-        metrics[f"{target} {split} L1"] = AverageMeter()
+        # fns[target] = {
+        #     f"{target} {split} MSE": F.mse_loss,
+        #     f"{target} {split} L1": F.l1_loss
+        # }
+        # metrics[f"{target} {split} MSE"] = AverageMeter()
+        # metrics[f"{target} {split} L1"] = AverageMeter()
+        metrics[f"{target} {split} Loss"] = AverageMeter()
 
     return metrics, fns, torchmetrics
 
@@ -288,18 +301,20 @@ def train_one_epoch(model: torch.nn.Module,
 
         #need to convert preds to a dict
         with torch.inference_mode():
-            metrics["Train Loss"].update(loss.detach().cpu().item())
+            metrics["Train Loss"].update(loss["total_loss"].detach().cpu().item())
             metrics["lr"].update(optimizer.param_groups[0]["lr"])
             for target in bool_targets + regr_targets + recon_targets:
+                metrics[f"{target} Train Loss"].update(loss[target].item())
+            for target in bool_targets:
                 for name, fn in fns[target].items():
-                    metric_val = fn(preds, batch[target])
+                    metric_val = fn(preds[target], batch[target])
                     metrics[name].update(metric_val.detach().cpu().item())
+            
+                surv_pred = torch.sigmoid(preds[target])
+                for obj in torchmetrics[target].values():
+                    obj.update(surv_pred.detach().squeeze(-1), batch[target].detach().int().squeeze(-1))
 
-            preds = torch.sigmoid(preds["survival_2yr"])
-            for obj in torchmetrics.values():
-                obj.update(preds.detach().squeeze(-1), batch["label"].detach().int().squeeze(-1))
-
-        loss.backward()
+        loss["total_loss"].backward()
         optimizer.step()
         optimizer.zero_grad()
         scheduler.step()
@@ -312,7 +327,7 @@ def test(model: torch.nn.Module,
          device: str, args: Namespace, split: str = "Test"):
     model.eval()
 
-    metrics, fns, torchmetrics = get_metrics(split, bool_targets, regr_targets)
+    metrics, fns, torchmetrics = get_metrics(split, bool_targets, regr_targets, recon_targets)
 
     for batch in data_loader:
         for key in batch:
@@ -320,23 +335,26 @@ def test(model: torch.nn.Module,
 
         with torch.inference_mode():
             preds, loss = model(batch)
-            metrics[f"{split} Loss"].update(loss.detach().cpu().item())
+            metrics[f"{split} Loss"].update(loss["total_loss"].detach().cpu().item())
             for target in bool_targets + regr_targets + recon_targets:
-                for name, fn in fns.items():
-                    metric_val = fn(preds, batch[target])
+                metrics[f"{target} {split} Loss"].update(loss[target].item())
+            
+            for target in bool_targets:
+                for name, fn in fns[target].items():
+                    metric_val = fn(preds[target], batch[target])
                     metrics[name].update(metric_val.detach().cpu().item())
 
-            preds = torch.sigmoid(preds["survival_2yr"])
-            for obj in torchmetrics.values():
-                obj.update(preds.detach().squeeze(-1), batch["label"].detach().int().squeeze(-1))
+                surv_pred = torch.sigmoid(preds[target])
+                for obj in torchmetrics[target].values():
+                    obj.update(surv_pred.detach().squeeze(-1), batch[target].detach().int().squeeze(-1))
 
     return {k: meter.avg for k, meter in metrics.items()}, torchmetrics
 
 def compile_preds(model, loader, device):
     split_preds, split_deaths, split_times = [], [], []
     for batch in loader:
-        surviving = batch["survival_right_censor"].numpy().astype(bool)
-        times = batch["survival_days"].numpy()
+        surviving = batch["survival_right_censor"].numpy().squeeze(-1).astype(bool)
+        times = batch["survival_days"].numpy().squeeze(-1)
         split_deaths.append(~surviving)
         split_times.append(times)
 
@@ -354,10 +372,11 @@ def run_setup(args, model_constructor, train_loader, valid_loader, test_loader, 
     torch.manual_seed(seed)
     np.random.seed(seed)
 
-    model, device = model_constructor(args)
+    bool_targets, regr_targets, recon_targets = ["survival_2yr"], ["survival_days", "recur_free_days"], ["clinical", "path_lang", "rad_lang"]
+
+    model, device = model_constructor(args, bool_targets, regr_targets, recon_targets)
 
     optimizer, scheduler = get_opt_and_sched(model, args, iter_per_epoch=len(train_loader))
-    bool_targets, regr_targets, recon_targets = ["survival_2yr"], ["survival_days", "recur_free_days"], ["clinical", "path_lang", "rad_lang"]
 
     early_stopper = EarlyStopper(args.patience, False) if args.early_stop else None
     stop_metric = "Test C-Index"
@@ -403,18 +422,20 @@ def run_setup(args, model_constructor, train_loader, valid_loader, test_loader, 
 
         tm = {}
         if len(train_tm) > 0:
-            if e == args.epochs - 1:
-                if run is not None: 
-                    fig, (ax1, ax2, ax3) = plt.subplots(1, 3)
-                    fig.suptitle('ROC Performance Curves')
-                    train_tm["Train ROC"].plot(ax=ax1)
-                    valid_tm["Valid ROC"].plot(ax=ax2)
-                    test_tm["Test ROC"].plot(ax=ax3)
-                    run.log({"ROC": fig})
-            del train_tm["Train ROC"], valid_tm["Valid ROC"], test_tm["Test ROC"]
+            # if e == args.epochs - 1:
+            #     if run is not None: 
+            #         fig, (ax1, ax2, ax3) = plt.subplots(1, 3)
+            #         fig.suptitle('ROC Performance Curves')
+            #         train_tm["Train ROC"].plot(ax=ax1)
+            #         valid_tm["Valid ROC"].plot(ax=ax2)
+            #         test_tm["Test ROC"].plot(ax=ax3)
+            #         run.log({"ROC": fig})
+            # del train_tm["Train ROC"], valid_tm["Valid ROC"], test_tm["Test ROC"]
 
-            tm = {**train_tm, **valid_tm, **test_tm}
-            tm = {name: obj.compute() for name, obj in tm.items()}
+            tms = {**train_tm, **valid_tm, **test_tm}
+            for t_d in tms.values():
+                for name, obj in t_d.items():
+                    tm[name] = obj.compute() 
 
         #need to adjust this
         c_indices = calculate_c_indices(model, train_loader, valid_loader, test_loader, device, compile=compile_preds)
@@ -448,7 +469,8 @@ def main(args):
     # want to load sparsely available labels?
     train_loader, valid_loader, test_loader = get_loaders(args, 
                                                           *get_inds(args),
-                                                          keys = ["slide_ids", "survival_days", "survival_right_censor", "recur_free_days", "recur_mask"])
+                                                          keys = ["survival_days", "survival_days_mask", "survival_right_censor", "recur_free_days", "recur_free_days_mask"],
+                                                          label_key="survival_2yr")
 
     run_setup(args, get_dense_fusion_model, train_loader, valid_loader, test_loader, 
               run_name = " - ".join([f"smaller, 64e", f"{args.label_col}", f"{args.model}"]))

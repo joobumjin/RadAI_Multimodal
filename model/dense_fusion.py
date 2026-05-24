@@ -71,7 +71,7 @@ class DenseFusionMulti(nn.Module):
         self.modality_order = list(encoders.keys())
 
         self.encoders = {mod: encoders[mod].to(device) for mod in encoders}
-        self.merge = LinearModel(emb_dim * len(encoders), hidden_dims=hidden_dims, layer_norm=True, loss_fn=None)
+        self.merge = LinearModel(emb_dim * len(encoders), hidden_dims=hidden_dims, out_dim=emb_dim, act=nn.GELU(), layer_norm=True, loss_fn=None)
         self.merge = self.merge.to(device)
 
         self.pred = {target: decoders[target].to(device) for target in decoders}
@@ -94,12 +94,13 @@ class DenseFusionMulti(nn.Module):
             if f"{modality}_mask" in x: 
                 logits[modality] *= x[f"{modality}_mask"].view((-1, 1))
         
-        catted = torch.cat([logits[mod] for mod in self.modality_order], dim=1)
+        merged = torch.cat([logits[mod] for mod in self.modality_order], dim=1)
+        merged = self.merge.predict(merged)
 
         preds = {}
         for target, dec in self.pred.items():
             with torch.autocast(device_type=self.device, dtype=torch.float16, enabled=self.autocast[target]):
-                preds[target] = dec.predict(catted)
+                preds[target] = dec.predict(merged)
             if f"{target}_mask" in x: 
                 preds[target] *= x[f"{target}_mask"].view((-1, 1))
             
