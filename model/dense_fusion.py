@@ -125,5 +125,6 @@ class SingleModAE(nn.Module):
     def forward(self, x: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
         preds = self.predict(x)
 
-        loss = [self.loss_fn(preds, x[self.mod])] if self.loss_fn is not None else []
+        lv = self.loss_fn(preds, x[self.mod]) if self.loss_fn is not None else None
+        loss = [{"total_loss": lv, self.mod: lv.detach().cpu()}] if self.loss_fn is not None else []
         return preds, *loss
