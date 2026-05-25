@@ -450,7 +450,7 @@ class MemmapDatasetMultimodal(Dataset):
         #filter keys
         if self.return_key:
             for feats in self._keys.values():
-                all_valid = combine(~np.isnan(feats))
+                all_valid = combine(all_valid, ~np.isnan(feats))
 
         #filter labels
         if self._labels is not None: all_valid *= (~np.isnan(self._labels))
