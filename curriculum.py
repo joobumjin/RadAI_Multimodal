@@ -456,7 +456,7 @@ def main(args):
         model = SingleModAE(mod, encoders[mod], decoders[mod], device, autocast=casts, loss_fn=loss_fn)
         optimizer, scheduler = get_opt_and_sched(model, args, iter_per_epoch=len(train_loader))
 
-        pbar = trange(0, args.epochs, desc="Pretrain Reconstruction", postfix={})
+        pbar = trange(0, args.epochs, desc=f"Pretrain {mod} Reconstruction", postfix={})
         for _ in pbar:
             train_stats, _ = train_one_epoch(model, train_loader, [], [], [mod], optimizer, scheduler, device, args)
             valid_stats, _ = test(model, valid_loader, [], [], [mod], device, args=args, split="Valid")
@@ -468,7 +468,7 @@ def main(args):
 
     #pretrain survival regr, recurrence regr
     #need to disable bool decoder and recon decoders
-    multimodal, _ = DenseFusionMulti(encoders, emb_dim=args.emb_dim, hidden_dims=[32], decoders=decoders, autocast=casts, loss_fn=None, device=device, targets=regr_targets)
+    multimodal = DenseFusionMulti(encoders, emb_dim=args.emb_dim, hidden_dims=[32], decoders=decoders, autocast=casts, loss_fn=None, device=device, targets=regr_targets)
     loss_weights = {
         "survival_days": .05, 
         "recur_free_days": .03, 
