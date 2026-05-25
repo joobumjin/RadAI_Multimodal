@@ -160,8 +160,8 @@ def get_key_loaders(args: Namespace,
     test_set = MemmapDatasetMultimodal(**test_args)
     test_loader = DataLoader(test_set, shuffle=False, **loader_args)
 
-    stats = [[split, len(dset), len(loader), under, over] 
-             for (split, dset, loader, under, over) 
+    stats = [[split, len(dset), len(loader)] 
+             for (split, dset, loader) 
              in zip(["Train", "Test"], 
                     [train_set, test_set], 
                     [train_loader, test_loader])
