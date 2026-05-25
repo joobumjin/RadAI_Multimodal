@@ -116,7 +116,7 @@ class SingleModAE(nn.Module):
         
     def predict(self, x):
         with torch.autocast(device_type=self.device, dtype=torch.float16, enabled=self.autocast[self.mod]):
-            preds = self.pred[self.mod].predict(x[self.mod])
+            preds = self.ae(x[self.mod])
         if f"{self.mod}_mask" in x: 
             preds *= x[f"{self.mod}_mask"].view((-1, 1))
             
