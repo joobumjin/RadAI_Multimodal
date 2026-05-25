@@ -28,7 +28,6 @@ def get_args_parser():
     parser.add_argument('--batch_size',         type=int,   default=16)
     parser.add_argument('--loss_fn',            type=str,   default="bce")
     parser.add_argument('--model',              type=str,   default="conch", choices=['conch', 'biomedclip', 'gemma', 'qwen'])
-    # parser.add_argument('--data_path',          type=str,   default="../{model}_path_rad_text_embs")
     parser.add_argument('--data_path',          type=str,   default="../updated_multimodal_bins")
     parser.add_argument('--test_path',          type=str,   default="../multimodal_bins_rw")
     parser.add_argument('--epochs',             type=int,   default=200)
@@ -40,7 +39,6 @@ def get_args_parser():
     parser.add_argument('--sparse',             action="store_true")
     parser.add_argument('--fusion',             type=str,   default="naive_sum", choices=["naive_sum", "naive_avg", "weighted_sum"])
     parser.add_argument('--clinical',           action="store_true")
-    parser.add_argument('--clinical_imputed',   action="store_true")
     parser.add_argument('--path_lang',          action="store_true")
     parser.add_argument('--rad_lang',           action="store_true")
     parser.add_argument('--path_img',           action="store_true")
@@ -89,13 +87,10 @@ def get_inds(args):
         mask = mask & (~np.isnan(index[key]))
 
     modality_mask = np.zeros_like(mask).astype(bool) if args.sparse else np.ones_like(mask).astype(bool)
-    combine_op = lambda x, y: x | y if args.sparse else x & y
+    combine_op = (lambda x, y: x | y) if args.sparse else (lambda x, y: x & y)
 
     arg_dict = vars(args)
-    for mod in ["clinical", "clinical_imputed"]:
-        if arg_dict.get(mod, False): 
-            modality_mask = combine_op(modality_mask, index[f'{mod}_mask'])
-    for mod in ["path_lang", "rad_lang", "path_img"]:
+    for mod in ["clinical", "path_lang", "rad_lang", "path_img"]:
         if arg_dict.get(mod, False): 
             modality_mask = combine_op(modality_mask, (index[f'{mod}_mask']))
 
@@ -103,23 +98,13 @@ def get_inds(args):
 
     valid_inds = inds[mask]
     num_train = int(len(valid_inds) * args.train_split)
-    if not args.clinical_imputed: #standard random shuffle and select
-        np.random.shuffle(valid_inds)
-        
-        train_inds, validation_inds = valid_inds[:num_train], valid_inds[num_train:]
-    else: #only test on real samples, but can train on imputed data
-        orig = inds[~np.isnan(index['clinical']).any(axis=1) & mask]
-        np.random.shuffle(orig)
-
-        imputed = inds[np.isnan(index['clinical']).any(axis=1) & mask]
-
-        num_test = len(inds) - num_train
-        train_inds, validation_inds = np.hstack((orig[num_test:], imputed)), orig[:num_test]
+    np.random.shuffle(valid_inds)
+    
+    train_inds, validation_inds = valid_inds[:num_train], valid_inds[num_train:]
 
     return train_inds, validation_inds
 
 # --------------------------------------------------------
-
 
 def get_clinical_encoder(args):
     # clin_enc = create_mlp(24, [128], args.emb_dim, act = nn.GELU(), dropout = 0.3, layer_norm = True)
@@ -164,7 +149,7 @@ def get_rad_lang_decoder(args):
     dec = create_mlp(args.emb_dim, [128], args.enc_dim, act = nn.GELU(), dropout = 0.3, layer_norm = True, end_with_norm=True)
     return dec, True
 
-def get_dense_fusion_model(args, bool_targets: list[str], regr_targets: list[str], recon_targets: list[str]):
+def get_encoders(args):
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
     get_enc_fns = {
@@ -179,6 +164,12 @@ def get_dense_fusion_model(args, bool_targets: list[str], regr_targets: list[str
     for mod, fn in get_enc_fns.items():
         if arg_dict.get(mod, False): 
             encs[mod], casts[mod] = fn(args)
+            encs[mod] = encs[mod].to(device)
+
+    return encs, casts, device
+
+def get_decoders(args, bool_targets: list[str], regr_targets: list[str], recon_targets: list[str]):
+    device = "cuda" if torch.cuda.is_available() else "cpu"
 
     #add decoders
     decoders = {
@@ -190,23 +181,13 @@ def get_dense_fusion_model(args, bool_targets: list[str], regr_targets: list[str
         "rad_lang": get_rad_lang_decoder #-> 512 dim
     }
 
-    decs = {}
+    decs, casts = {}, {}
     for target, fn in decoders.items():
         if target in bool_targets + regr_targets + recon_targets:
             decs[target], casts[target] = fn(args)
+            decs[target] = decs[target].to(device)
 
-    loss_weights = {
-        "survival_2yr": 10, 
-        "survival_days": .05, 
-        "recur_free_days": .03, 
-        "clinical": .0002, 
-        "path_lang": .0002, 
-        "rad_lang": .0002
-    }
-    loss_fn = MultiLossFn(bool_targets, regr_targets, recon_targets, weights=loss_weights, autocast=casts, device=device)
-
-    model = DenseFusionMulti(encs, emb_dim=args.emb_dim, hidden_dims=[32], decoders=decs, autocast=casts, loss_fn=loss_fn, device=device)
-    return model, device
+    return decs, casts, device
 
 class MultiLossFn(nn.Module):
     def __init__(self, bool_targets: list[str], regr_targets: list[str], recon_targets: list[str], weights: dict[str, int], autocast: dict[str, bool], device):
@@ -237,7 +218,6 @@ class MultiLossFn(nn.Module):
 
                 unmasked_samples = targets[f"{target}_mask"].sum()
                 loss_value = (l * targets[f"{target}_mask"]).sum() / unmasked_samples if unmasked_samples > 0 else torch.tensor(0.0, dtype=torch.float32, device=l.device)
-                # loss_value = (l * targets[f"{target}_mask"]).mean()
 
                 total_loss += self.weights[target] * loss_value
                 loss[target] = loss_value.detach().cpu().numpy()
@@ -363,51 +343,11 @@ def compile_preds(model, loader, device):
     
     return [np.concatenate(l) for l in [split_deaths, split_times, split_preds]]
 
-def run_setup(args, model_constructor, train_loader, valid_loader, test_loader, run_name = None):
-    seed = args.seed
-    torch.manual_seed(seed)
-    np.random.seed(seed)
-
-    bool_targets, regr_targets, recon_targets = ["survival_2yr"], ["survival_days", "recur_free_days"], ["clinical", "path_lang", "rad_lang"]
-
-    model, device = model_constructor(args, bool_targets, regr_targets, recon_targets)
-
+def run_setup(args, model, device, bool_targets, regr_targets, recon_targets, train_loader, valid_loader, test_loader, run = None):
     optimizer, scheduler = get_opt_and_sched(model, args, iter_per_epoch=len(train_loader))
 
     early_stopper = EarlyStopper(args.patience, False) if args.early_stop else None
     stop_metric = "Test C-Index"
-
-    if args.disable_wandb: run = None
-    else:
-        config = {
-            "Loss": args.loss_fn,
-            "Seed": args.seed,
-            "Clinical": args.clinical,
-            "Clinical Imputed": args.clinical_imputed,
-            "Path Lang": args.path_lang,
-            "Rad Lang": args.rad_lang,
-            "Path Img": args.path_img,
-            "Fusion": "Dense",
-            "Model": args.model,
-            "MLP Norm": "Layer Norm",
-        }
-
-        mods = [mod for mod, used 
-                        in zip(["Clinical", "Path Lang", "Rad Lang", "Path Img"], 
-                               [args.clinical, args.path_lang, args.rad_lang, args.path_img]) 
-                        if used]
-
-        if run_name is None:
-            run_name =  " - ".join([f"{args.label_col}", f"{args.model}"]) + "+".join(mods)
-        else:
-            run_name += "+".join(mods)
-
-        run = wandb.init(
-            entity="bumjin_joo-brown-university", 
-            project=args.wb_proj, 
-            name=run_name,
-            config=config
-        )
 
     print(f"Start training for {args.epochs} epochs")
     pbar = trange(0, args.epochs, desc="Training Epochs", postfix={})
@@ -448,28 +388,118 @@ def run_setup(args, model_constructor, train_loader, valid_loader, test_loader, 
             elif stop:
                 print("Early stopping triggered!")
                 return
-            
-    if run is not None:
-        run.finish()
+
 
 # --------------------------------------------------------
 
 def main(args):
-    seed = args.seed
-    torch.manual_seed(seed)
-    np.random.seed(seed)
+    if args.disable_wandb: run = None
+    else:
+        config = {
+            "Loss": args.loss_fn,
+            "Seed": args.seed,
+            "Clinical": args.clinical,
+            "Clinical Imputed": args.clinical_imputed,
+            "Path Lang": args.path_lang,
+            "Rad Lang": args.rad_lang,
+            "Path Img": args.path_img,
+            "Fusion": "Dense",
+            "Model": args.model,
+            "MLP Norm": "Layer Norm",
+        }
 
-    ## reconstruction loss, recurrence regression loss, survival regression loss?, survival binary loss
-    #reconstruction: batch[modality]
-    #recurrence key: "recur_free_days", "recur_mask", 
-    #
-    # want to load sparsely available labels?
-    train_loader, valid_loader, test_loader = get_loaders(args, 
-                                                        *get_inds(args),
-                                                        keys = ["survival_days", "survival_days_mask", "survival_right_censor", "recur_free_days", "recur_free_days_mask"],
-                                                        label_key="survival_2yr")
-    run_setup(args, get_dense_fusion_model, train_loader, valid_loader, test_loader, 
-            run_name = " - ".join([f"smaller, 64e", f"{args.label_col}", f"{args.model}"]))
+        mods = [mod for mod, used 
+                        in zip(["Clinical", "Path Lang", "Rad Lang", "Path Img"], 
+                               [args.clinical, args.path_lang, args.rad_lang, args.path_img]) 
+                        if used]
+
+        if run_name is None:
+            run_name =  " - ".join([f"{args.label_col}", f"{args.model}"]) + "+".join(mods)
+        else:
+            run_name += "+".join(mods)
+
+        run = wandb.init(
+            entity="bumjin_joo-brown-university", 
+            project=args.wb_proj, 
+            name=run_name,
+            config=config
+        )
+
+    bool_targets, regr_targets, recon_targets = ["survival_2yr"], ["survival_days", "recur_free_days"], ["clinical", "path_lang", "rad_lang"]
+
+    encoders, enc_casts, device = get_encoders(args)
+    decoders, dec_casts, device = get_decoders(args, bool_targets, regr_targets, recon_targets)
+    casts = {**enc_casts, **dec_casts}
+
+    arg_dict = vars(args)
+    mods = [mod for mod in ["path_lang", "rad_lang", "clinical"] if arg_dict.get(mod, False)]
+
+    train_inds, val_inds = get_inds(args)
+
+    index = np.load(f"{args.data_path}/index_arrays_labeled.npz", allow_pickle=True)
+    inds = np.arange(len(index['survival_days']))[~index["excluded"]]
+
+    expanded_train = np.setdiff1d(inds, val_inds)
+
+    #pretrain modality specifics
+    for mod in mods:
+        kw_mod = {"bin_mods": [mod]} if mod != "clinical" else {"extra_mods": mod}
+        train_loader, valid_loader, test_loader = get_input_loader(args, train_inds = expanded_train, validation_inds=val_inds, **kw_mod)
+
+        #train encoders[mod] and decoders[mod]
+        model = nn.Sequential(encoders[mod], decoders[mod])
+        optimizer, scheduler = get_opt_and_sched(model, args, iter_per_epoch=len(train_loader))
+
+        pbar = trange(0, args.epochs, desc="Pretrain Reconstruction", postfix={})
+        for _ in pbar:
+            train_stats, _ = train_one_epoch(model, train_loader, [], [], [mod], optimizer, scheduler, device, args)
+            valid_stats, _ = test(model, valid_loader, [], [], [mod], device, args=args, split="Valid")
+            test_stats, _ = test(model, test_loader, [], [], [mod], device, args=args, split="Test")
+
+            postfix = {**train_stats, **valid_stats, **test_stats}
+            if run is not None: run.log(postfix)
+            pbar.set_postfix(postfix)
+
+    #pretrain survival regr, recurrence regr
+    #need to disable bool decoder and recon decoders
+    multimodal, _ = DenseFusionMulti(encoders, emb_dim=args.emb_dim, hidden_dims=[32], decoders=decoders, autocast=casts, loss_fn=None, device=device, targets=regr_targets)
+    loss_weights = {
+        "survival_days": .05, 
+        "recur_free_days": .03, 
+    }
+    loss_fn = MultiLossFn([], regr_targets, [], weights=loss_weights, autocast=casts, device=device)
+    multimodal.loss_fn = loss_fn
+    optimizer, scheduler = get_opt_and_sched(model, args, iter_per_epoch=len(train_loader))
+
+    train_loader, valid_loader, test_loader = get_key_loaders(args, train_inds = expanded_train, validation_inds=val_inds, keys=regr_targets + [f"{t}_mask" for t in regr_targets])
+
+    pbar = trange(0, args.epochs, desc="Pretrain Regression", postfix={})
+    for _ in pbar:
+        train_stats, _ = train_one_epoch(model, train_loader, [], regr_targets, [], optimizer, scheduler, device, args)
+        valid_stats, _ = test(model, valid_loader, [], regr_targets, [], device, args=args, split="Valid")
+        test_stats, _ = test(model, test_loader, [], regr_targets, [], device, args=args, split="Test")
+
+        postfix = {**train_stats, **valid_stats, **test_stats}
+        if run is not None: run.log(postfix)
+        pbar.set_postfix(postfix)
+
+
+    loss_weights = {
+        "survival_2yr": 10, 
+        "survival_days": .05, 
+        "recur_free_days": .03, 
+    }
+    loss_fn = MultiLossFn([], regr_targets, bool_targets, weights=loss_weights, autocast=casts, device=device)
+    multimodal.loss_fn = loss_fn
+    multimodal.targets = regr_targets + bool_targets
+
+    train_loader, valid_loader, test_loader = get_loaders(args, train_inds, val_inds,
+                                                          keys = ["survival_days", "survival_days_mask", "survival_right_censor", "recur_free_days", "recur_free_days_mask"],
+                                                          label_key="survival_2yr")
+    run_setup(args, multimodal, device, bool_targets, regr_targets, [], train_loader, valid_loader, test_loader, run=run)
+
+    if run is not None:
+        run.finish()
 
 if __name__ == '__main__':
     parser  = get_args_parser()
@@ -478,5 +508,9 @@ if __name__ == '__main__':
     if args.debug:
         args.epochs = 5
         args.disable_wandb = True
+
+    seed = args.seed
+    torch.manual_seed(seed)
+    np.random.seed(seed)
 
     main(args)

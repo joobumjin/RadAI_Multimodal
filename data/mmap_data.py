@@ -371,7 +371,7 @@ class MemmapDatasetMultimodal(Dataset):
         bin_paths: Optional[Dict[str,str]] = None,
         extra_modality_keys: Optional[List[str]] = [], #eg ['clinical']
         allow_sparse_samples: bool = False,
-        label_fn: Optional[callable] = None,
+        label_fn: Optional[callable] = lambda x: x,
         label_key: str = "label"
     ):
         """
@@ -403,13 +403,11 @@ class MemmapDatasetMultimodal(Dataset):
         self._labels        = None
         self._label_mask    = None
         if label_column is not None:
-            self._labels = index[label_column].astype(label_dtype) 
-            if label_fn is not None: self._labels = label_fn(self._labels)
+            self._labels = label_fn(index[label_column].astype(label_dtype))
             self._label_mask = index[f"{label_column}_mask"]
             if len(self._labels.shape) == 1: 
                 self._labels = self._labels[:, None]
             if len(self._label_mask.shape) == 1: self._label_mask = self._label_mask[:, None]
-
 
         #handle keys
         self._keys = None
@@ -439,31 +437,24 @@ class MemmapDatasetMultimodal(Dataset):
         
         #Filtering
         all_valid = np.zeros((len(self._slide_ids), 1)) if self.sparse else np.ones((len(self._slide_ids), 1))
-        
-        #filter labels
-        if self._labels is not None: all_valid *= (~np.isnan(self._labels))
+        combine = (lambda x, y: x + y) if self.sparse else (lambda x, y: x * y)
 
         #filter bin modalities
         for lengths in self._lengths.values():
-            if self.sparse:
-                all_valid += (lengths[:, None] > 0)  
-            else:
-                all_valid *= (lengths[:, None] > 0)
+            all_valid = combine(all_valid, lengths[:, None] > 0)
                 
         #filter extras
         for feats in self.extras.values():
-            if self.sparse:
-                all_valid += ~np.isnan(feats).any(axis=1, keepdims=True)
-            else:
-                all_valid *= ~np.isnan(feats).any(axis=1, keepdims=True)
+            all_valid = combine(all_valid, ~np.isnan(feats).any(axis=1, keepdims=True))
         
         #filter keys
         if self.return_key:
             for feats in self._keys.values():
-                if self.sparse:
-                    all_valid += ~np.isnan(feats)
-                else:
-                    all_valid *= ~np.isnan(feats)
+                all_valid = combine(~np.isnan(feats))
+
+        #filter labels
+        if self._labels is not None: all_valid *= (~np.isnan(self._labels))
+        all_valid *= ~index['excluded'][:,None]
 
         all_valid = np.flatnonzero(all_valid)
         
