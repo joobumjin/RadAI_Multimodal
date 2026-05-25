@@ -453,7 +453,7 @@ def main(args):
         train_loader, valid_loader, test_loader = get_input_loader(args, train_inds = expanded_train, validation_inds=val_inds, **kw_mod)
 
         #train encoders[mod] and decoders[mod]
-        model = SingleModAE(mod, encoders[mod], decoders[mod], autocast=casts, loss_fn=loss_fn)
+        model = SingleModAE(mod, encoders[mod], decoders[mod], device, autocast=casts, loss_fn=loss_fn)
         optimizer, scheduler = get_opt_and_sched(model, args, iter_per_epoch=len(train_loader))
 
         pbar = trange(0, args.epochs, desc="Pretrain Reconstruction", postfix={})

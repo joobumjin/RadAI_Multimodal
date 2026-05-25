@@ -106,12 +106,13 @@ class DenseFusionMulti(nn.Module):
 
 
 class SingleModAE(nn.Module):
-    def __init__(self, mod_name: str, enc: nn.Module, dec: nn.Module, autocast: Dict[str, bool], loss_fn = None):
+    def __init__(self, mod_name: str, enc: nn.Module, dec: nn.Module, device, autocast: Dict[str, bool], loss_fn = None):
         super().__init__()
         self.mod = mod_name
         self.autocast = autocast
         self.loss_fn = loss_fn
         self.ae = nn.Sequential(enc, dec)
+        self.device=device
         
     def predict(self, x):
         with torch.autocast(device_type=self.device, dtype=torch.float16, enabled=self.autocast[self.mod]):
