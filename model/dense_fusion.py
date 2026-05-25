@@ -77,16 +77,6 @@ class DenseFusionMulti(nn.Module):
         self.merge = self.merge.to(device)
 
         self.pred = {target: decoders[target].to(device) for target in decoders}
-        self.apply(self._init_weights)
-
-    def _init_weights(self, m):
-        if isinstance(m, nn.Linear):
-            torch.nn.init.xavier_uniform_(m.weight)
-            if isinstance(m, nn.Linear) and m.bias is not None:
-                nn.init.constant_(m.bias, 0)
-        elif isinstance(m, nn.LayerNorm):
-            nn.init.constant_(m.bias, 0)
-            nn.init.constant_(m.weight, 1.0)
 
     def predict(self, x: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:            
         logits = {}
@@ -115,3 +105,24 @@ class DenseFusionMulti(nn.Module):
         return preds, *loss
 
 
+class SingleModAE(nn.Module):
+    def __init__(self, mod_name: str, enc: nn.Module, dec: nn.Module, autocast: Dict[str, bool], loss_fn = None):
+        super().__init__()
+        self.mod = mod_name
+        self.autocast = autocast
+        self.loss_fn = loss_fn
+        self.ae = nn.Sequential(enc, dec)
+        
+    def predict(self, x):
+        with torch.autocast(device_type=self.device, dtype=torch.float16, enabled=self.autocast[self.mod]):
+            preds = self.pred[self.mod].predict(x[self.mod])
+        if f"{self.mod}_mask" in x: 
+            preds *= x[f"{self.mod}_mask"].view((-1, 1))
+            
+        return preds        
+
+    def forward(self, x: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
+        preds = self.predict(x)
+
+        loss = [self.loss_fn(preds, x[self.mod])] if self.loss_fn is not None else []
+        return preds, *loss

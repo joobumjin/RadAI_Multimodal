@@ -443,11 +443,17 @@ def main(args):
 
     #pretrain modality specifics
     for mod in mods:
-        kw_mod = {"bin_mods": [mod], "extra_mods": []} if mod != "clinical" else {"bin_mods": [], "extra_mods": [mod]}
+        if mod != "clinical":
+            kw_mod = {"bin_mods": [mod], "extra_mods": []}  
+            loss_fn = F.mse_loss
+        else:
+            kw_mod = {"bin_mods": [], "extra_mods": [mod]}
+            loss_fn = F.smooth_l1_loss
+
         train_loader, valid_loader, test_loader = get_input_loader(args, train_inds = expanded_train, validation_inds=val_inds, **kw_mod)
 
         #train encoders[mod] and decoders[mod]
-        model = nn.Sequential(encoders[mod], decoders[mod])
+        model = SingleModAE(mod, encoders[mod], decoders[mod], autocast=casts, loss_fn=loss_fn)
         optimizer, scheduler = get_opt_and_sched(model, args, iter_per_epoch=len(train_loader))
 
         pbar = trange(0, args.epochs, desc="Pretrain Reconstruction", postfix={})
