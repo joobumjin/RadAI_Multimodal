@@ -443,7 +443,7 @@ def main(args):
 
     #pretrain modality specifics
     for mod in mods:
-        kw_mod = {"bin_mods": [mod]} if mod != "clinical" else {"extra_mods": mod}
+        kw_mod = {"bin_mods": [mod], "extra_mods": []} if mod != "clinical" else {"bin_mods": [], "extra_mods": [mod]}
         train_loader, valid_loader, test_loader = get_input_loader(args, train_inds = expanded_train, validation_inds=val_inds, **kw_mod)
 
         #train encoders[mod] and decoders[mod]
