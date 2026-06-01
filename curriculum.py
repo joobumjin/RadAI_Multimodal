@@ -399,7 +399,6 @@ def main(args):
             "Loss": args.loss_fn,
             "Seed": args.seed,
             "Clinical": args.clinical,
-            "Clinical Imputed": args.clinical_imputed,
             "Path Lang": args.path_lang,
             "Rad Lang": args.rad_lang,
             "Path Img": args.path_img,
@@ -413,10 +412,7 @@ def main(args):
                                [args.clinical, args.path_lang, args.rad_lang, args.path_img]) 
                         if used]
 
-        if run_name is None:
-            run_name =  " - ".join([f"{args.label_col}", f"{args.model}"]) + "+".join(mods)
-        else:
-            run_name += "+".join(mods)
+        run_name =  " - ".join([f"{args.label_col}", f"{args.model}"]) + "+".join(mods)
 
         run = wandb.init(
             entity="bumjin_joo-brown-university", 
@@ -475,15 +471,15 @@ def main(args):
     }
     loss_fn = MultiLossFn([], regr_targets, [], weights=loss_weights, autocast=casts, device=device)
     multimodal.loss_fn = loss_fn
-    optimizer, scheduler = get_opt_and_sched(model, args, iter_per_epoch=len(train_loader))
+    optimizer, scheduler = get_opt_and_sched(multimodal, args, iter_per_epoch=len(train_loader))
 
     train_loader, valid_loader, test_loader = get_key_loaders(args, train_inds = expanded_train, validation_inds=val_inds, keys=regr_targets + [f"{t}_mask" for t in regr_targets])
 
     pbar = trange(0, args.epochs, desc="Pretrain Regression", postfix={})
     for _ in pbar:
-        train_stats, _ = train_one_epoch(model, train_loader, [], regr_targets, [], optimizer, scheduler, device, args)
-        valid_stats, _ = test(model, valid_loader, [], regr_targets, [], device, args=args, split="Valid")
-        test_stats, _ = test(model, test_loader, [], regr_targets, [], device, args=args, split="Test")
+        train_stats, _ = train_one_epoch(multimodal, train_loader, [], regr_targets, [], optimizer, scheduler, device, args)
+        valid_stats, _ = test(multimodal, valid_loader, [], regr_targets, [], device, args=args, split="Valid")
+        test_stats, _ = test(multimodal, test_loader, [], regr_targets, [], device, args=args, split="Test")
 
         postfix = {**train_stats, **valid_stats, **test_stats}
         if run is not None: run.log(postfix)
@@ -491,18 +487,16 @@ def main(args):
 
 
     loss_weights = {
-        "survival_2yr": 10, 
-        "survival_days": .05, 
-        "recur_free_days": .03, 
+        "survival_2yr": 1, 
     }
-    loss_fn = MultiLossFn([], regr_targets, bool_targets, weights=loss_weights, autocast=casts, device=device)
+    loss_fn = MultiLossFn(bool_targets, [], [], weights=loss_weights, autocast=casts, device=device)
     multimodal.loss_fn = loss_fn
-    multimodal.targets = regr_targets + bool_targets
+    multimodal.targets = bool_targets
 
     train_loader, valid_loader, test_loader = get_loaders(args, train_inds, val_inds,
                                                           keys = ["survival_days", "survival_days_mask", "survival_right_censor", "recur_free_days", "recur_free_days_mask"],
                                                           label_key="survival_2yr")
-    run_setup(args, multimodal, device, bool_targets, regr_targets, [], train_loader, valid_loader, test_loader, run=run)
+    run_setup(args, multimodal, device, bool_targets, [], [], train_loader, valid_loader, test_loader, run=run)
 
     if run is not None:
         run.finish()

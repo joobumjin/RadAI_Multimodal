@@ -45,6 +45,8 @@ conda activate multi
 #     }
 # }
 
+""
+"Standard Dense"
 $models = "gemma", "qwen"
 $enc_dims = 768, 1024
 for ($i = 0; $i -lt $models.Count; $i++){
@@ -56,6 +58,8 @@ for ($i = 0; $i -lt $models.Count; $i++){
     }
 }
 
+""
+"Dense Sparse"
 #sparse
 for ($i = 0; $i -lt $models.Count; $i++){
     $model, $enc_dim = $models[$i], $enc_dims[$i] 
@@ -65,6 +69,14 @@ for ($i = 0; $i -lt $models.Count; $i++){
         python .\emb_fusion_train.py --model $model --data_path "../${model}_multimodal_bins" --test_path "../${model}_multimodal_bins_rw" --enc_dim $enc_dim --fusion $fusion --sparse --clinical --path_lang --rad_lang --label_col $target --loss_fn $loss
     }
 }
+
+""
+"Curriculum"
+for ($i = 0; $i -lt $models.Count; $i++){
+    $model, $enc_dim = $models[$i], $enc_dims[$i] 
+    python .\curriculum.py  --model $model --data_path "../${model}_multimodal_bins" --test_path "../${model}_multimodal_bins_rw" --enc_dim $enc_dim --clinical --path_lang --rad_lang --label_col $target --loss_fn $loss --epochs 500
+}
+
 
 # #train on RW
 # $models = "gemma", "qwen"
