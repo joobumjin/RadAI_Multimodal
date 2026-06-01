@@ -338,7 +338,7 @@ def compile_preds(model, loader, device):
         with torch.inference_mode():
             preds = model.predict(batch)["survival_2yr"]
 
-            preds = preds.detach().squeeze(-1).cpu().numpy()
+            preds = 1 - preds.detach().squeeze(-1).cpu().numpy()
             split_preds.append(preds)
     
     return [np.concatenate(l) for l in [split_deaths, split_times, split_preds]]
@@ -366,8 +366,8 @@ def run_setup(args, model, device, bool_targets, regr_targets, recon_targets, tr
                         train_tm[target][f"{target} Train ROC"].plot(ax=ax1)
                         valid_tm[target][f"{target} Valid ROC"].plot(ax=ax2)
                         test_tm[target][f"{target} Test ROC"].plot(ax=ax3)
-                        run.log({f"{target} ROC": fig})
-                del train_tm[target][f"{target} Train ROC"], valid_tm[target][f"{target} Valid ROC"], test_tm[target][f"{target} Test ROC"]
+                        run.log({f"{target} ROC": fig}, step = e)
+                    del train_tm[target][f"{target} Train ROC"], valid_tm[target][f"{target} Valid ROC"], test_tm[target][f"{target} Test ROC"]
 
             tms = {**train_tm, **valid_tm, **test_tm}
             for t_d in tms.values():

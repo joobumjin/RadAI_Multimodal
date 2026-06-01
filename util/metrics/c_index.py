@@ -6,7 +6,7 @@ from sksurv.metrics import concordance_index_censored
 def compile_split(model, loader, device):
     split_preds, split_deaths, split_times = [], [], []
     for batch in loader:
-        surviving = batch["survival_right_censor"].numpy().squeeze(-1).astype(bool)
+        surviving = (batch["survival_right_censor"].numpy().squeeze(-1).astype(bool)) #true if died
         times = batch["survival_days"].numpy().squeeze(-1)
         split_deaths.append(~surviving)
         split_times.append(times)
@@ -15,7 +15,8 @@ def compile_split(model, loader, device):
         with torch.inference_mode():
             preds = model.predict(batch)
 
-            preds = preds.detach().squeeze(-1).cpu().numpy()
+            #convert to risk score, in this case the conversion doesnt matter as long as the relative risk values make sense (higher risk = lower survival likelihood)
+            preds = 1 - preds.detach().squeeze(-1).cpu().numpy()
             split_preds.append(preds)
     
     return [np.concatenate(l) for l in [split_deaths, split_times, split_preds]]
