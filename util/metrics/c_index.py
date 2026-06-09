@@ -4,6 +4,8 @@ import torch
 from sksurv.metrics import concordance_index_censored
 
 def compile_split(model, loader, device):
+    model.eval()
+
     split_preds, split_deaths, split_times = [], [], []
     for batch in loader:
         surviving = (batch["survival_right_censor"].numpy().squeeze(-1).astype(bool)) #true if died
@@ -29,11 +31,8 @@ def calculate_c_indices(model: torch.nn.Module, train_loader, val_loader, test_l
     - "survival_days"
     - Whatever else the model needs
     """
-
-    model.eval()
-
     compile_fn = compile if compile is not None else compile_split
-  
+    
     train = compile_fn(model, train_loader, device)
 
     if val_loader is not None:        
