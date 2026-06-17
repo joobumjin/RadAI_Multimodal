@@ -1,4 +1,4 @@
-from typing import List, Dict, Optional, Union, Literal
+from typing import List, Dict, Optional, Union, Literal, Callable
 
 import torch
 import torch.nn as nn
@@ -9,7 +9,7 @@ class DenseFusion(nn.Module):
     """
     Logit-level fusion using an nn.Module 
     """
-    def __init__(self, encoders: Dict[str, nn.Module], emb_dim: int, hidden_dims: List[int], autocast: Dict[str, bool], loss_fn: Optional[nn.Module], device: str):
+    def __init__(self, encoders: Dict[str, nn.Module], emb_dim: int, hidden_dims: List[int], autocast: Dict[str, bool], loss_fn: Optional[Callable], device: str):
         super().__init__()
 
         self.autocast = autocast
@@ -46,7 +46,7 @@ class DenseFusion(nn.Module):
     
     def forward(self, x: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
         preds = self.predict(x)
-        loss = [self.loss_fn(preds, x["label"])] if self.loss_fn is not None else []
+        loss = [self.loss_fn(preds, x)] if self.loss_fn is not None else []
         return preds, *loss
 
 

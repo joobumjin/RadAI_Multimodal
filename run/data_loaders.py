@@ -50,7 +50,7 @@ def get_loaders(args: Namespace,
         "bin_modality_keys": bin_mods,
         "extra_modality_keys": extra_mods,
         "allow_sparse_samples": args.sparse,
-        "label_fn": lambda dates: (dates > (365.0 * args.survival_years)).astype(np.float32), #predict if the patient will survive past x years,
+        "label_fn": lambda dates: (dates < (365.0 * args.survival_years)).astype(np.float32), #predict survival hazard
         "label_key": label_key
     }
     loader_args = {

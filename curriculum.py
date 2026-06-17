@@ -26,7 +26,6 @@ def get_args_parser():
     parser.add_argument('--seed',               type=int,   default=0)
       
     parser.add_argument('--batch_size',         type=int,   default=16)
-    parser.add_argument('--loss_fn',            type=str,   default="bce")
     parser.add_argument('--model',              type=str,   default="conch", choices=['conch', 'biomedclip', 'gemma', 'qwen'])
     parser.add_argument('--data_path',          type=str,   default="../updated_multimodal_bins")
     parser.add_argument('--test_path',          type=str,   default="../multimodal_bins_rw")
@@ -37,7 +36,7 @@ def get_args_parser():
     parser.add_argument('--patience',           type=int,   default=5)
 
     parser.add_argument('--sparse',             action="store_true")
-    parser.add_argument('--fusion',             type=str,   default="naive_sum", choices=["naive_sum", "naive_avg", "weighted_sum"])
+    parser.add_argument('--fusion',             type=str,   default="naive_sum", choices=list(FUSERS.keys))
     parser.add_argument('--clinical',           action="store_true")
     parser.add_argument('--path_lang',          action="store_true")
     parser.add_argument('--rad_lang',           action="store_true")

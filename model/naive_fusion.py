@@ -39,6 +39,13 @@ class LearnedWeightSum(Fuser):
         return self.weights(x) #kind of a crude way to do it
     
 
+FUSERS = {
+    "naive_sum": NaiveSum,
+    "naive_avg": NaiveAvg,
+    "weighted_sum": LearnedWeightSum
+}
+    
+
 class LogitFusion(nn.Module):
     """
     Logit-level fusion using an nn.Module 

@@ -15,10 +15,7 @@ def compile_split(model, loader, device):
 
         for key in batch: batch[key] = batch[key].to(device)
         with torch.inference_mode():
-            preds = model.predict(batch)
-
-            #convert to risk score, in this case the conversion doesnt matter as long as the relative risk values make sense (higher risk = lower survival likelihood)
-            preds = 1 - preds.detach().squeeze(-1).cpu().numpy()
+            preds = model.predict(batch).detach().squeeze(-1).cpu().numpy() #predicted hazards
             split_preds.append(preds)
     
     return [np.concatenate(l) for l in [split_deaths, split_times, split_preds]]

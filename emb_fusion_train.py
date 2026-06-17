@@ -1,19 +1,8 @@
 import os
 import argparse
-from argparse import Namespace
-from typing import Iterable, Optional
-from collections import defaultdict
 
-import wandb
-from tqdm import trange
 import numpy as np
-import matplotlib.pyplot as plt
 from torch import nn
-from torch.utils.data import TensorDataset, DataLoader
-from torch.nn import functional as F
-from torch import optim
-
-from torchmetrics import ROC, AUROC
 
 from data import *
 from model import *
@@ -26,7 +15,7 @@ def get_args_parser():
     parser.add_argument('--seed',               type=int,   default=0)
       
     parser.add_argument('--batch_size',         type=int,   default=16)
-    parser.add_argument('--loss_fn',            type=str,   default="bce")
+    parser.add_argument('--loss_fn',            type=str,   default="bce", choices=list(LOSS_FNS.keys()))
     parser.add_argument('--model',              type=str,   default="conch", choices=['conch', 'biomedclip', 'gemma', 'qwen'])
     # parser.add_argument('--data_path',          type=str,   default="../{model}_path_rad_text_embs")
     parser.add_argument('--data_path',          type=str,   default="../updated_multimodal_bins")
@@ -38,7 +27,7 @@ def get_args_parser():
     parser.add_argument('--patience',           type=int,   default=5)
 
     parser.add_argument('--sparse',             action="store_true")
-    parser.add_argument('--fusion',             type=str,   default="naive_sum", choices=["naive_sum", "naive_avg", "weighted_sum"])
+    parser.add_argument('--fusion',             type=str,   default="naive_sum", choices=list(FUSERS.keys()))
     parser.add_argument('--clinical',           action="store_true")
     parser.add_argument('--clinical_imputed',   action="store_true")
     parser.add_argument('--path_lang',          action="store_true")
@@ -145,19 +134,6 @@ def get_path_img_encoder(args):
 def get_dense_fusion_model(args):
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
-    losses = {
-        "l1": F.l1_loss,
-        "smooth_l1": F.smooth_l1_loss,
-        "mse": F.mse_loss,
-        "bce": F.binary_cross_entropy_with_logits,
-    }
-
-    fusers = {
-        "naive_sum": NaiveSum,
-        "naive_avg": NaiveAvg,
-        "weighted_sum": LearnedWeightSum
-    }
-
     get_enc_fns = {
         "clinical": get_clinical_encoder, 
         "clinical_imputed": get_clinical_encoder, 
@@ -172,7 +148,7 @@ def get_dense_fusion_model(args):
         if arg_dict.get(mod, False): 
             encs[mod], casts[mod] = fn(args)
 
-    model = EmbFusion(encs, emb_dim=args.emb_dim, hidden_dims=[32], autocast=casts, fusion_fn=fusers[args.fusion], loss_fn=losses[args.loss_fn], device=device)
+    model = EmbFusion(encs, emb_dim=args.emb_dim, hidden_dims=[32], autocast=casts, fusion_fn=FUSERS[args.fusion], loss_fn=LOSS_FNS[args.loss_fn], device=device)
     return model, device
 
 # --------------------------------------------------------
