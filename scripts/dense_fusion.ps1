@@ -70,12 +70,12 @@ for ($i = 0; $i -lt $models.Count; $i++){
     }
 }
 
-""
-"Curriculum"
-for ($i = 0; $i -lt $models.Count; $i++){
-    $model, $enc_dim = $models[$i], $enc_dims[$i] 
-    python .\curriculum.py  --model $model --data_path "../${model}_multimodal_bins" --test_path "../${model}_multimodal_bins_rw" --enc_dim $enc_dim --clinical --path_lang --rad_lang --label_col $target --loss_fn $loss --epochs 500
-}
+# ""
+# "Curriculum"
+# for ($i = 0; $i -lt $models.Count; $i++){
+#     $model, $enc_dim = $models[$i], $enc_dims[$i] 
+#     python .\curriculum.py  --model $model --data_path "../${model}_multimodal_bins" --test_path "../${model}_multimodal_bins_rw" --enc_dim $enc_dim --clinical --path_lang --rad_lang --label_col $target --loss_fn $loss --epochs 500
+# }
 
 
 # #train on RW

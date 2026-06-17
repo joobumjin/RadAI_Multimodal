@@ -211,12 +211,13 @@ def run_setup(args, model_constructor, train_loader, valid_loader, test_loader, 
             tm = {name: obj.compute() for name, obj in tm.items()}
 
         c_indices = calculate_c_indices(model, train_loader, valid_loader, test_loader, device)
-        conf_mats = get_tp_fp(model, train_loader, valid_loader, test_loader, device)
 
         postfix = {**train_stats, **valid_stats, **test_stats, **c_indices, **tm}
         if run is not None: 
             run.log(postfix)
-            if e == args.epochs - 1: run.log(conf_mats)
+            if e == args.epochs - 1: 
+                conf_mats = get_tp_fp(model, train_loader, valid_loader, test_loader, device)
+                run.log(conf_mats)
         pbar.set_postfix(postfix)
 
         if early_stopper is not None:

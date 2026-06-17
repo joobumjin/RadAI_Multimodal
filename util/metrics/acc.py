@@ -12,7 +12,7 @@ def compile_survival(model, loader, device):
             p = model.predict(batch)
 
             #in this case, we have survival probs 
-            p = (torch.sigmoid(p.detach().squeeze(-1)) > 0.5).numpy().squeeze(-1)
+            p = (torch.sigmoid(p.detach().squeeze(-1)) > 0.5).cpu().numpy()
             preds.append(p)
     
     return [np.concatenate(l) for l in [ids, gt, preds]]
@@ -45,34 +45,27 @@ def confusion_matrix(conf_counts, conf_names):
                     labels=dict(x="Predicted", y="Ground Truth", color="Count"), 
                     x=['True', 'False'], 
                     y=['True', 'False'], 
-                    text_auto=True,
-                    custom_data=[conf_names])
+                    text_auto=True)
     fig.update_traces(
-        hovertemplate="{customdata[0]}"
+        customdata=[conf_names],
+        hovertemplate="%{customdata[0]}"
     )
 
     return fig
 
 def get_tp_fp(model: torch.nn.Module, train_loader, val_loader, test_loader, device, compile = None):
     def tp_fp(ids, gt, preds):
-        pos_mask = gt == 1.
-        neg_mask = ~pos_mask
+        pos = gt == 1.
+        pred_pos = preds == 1.
 
-        tp_mask = preds[pos_mask] == 1.
-        fp_mask = preds[pos_mask] == 0.
+        tp_mask = pos & pred_pos #gt pos, pred pos
+        fp_mask = ~pos & pred_pos #gt neg, pred pos
 
-        tn_mask = preds[neg_mask] == 0.
-        fn_mask = preds[neg_mask] == 1.
+        tn_mask = ~pos & ~pred_pos
+        fn_mask = pos & ~pred_pos
 
-        # counts = {
-        #     "true pos": np.sum(tp_mask),
-        #     "false pos": np.sum(fp_mask),
-        #     "true neg": np.sum(tn_mask),
-        #     "false neg": np.sum(fn_mask),
-        # }
-
-        counts = [[np.sum(tp_mask), np.sum(fp_mask)], 
-                  [np.sum(tn_mask), np.sum(fn_mask)]]
+        counts = [[np.sum(tp_mask), np.sum(tn_mask)], 
+                  [np.sum(fp_mask), np.sum(fn_mask)]]
 
         # id_split =  {
         #     "true pos": ids[tp_mask],
@@ -81,8 +74,8 @@ def get_tp_fp(model: torch.nn.Module, train_loader, val_loader, test_loader, dev
         #     "false neg": ids[fn_mask],
         # }
 
-        id_split = [[ids[tp_mask], ids[fp_mask]],
-                    [ids[tn_mask], ids[fn_mask]]]
+        id_split = [[ids[tp_mask], ids[tn_mask]],
+                    [ids[fp_mask], ids[fn_mask]]]
 
         return counts, id_split
 
