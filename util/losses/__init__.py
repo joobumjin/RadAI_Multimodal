@@ -1,1 +1,2 @@
-from losses import *
+from .fns import *
+from .cox_loss import *
