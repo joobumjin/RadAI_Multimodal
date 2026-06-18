@@ -1,14 +1,12 @@
 from argparse import Namespace
 from typing import Iterable
+from collections import defaultdict
 
 import wandb
 from tqdm import trange
 import numpy as np
-import matplotlib.pyplot as plt
 from torch.nn import functional as F
 from torch import optim
-
-from torchmetrics import ROC, AUROC
 
 from data import *
 from util import *
@@ -16,29 +14,18 @@ from util import *
 # --------------------------------------------------------
 
 def get_bool_metrics(split: str):
-    metrics = {f"{split} Loss": AverageMeter()}
-    if split == "Train": metrics["lr"] = AverageMeter()
-    fns = {"Acc": lambda p, l: acc(torch.sigmoid(p) > 0.5, l)} 
-    fns = {f"{split} {name}": fn for name, fn in fns.items()}
-    test_metrics = {f"{name}": AverageMeter() for name in fns}
-    metrics = {**metrics, **test_metrics}
-    
-    torchmetrics = {"ROC": ROC(task="binary"), "AUC": AUROC(task="binary")}
-    torchmetrics = {f"{split} {name}": obj for name, obj in torchmetrics.items()}
+    fns = {f"{split} Acc": lambda p, l: acc(torch.sigmoid(p) > 0.5, l)} 
+    metrics = defaultdict(lambda: AverageMeter())
 
-    return metrics, fns, torchmetrics
+    return metrics, fns
 
 def get_regression_metrics(split: str):
-    metrics = {f"{split} Loss": AverageMeter()}
-    if split == "Train": metrics["lr"] = AverageMeter()
     fns = {"MSE": F.mse_loss, "L1": F.l1_loss}
     fns = {f"{split} {name}": fn for name, fn in fns.items()}
-    test_metrics = {f"{name}": AverageMeter() for name in fns}
-    metrics = {**metrics, **test_metrics}
-    
-    torchmetrics = {}
 
-    return metrics, fns, torchmetrics
+    metrics = defaultdict(lambda: AverageMeter())
+    
+    return metrics, fns
 
 # --------------------------------------------------------
 
@@ -50,7 +37,7 @@ def train_one_epoch(model: torch.nn.Module,
     model.train(True)
     optimizer.zero_grad()
 
-    metrics, fns, torchmetrics = get_bool_metrics("Train")
+    metrics, fns = get_bool_metrics("Train")
     
     for batch in train_loader:
         for key in batch:
@@ -65,16 +52,12 @@ def train_one_epoch(model: torch.nn.Module,
                 metric_val = fn(preds, batch["label"])
                 metrics[name].update(metric_val.detach().item())
 
-            preds = torch.sigmoid(preds)
-            for obj in torchmetrics.values():
-                obj.update(preds.detach().squeeze(-1), batch["label"].detach().int().squeeze(-1))
-
         loss.backward()
         optimizer.step()
         optimizer.zero_grad()
         scheduler.step()
 
-    return {k: meter.avg for k, meter in metrics.items()}, torchmetrics
+    return {k: meter.avg for k, meter in metrics.items()}
 
 def train_one_epoch_list(model: torch.nn.Module, 
                          train_loader: Iterable, 
@@ -84,7 +67,7 @@ def train_one_epoch_list(model: torch.nn.Module,
     model.train(True)
     optimizer.zero_grad()
 
-    metrics, fns, torchmetrics = get_bool_metrics("Train")
+    metrics, fns = get_bool_metrics("Train")
     
     for batch in train_loader:
         for key in batch:
@@ -99,16 +82,12 @@ def train_one_epoch_list(model: torch.nn.Module,
                 metric_val = fn(preds, batch["label"])
                 metrics[name].update(metric_val.detach().item())
 
-            preds = torch.sigmoid(preds)
-            for obj in torchmetrics.values():
-                obj.update(preds.detach().squeeze(-1), batch["label"].detach().int().squeeze(-1))
-
         loss.backward()
         optimizer.step()
         optimizer.zero_grad()
         scheduler.step()
 
-    return {k: meter.avg for k, meter in metrics.items()}, torchmetrics
+    return {k: meter.avg for k, meter in metrics.items()}
 
 def test(model: torch.nn.Module, 
          data_loader: Iterable, 
@@ -117,7 +96,7 @@ def test(model: torch.nn.Module,
          split: str = "Test"):
     model.eval()
 
-    metrics, fns, torchmetrics = get_bool_metrics(split)
+    metrics, fns = get_bool_metrics(split)
 
     for batch in data_loader:
         for key in batch:
@@ -130,11 +109,7 @@ def test(model: torch.nn.Module,
                 metric_val = fn(preds, batch["label"])
                 metrics[name].update(metric_val.detach().item())
 
-            preds = torch.sigmoid(preds)
-            for obj in torchmetrics.values():
-                obj.update(preds.detach().squeeze(-1), batch["label"].detach().int().squeeze(-1))
-
-    return {k: meter.avg for k, meter in metrics.items()}, torchmetrics
+    return {k: meter.avg for k, meter in metrics.items()}
 
 # --------------------------------------------------------
 
@@ -187,37 +162,23 @@ def run_setup(args, model_constructor, train_loader, valid_loader, test_loader, 
     print(f"Start training for {args.epochs} epochs")
     pbar = trange(0, args.epochs, desc="Training Epochs", postfix={})
     for e in pbar:
-        train_stats, train_tm = train_one_epoch(model, train_loader, optimizer, scheduler, device, args)
+        train_stats = train_one_epoch(model, train_loader, optimizer, scheduler, device, args)
         if valid_loader is not None:
-            valid_stats, valid_tm = test(model, valid_loader, device, args=args, split="Valid") 
+            valid_stats = test(model, valid_loader, device, args=args, split="Valid") 
         else:
-            valid_stats, valid_tm = {}, {}
-        test_stats, test_tm = test(model, test_loader, device, args=args, split="Test")
+            valid_stats = {}
+        test_stats = test(model, test_loader, device, args=args, split="Test")
 
-        tm = {}
-        if len(train_tm) > 0:
-            if e == args.epochs - 1:
-                if run is not None: 
-                    fig, (ax1, ax2, ax3) = plt.subplots(1, 3)
-                    fig.suptitle('ROC Performance Curves')
-                    train_tm["Train ROC"].plot(ax=ax1)
-                    if "Valid ROC" in valid_tm: valid_tm["Valid ROC"].plot(ax=ax2)
-                    test_tm["Test ROC"].plot(ax=ax3)
-                    run.log({"ROC": fig})
-            del train_tm["Train ROC"], test_tm["Test ROC"]
-            if "Valid ROC" in valid_tm: del valid_tm["Valid ROC"]
+        c_ind_auc = calculate_c_indices_auc(model, train_loader, valid_loader, test_loader, device, surv_yr=args.survival_years)
 
-            tm = {**train_tm, **valid_tm, **test_tm}
-            tm = {name: obj.compute() for name, obj in tm.items()}
+        postfix = {**train_stats, **valid_stats, **test_stats, **c_ind_auc}
 
-        c_indices = calculate_c_indices(model, train_loader, valid_loader, test_loader, device)
-
-        postfix = {**train_stats, **valid_stats, **test_stats, **c_indices, **tm}
         if run is not None: 
             run.log(postfix)
             if e == args.epochs - 1: 
                 conf_mats = get_tp_fp(model, train_loader, valid_loader, test_loader, device)
                 run.log(conf_mats)
+                
         pbar.set_postfix(postfix)
 
         if early_stopper is not None:
