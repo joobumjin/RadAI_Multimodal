@@ -47,14 +47,6 @@ def calculate_c_indices_auc(model: torch.nn.Module, train_loader, val_loader, te
     val_c = concordance_index_censored(*val)[0] if len(val) else None
     test_c, _, _, _, _ = concordance_index_censored(*test)
 
-   
-    if len(val): data = [train, val, test]
-    else: data = [train, test]
-
-    combined = [np.concatenate(arrs) for arrs in zip(*data)]
-    combined_c, _, _, _, _ = concordance_index_censored(*combined)
-
-
     surv_train  = np.zeros(num_train,   dtype=[('event', bool), ('surv_time', float)])
     surv_val    = np.zeros(num_val,     dtype=[('event', bool), ('surv_time', float)])
     surv_test   = np.zeros(num_test,    dtype=[('event', bool), ('surv_time', float)])
@@ -78,13 +70,12 @@ def calculate_c_indices_auc(model: torch.nn.Module, train_loader, val_loader, te
     ret = {
         "Train C-Index": train_c, 
         "Test C-Index": test_c, 
-        "Combined C-Index": combined_c,
         "Train AUC": train_auc[0], 
         "Test AUC": test_auc[0], 
     }
 
     if len(val): 
         ret["Validation C-Index"] = val_c
-        ret["Validation C-Index"] = val_auc[0]
+        ret["Validation AUC"] = val_auc[0]
 
     return ret
