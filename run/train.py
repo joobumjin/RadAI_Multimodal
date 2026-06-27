@@ -175,10 +175,7 @@ def run_setup(args, model_constructor, train_loader, valid_loader, test_loader, 
 
         if run is not None: 
             run.log(postfix)
-            if e == args.epochs - 1: 
-                conf_mats = get_tp_fp(model, train_loader, valid_loader, test_loader, device)
-                run.log(conf_mats)
-                
+
         pbar.set_postfix(postfix)
 
         if early_stopper is not None:

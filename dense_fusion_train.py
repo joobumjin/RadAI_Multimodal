@@ -183,6 +183,7 @@ def main(args):
 
     run_name = args.run_name if args.run_name is not None else " - ".join([f"{args.emb_dim}e{", sparse" if args.sparse else ""}", f"{args.label_col}", f"{args.model} - "])
 
+    #NOTE: THE MODEL IS TRAINED AS LOG HAZARD PREDICTING
     run_setup(args, get_dense_fusion_model, train_loader, valid_loader, test_loader, run_name = run_name)
        
 

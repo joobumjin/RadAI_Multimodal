@@ -8,7 +8,7 @@ def compile_split(model, loader, device):
 
     split_preds, split_deaths, split_times = [], [], []
     for batch in loader:
-        surviving = (batch["survival_right_censor"].numpy().squeeze(-1).astype(bool)) #true if died
+        surviving = (batch["survival_right_censor"].numpy().squeeze(-1).astype(bool)) #true if could have lived longer
         times = batch["survival_days"].numpy().squeeze(-1)
         split_deaths.append(~surviving)
         split_times.append(times)
