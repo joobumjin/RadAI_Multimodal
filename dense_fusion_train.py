@@ -3,6 +3,7 @@ import argparse
 
 import numpy as np
 from torch import nn
+from sklearn.model_selection import train_test_split
 
 from data import *
 from model import create_mlp, EmbMIL, DenseFusion
@@ -26,6 +27,7 @@ def get_args_parser():
     parser.add_argument('--early_stop',         type=bool,  default=True)
     parser.add_argument('--patience',           type=int,   default=5)
 
+    parser.add_argument('--mix_data',           action="store_true")
     parser.add_argument('--sparse',             action="store_true")
     parser.add_argument('--clinical',           action="store_true")
     parser.add_argument('--clinical_imputed',   action="store_true")
@@ -156,7 +158,27 @@ def main(args):
     torch.manual_seed(seed)
     np.random.seed(seed)
 
-    train_loader, valid_loader, test_loader = get_loaders(args, *get_inds(args))
+    if args.mix_data:
+        datasets = get_datasets(args)
+        dataset = ConcatDataset(datasets) #this is prob a little mem inefficient
+
+        tv, test_inds = train_test_split(
+            np.arange(len(dataset)),
+            test_size=0.15,
+            random_state=args.seed,
+            #consider stratifying
+        )
+
+        train_inds, val_inds = train_test_split(
+            tv,
+            test_size=0.1,
+            random_state=args.seed
+        )
+
+        train_loader, valid_loader, test_loader = get_combined_loaders(args, dataset, train_inds, val_inds, test_inds)
+
+    else:
+        train_loader, valid_loader, test_loader = get_loaders(args, *get_inds(args))
 
     run_name = args.run_name if args.run_name is not None else " - ".join([f"{args.emb_dim}e{", sparse" if args.sparse else ""}", f"{args.label_col}", f"{args.model} - "])
 

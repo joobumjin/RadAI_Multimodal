@@ -2,10 +2,81 @@ from argparse import Namespace
 from functools import reduce
 from typing import Optional
 
-import numpy as np
 from tabulate import tabulate
+import numpy as np
+from torch.utils.data import Dataset, ConcatDataset, Subset
 
 from data import *
+
+def get_datasets(args: Namespace,
+                 keys: list[str] = ["slide_ids", "survival_days", "survival_right_censor"],
+                 label_key = "label"):
+    bin_mods, extra_mods = [], []
+
+    arg_dict = vars(args)
+    for mod in ["clinical", "clinical_imputed"]:
+        if arg_dict.get(mod, False): 
+            extra_mods.append(mod)
+    for mod in ["path_lang", "rad_lang", "path_img"]:
+        if arg_dict.get(mod, False): 
+            bin_mods.append(mod)
+
+    dataset_args = {
+        "data_dir": args.data_path,
+        "return_key": True,
+        "keys": keys,
+        "label_column": args.label_col,
+        "label_dtype": np.float32,
+        "bin_modality_keys": bin_mods,
+        "extra_modality_keys": extra_mods,
+        "allow_sparse_samples": args.sparse,
+        "label_fn": lambda dates: (dates < (365.0 * args.survival_years)).astype(np.float32), #predict survival hazard
+        "label_key": label_key
+    }
+    train_set = MemmapDatasetMultimodal(**dataset_args)
+
+    test_args = {**dataset_args}
+    test_args["data_dir"] = args.test_path
+    test_set = MemmapDatasetMultimodal(**test_args)
+
+    return train_set, test_set
+
+def get_combined_loaders(args, 
+                         dataset: Dataset,
+                         train_inds, 
+                         validation_inds, 
+                         test_inds):
+    bin_mods, extra_mods = [], []
+
+    arg_dict = vars(args)
+    for mod in ["clinical", "clinical_imputed"]:
+        if arg_dict.get(mod, False): 
+            extra_mods.append(mod)
+    for mod in ["path_lang", "rad_lang", "path_img"]:
+        if arg_dict.get(mod, False): 
+            bin_mods.append(mod)
+
+    loader_args = {
+        "batch_size": args.batch_size,
+        "pin_memory": args.pin_mem,
+        "num_workers": args.num_workers,
+        "collate_fn": default_collate if not args.path_img else lambda batch: collate_mixed(batch, ["label", *bin_mods, *extra_mods]),
+        "persistent_workers": args.num_workers > 0,
+        "drop_last": False,
+    }
+
+    train_set = Subset(dataset, train_inds)
+    train_loader = DataLoader(train_set, shuffle=True, **loader_args)
+
+    if len(validation_inds): 
+        val_set = Subset(dataset, validation_inds)
+        val_loader = DataLoader(val_set, shuffle=False, **loader_args)
+
+    test_set = Subset(dataset, test_inds)
+    test_loader = DataLoader(test_set, shuffle=False, **loader_args)
+
+    return train_loader, val_loader, test_loader
+
 
 def get_loaders(args: Namespace, 
                 train_inds, 
