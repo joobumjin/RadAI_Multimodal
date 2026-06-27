@@ -165,14 +165,14 @@ def main(args):
 
         tv, test_inds = train_test_split(
             np.arange(len(dataset)),
-            test_size=0.15,
+            test_size=0.08,
             random_state=args.seed,
             #consider stratifying
         )
 
         train_inds, val_inds = train_test_split(
             tv,
-            test_size=0.1,
+            test_size=0.08,
             random_state=args.seed
         )
 
