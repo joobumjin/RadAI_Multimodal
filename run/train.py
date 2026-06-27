@@ -14,7 +14,7 @@ from util import *
 # --------------------------------------------------------
 
 def get_bool_metrics(split: str):
-    fns = {f"{split} Acc": lambda p, l: acc(torch.sigmoid(p) > 0.5, l)} 
+    fns = {} 
     metrics = defaultdict(lambda: AverageMeter())
 
     return metrics, fns
