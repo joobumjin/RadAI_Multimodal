@@ -27,7 +27,7 @@ def get_args_parser():
     parser.add_argument('--float16',            type=bool,  default=True)
     parser.add_argument('--early_stop',         type=bool,  default=True)
     parser.add_argument('--patience',           type=int,   default=5)
-    parser.add_argument('--folds',              type=int,   default=10)
+    parser.add_argument('--folds',              type=int,   default=5)
 
     parser.add_argument('--mix_data',           action="store_true")
     parser.add_argument('--sparse',             action="store_true")
@@ -66,51 +66,6 @@ def get_args_parser():
     parser.add_argument('--run_name')
     parser.add_argument('--debug',              action="store_true")
     return parser
-
-# --------------------------------------------------------
-
-def get_inds(args):
-    keys = ["slide_ids", "survival_days", "survival_right_censor"]
-
-    index   = np.load(f"{args.data_path}/index_arrays_labeled.npz", allow_pickle=True)
-    inds    = np.arange(len(index['survival_days']))
-
-    label_mask = ~np.isnan(index[args.label_col])
-    exclusion_mask = ~index["excluded"]
-    mask = label_mask & exclusion_mask
-    if "indicator" in args.label_col: 
-        for key in keys:
-            mask = mask & (~np.isnan(index[key]))
-
-    modality_mask = np.zeros_like(mask).astype(bool) if args.sparse else np.ones_like(mask).astype(bool)
-    combine_op = lambda x, y: x | y if args.sparse else x & y
-
-    arg_dict = vars(args)
-    for mod in ["clinical", "clinical_imputed"]:
-        if arg_dict.get(mod, False): 
-            modality_mask = combine_op(modality_mask, index[f'{mod}_mask'])
-    for mod in ["path_lang", "rad_lang", "path_img"]:
-        if arg_dict.get(mod, False): 
-            modality_mask = combine_op(modality_mask, (index[f'{mod}_mask']))
-
-    mask = mask & modality_mask
-
-    valid_inds = inds[mask]
-    num_train = int(len(valid_inds) * args.train_split)
-    if not args.clinical_imputed: #standard random shuffle and select
-        np.random.shuffle(valid_inds)
-        
-        train_inds, validation_inds = valid_inds[:num_train], valid_inds[num_train:]
-    else: #only test on real samples, but can train on imputed data
-        orig = inds[~np.isnan(index['clinical']).any(axis=1) & mask]
-        np.random.shuffle(orig)
-
-        imputed = inds[np.isnan(index['clinical']).any(axis=1) & mask]
-
-        num_test = len(inds) - num_train
-        train_inds, validation_inds = np.hstack((orig[num_test:], imputed)), orig[:num_test]
-
-    return train_inds, validation_inds
 
 # --------------------------------------------------------
 
@@ -156,7 +111,7 @@ def get_dense_fusion_model(args):
 # --------------------------------------------------------
 
 def main(args):
-    args.wb_proj = f"{args.model} {args.wb_proj}"
+    args.wb_proj = f"{args.model} {args.wb_proj} {args.folds}"
     seed = args.seed
     torch.manual_seed(seed)
     np.random.seed(seed)
@@ -178,7 +133,7 @@ def main(args):
     for split, (train_inds, val_inds) in enumerate(splits):
         train_loader, valid_loader, test_loader = get_combined_loaders(args, dataset, train_inds, val_inds, test_inds)
 
-        run_name = f"Split {split}"
+        run_name = f"Split {split} "
 
         #NOTE: THE MODEL IS TRAINED AS LOG HAZARD PREDICTING
         run_setup(args, get_dense_fusion_model, train_loader, valid_loader, test_loader, run_name = run_name)

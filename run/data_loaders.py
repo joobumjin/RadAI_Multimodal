@@ -75,6 +75,19 @@ def get_combined_loaders(args,
     test_set = Subset(dataset, test_inds)
     test_loader = DataLoader(test_set, shuffle=False, **loader_args)
 
+    stats = [[split, len(dset), len(loader)] 
+             for (split, dset, loader) 
+             in zip(["Train", "Test"], 
+                    [train_set, test_set], 
+                    [train_loader, test_loader])]
+    
+    if len(validation_inds):
+        valid_stats = ["Valid", len(val_set), len(val_loader)] 
+        stats = [stats[0], valid_stats, stats[1]]
+
+    headers = ["Split", "# Samples", "# Batches"]
+    print(tabulate(stats, headers=headers, tablefmt="grid"), "\n")
+
     return train_loader, val_loader, test_loader
 
 
