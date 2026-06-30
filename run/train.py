@@ -138,6 +138,7 @@ def run_setup(args, model_constructor, train_loader, valid_loader, test_loader, 
             "Fusion": "Dense",
             "Model": args.model,
             "MLP Norm": "Layer Norm",
+            "Mix Data": args.mix_data
         }
 
         mods = []
