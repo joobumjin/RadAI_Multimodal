@@ -1,2 +1,2 @@
-from data.mmap_data import *
-from data.mmap_ssl_data_multimodal import *
+from .mmap_data import *
+from .mmap_ssl_data_multimodal import *

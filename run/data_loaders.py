@@ -4,7 +4,7 @@ from typing import Optional
 
 from tabulate import tabulate
 import numpy as np
-from torch.utils.data import Dataset, Subset
+from torch.utils.data import Dataset, Subset, DataLoader
 
 from data import *
 

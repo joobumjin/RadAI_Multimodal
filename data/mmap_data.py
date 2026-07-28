@@ -9,7 +9,7 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 import numpy as np
 import pandas as pd
 import torch
-from torch.utils.data import Dataset, DataLoader, default_collate
+from torch.utils.data import Dataset, default_collate
 
 class MemmapDataset(Dataset):
     """

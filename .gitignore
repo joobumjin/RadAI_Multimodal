@@ -3,13 +3,14 @@ wandb.txt
 data/*build*
 .paquo*
 .vscode/
+paper/
 
 #nonpublic data 
 Notebooks/data.ipynb
 Notebooks/slide_vis.ipynb
 Notebooks/index.ipynb
 Notebooks/lang_index.ipynb
-Notebooks/
+Notebooks/pathlang.ipynb
 
 # Byte-compiled / optimized / DLL files
 **/__pycache__/
