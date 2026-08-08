@@ -4,6 +4,7 @@ data/*build*
 .paquo*
 .vscode/
 paper/
+ignore/
 
 #nonpublic data 
 Notebooks/data.ipynb

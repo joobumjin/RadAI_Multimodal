@@ -28,7 +28,8 @@ def get_args_parser():
     parser.add_argument('--early_stop',         type=bool,  default=True)
     parser.add_argument('--patience',           type=int,   default=5)
 
-    parser.add_argument('--mix_data',           action="store_true")
+    parser.add_argument('--mix_data',           action="store_true", 
+                        help="Combine and then shuffle the train and test data")
     parser.add_argument('--modality',           type=str, default="multi", options=["multi", "uni_path", "uni_rad", "uni_clin"])
     
     parser.add_argument('--sparse',             action="store_true")
