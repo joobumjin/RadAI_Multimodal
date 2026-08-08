@@ -30,7 +30,7 @@ def get_args_parser():
 
     parser.add_argument('--mix_data',           action="store_true", 
                         help="Combine and then shuffle the train and test data")
-    parser.add_argument('--modality',           type=str, default="multi", options=["multi", "uni_path", "uni_rad", "uni_clin"])
+    parser.add_argument('--modality',           type=str, default="multi", choices=["multi", "uni_path", "uni_rad", "uni_clin"])
     
     parser.add_argument('--sparse',             action="store_true")
     parser.add_argument('--multi',              action="store_true")
@@ -160,15 +160,24 @@ def get_dense_fusion_model(args):
 
 def get_unimodal_path(args):
     model = Unimodal(args.enc_dim, [128, 32], 1, act = nn.GELU(), loss_fn=LOSS_FNS[args.loss_fn], rms_norm = True)
-    return model
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+
+    model = model.to(device)
+    return model, device
 
 def get_unimodal_rad(args):
-    model = Unimodal(args.enc_dim, [128, 32], 1, act = nn.GELU(), loss_fn=LOSS_FNS[args.loss_fn], rms_norm = True)
-    return model
+    model = Unimodal(args.enc_dim, [128, 32], 1, act = nn.GELU(), loss_fn=LOSS_FNS[args.loss_fn], rms_norm = True, mod="rad_lang")
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+
+    model = model.to(device)
+    return model, device
 
 def get_unimodal_clin(args):
-    model = Unimodal(24, [64], 1, act = nn.GELU(), loss_fn=LOSS_FNS[args.loss_fn], rms_norm = True) 
-    return model
+    model = Unimodal(24, [64], 1, act = nn.GELU(), loss_fn=LOSS_FNS[args.loss_fn], rms_norm = True, mod="clinical") 
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+
+    model = model.to(device)
+    return model, device
 
 # --------------------------------------------------------
 
@@ -219,5 +228,9 @@ if __name__ == '__main__':
     if args.debug:
         args.epochs = 5
         args.disable_wandb = True
+
+    if args.modality == "uni_path": args.path_lang = True
+    elif args.modality == "uni_rad": args.rad_lang = True
+    elif args.modality == "uni_clin": args.clinical = True
 
     main(args)

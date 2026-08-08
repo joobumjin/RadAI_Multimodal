@@ -66,7 +66,7 @@ class Unimodal(nn.Module):
                  rms_norm: bool = False,
                  autocast: bool = False,
                  device: str = 'cpu',
-                 mod: str = 'path_text'
+                 mod: str = 'path_lang'
     ):
         super().__init__()
         self.loss_fn = loss_fn
@@ -102,7 +102,7 @@ class Unimodal(nn.Module):
         return pred
     
     def forward(self, x: Dict[str, torch.Tensor]) -> tuple[torch.Tensor, torch.Tensor]:
-        pred = self.predictor(x)
+        pred = self.predict(x)
 
         loss = [self.loss_fn(pred, x)] if self.loss_fn is not None else []
         return pred, *loss
