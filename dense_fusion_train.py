@@ -192,16 +192,17 @@ def main(args):
 
         tv, test_inds = train_test_split(
             np.arange(len(dataset)),
-            test_size=0.08,
+            test_size=0.1,
             random_state=args.seed,
             #consider stratifying
         )
 
-        train_inds, val_inds = train_test_split(
-            tv,
-            test_size=0.08,
-            random_state=args.seed
-        )
+        # train_inds, val_inds = train_test_split(
+        #     tv,
+        #     test_size=0.08,
+        #     random_state=args.seed
+        # )
+        train_inds, val_inds = tv, []
 
         train_loader, valid_loader, test_loader = get_combined_loaders(args, dataset, train_inds, val_inds, test_inds)
 
