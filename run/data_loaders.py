@@ -71,6 +71,7 @@ def get_combined_loaders(args,
     if len(validation_inds): 
         val_set = Subset(dataset, validation_inds)
         val_loader = DataLoader(val_set, shuffle=False, **loader_args)
+    else: val_loader = None
 
     test_set = Subset(dataset, test_inds)
     test_loader = DataLoader(test_set, shuffle=False, **loader_args)
