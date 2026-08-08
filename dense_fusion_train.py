@@ -7,7 +7,7 @@ from torch.utils.data import ConcatDataset
 from sklearn.model_selection import train_test_split
 
 from data import *
-from model import create_mlp, EmbMIL, DenseFusion
+from model import create_mlp, EmbMIL, DenseFusion, Unimodal
 from util import *
 from run import *
 
@@ -29,7 +29,10 @@ def get_args_parser():
     parser.add_argument('--patience',           type=int,   default=5)
 
     parser.add_argument('--mix_data',           action="store_true")
+    parser.add_argument('--modality',           type=str, default="multi", options=["multi", "uni_path", "uni_rad", "uni_clin"])
+    
     parser.add_argument('--sparse',             action="store_true")
+    parser.add_argument('--multi',              action="store_true")
     parser.add_argument('--clinical',           action="store_true")
     parser.add_argument('--clinical_imputed',   action="store_true")
     parser.add_argument('--path_lang',          action="store_true")
@@ -61,7 +64,7 @@ def get_args_parser():
                         help="directory to which the pretrained model weights should be saved")
 
     parser.add_argument('--disable_wandb',      action="store_true")
-    parser.add_argument('--wb_proj',            type=str,   default="Panc MM External Test")
+    parser.add_argument('--wb_proj',            type=str,   default="Panc MM Final")
     parser.add_argument('--run_name')
     parser.add_argument('--debug',              action="store_true")
     return parser
@@ -154,6 +157,20 @@ def get_dense_fusion_model(args):
 
 # --------------------------------------------------------
 
+def get_unimodal_path(args):
+    model = Unimodal(args.enc_dim, [128, 32], 1, act = nn.GELU(), loss_fn=LOSS_FNS[args.loss_fn], rms_norm = True)
+    return model
+
+def get_unimodal_rad(args):
+    model = Unimodal(args.enc_dim, [128, 32], 1, act = nn.GELU(), loss_fn=LOSS_FNS[args.loss_fn], rms_norm = True)
+    return model
+
+def get_unimodal_clin(args):
+    model = Unimodal(24, [64], 1, act = nn.GELU(), loss_fn=LOSS_FNS[args.loss_fn], rms_norm = True) 
+    return model
+
+# --------------------------------------------------------
+
 def main(args):
     seed = args.seed
     torch.manual_seed(seed)
@@ -183,8 +200,15 @@ def main(args):
 
     run_name = args.run_name if args.run_name is not None else " - ".join([f"{args.emb_dim}e{", sparse" if args.sparse else ""}", f"{args.label_col}", f"{args.model} - "])
 
+    model_fns = {
+        "multi": get_dense_fusion_model,
+        "uni_path": get_unimodal_path,
+        "uni_rad": get_unimodal_rad,
+        "uni_clin": get_unimodal_clin
+    }
+
     #NOTE: THE MODEL IS TRAINED AS LOG HAZARD PREDICTING
-    run_setup(args, get_dense_fusion_model, train_loader, valid_loader, test_loader, run_name = run_name)
+    run_setup(args, model_fns[args.modality], train_loader, valid_loader, test_loader, run_name = run_name)
        
 
 if __name__ == '__main__':

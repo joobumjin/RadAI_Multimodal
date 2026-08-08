@@ -1,4 +1,4 @@
-from typing import Optional, Tuple, Union
+from typing import Optional, Tuple, Union, Dict
 from collections.abc import Callable
 
 import torch
@@ -52,4 +52,60 @@ class LinearModel(nn.Module):
 
         loss = self.loss_fn(pred, labels) if self.loss_fn is not None else None
         return loss, pred
+    
+
+class Unimodal(nn.Module):
+    def __init__(self, 
+                 input_dim: int = 23,
+                 hidden_dims: list[int] = [128, 128, 32],
+                 out_dim: int = 1,
+                 act: nn.Module = nn.LeakyReLU(),
+                 loss_fn: Optional[Callable] = F.mse_loss,
+                 batch_norm: bool = False,
+                 layer_norm: bool = False,
+                 rms_norm: bool = False,
+                 autocast: bool = False,
+                 device: str = 'cpu',
+                 mod: str = 'path_text'
+    ):
+        super().__init__()
+        self.loss_fn = loss_fn
+        self.device = device
+        self.autocast = autocast
+        self.mod = mod
+
+        self.predictor = create_mlp(
+            in_dim      = input_dim,
+            hid_dims    = hidden_dims,
+            out_dim     = out_dim,
+            act         = act,
+            dropout     = 0.3,
+            batch_norm  = batch_norm,
+            layer_norm  = layer_norm,
+            rms_norm    = rms_norm,
+        )
+
+        self.apply(self._init_weights)
+
+    def _init_weights(self, m):
+        if isinstance(m, nn.Linear):
+            torch.nn.init.xavier_uniform_(m.weight)
+            if isinstance(m, nn.Linear) and m.bias is not None:
+                nn.init.constant_(m.bias, 0)
+        elif isinstance(m, nn.LayerNorm):
+            nn.init.constant_(m.bias, 0)
+            nn.init.constant_(m.weight, 1.0)
+
+    def predict(self, x: Dict[str, torch.Tensor]) -> torch.Tensor:
+        with torch.autocast(device_type=self.device, dtype=torch.float16, enabled=self.autocast):
+            pred = self.predictor(x[self.mod])
+        return pred
+    
+    def forward(self, x: Dict[str, torch.Tensor]) -> tuple[torch.Tensor, torch.Tensor]:
+        pred = self.predictor(x)
+
+        loss = [self.loss_fn(pred, x)] if self.loss_fn is not None else []
+        return pred, *loss
+
+
 
