@@ -62,7 +62,7 @@ def get_args_parser():
                         help="directory to which the pretrained model weights should be saved")
 
     parser.add_argument('--disable_wandb',      action="store_true")
-    parser.add_argument('--wb_proj',            type=str,   default="KFold Validation")
+    parser.add_argument('--wb_proj',            type=str,   default="New KFold Validation")
     parser.add_argument('--run_name')
     parser.add_argument('--debug',              action="store_true")
     return parser

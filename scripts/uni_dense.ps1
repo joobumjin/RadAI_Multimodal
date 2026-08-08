@@ -9,7 +9,12 @@ conda activate multi
 
 $models = "gemma", "qwen"
 $enc_dims = 768, 1024
+
+$modalities = "uni_path", "uni_rad", "uni_clin"
+
 for ($i = 0; $i -lt 1; $i++){
     $model, $enc_dim = $models[$i], $enc_dims[$i] 
-    python .\dense_fusion_train.py --modality uni_path --run_name uni_path_gemma --loss_fn "cox_nll" --mix_data --batch_size 128 --lr 1e-3 --warmup_epochs 25 --model $model --data_path "../${model}_multimodal_bins" --test_path "../${model}_multimodal_bins_rw" --enc_dim $enc_dim --clinical --path_lang --rad_lang --label_col $target
+    foreach ($mod in $modalities) {
+        python .\dense_fusion_train.py --modality $mod --run_name "${mod}_${model}" --loss_fn "cox_nll" --mix_data --batch_size 128 --lr 1e-3 --warmup_epochs 25 --model $model --data_path "../${model}_multimodal_bins" --test_path "../${model}_multimodal_bins_rw" --enc_dim $enc_dim --label_col $target
+    }
 }
