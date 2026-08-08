@@ -1,6 +1,3 @@
-import torch
-import numpy as np
-
 class EarlyStopper:
     def __init__(self, patience: int = 5, minimize: bool = True, verb: bool = False):
         self.verb = verb

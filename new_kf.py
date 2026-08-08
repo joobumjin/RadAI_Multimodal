@@ -1,15 +1,13 @@
-import os
 import argparse
 
 import numpy as np
-from torch import nn
 from torch.utils.data import ConcatDataset
 from sklearn.model_selection import train_test_split, KFold
 
 from data import *
-from model import create_mlp, EmbMIL, DenseFusion
 from util import *
 from run import *
+from dense_fusion_train import get_dense_fusion_model, get_unimodal_clin, get_unimodal_path, get_unimodal_rad
 
 def get_args_parser():
     parser = argparse.ArgumentParser('Supervised Panc Training', add_help=False)
@@ -29,7 +27,10 @@ def get_args_parser():
     parser.add_argument('--patience',           type=int,   default=5)
     parser.add_argument('--folds',              type=int,   default=5)
 
-    parser.add_argument('--mix_data',           action="store_true")
+    parser.add_argument('--mix_data',           action="store_true", 
+                        help="Combine and then shuffle the train and test data")
+    parser.add_argument('--modality',           type=str, default="multi", choices=["multi", "uni_path", "uni_rad", "uni_clin"])
+
     parser.add_argument('--sparse',             action="store_true")
     parser.add_argument('--clinical',           action="store_true")
     parser.add_argument('--clinical_imputed',   action="store_true")
@@ -69,49 +70,25 @@ def get_args_parser():
 
 # --------------------------------------------------------
 
-def get_clinical_encoder(args):
-    # clin_enc = create_mlp(24, [128], args.emb_dim, act = nn.GELU(), dropout = 0.3, layer_norm = True)
-    clin_enc = create_mlp(24, [], args.emb_dim, act = nn.GELU(), dropout = 0.3, end_with_fc=False, end_with_dropout=True, rms_norm = True, end_with_norm=True)
-    return clin_enc, False
-
-def get_path_lang_encoder(args):
-    # path_lang_enc = create_mlp(args.enc_dim, [128], args.emb_dim, act = nn.GELU(), dropout = 0.4, layer_norm = True)
-    path_lang_enc = create_mlp(args.enc_dim, [], args.emb_dim, act = nn.GELU(), dropout = 0.3, end_with_fc=False, end_with_dropout=True, rms_norm = True, end_with_norm=True)
-    return path_lang_enc, True
-
-def get_rad_lang_encoder(args):
-    # rad_lang_enc = create_mlp(args.enc_dim, [128], args.emb_dim, act = nn.GELU(), dropout = 0.4, layer_norm = True)
-    rad_lang_enc = create_mlp(args.enc_dim, [], args.emb_dim, act = nn.GELU(), dropout = 0.3, end_with_fc=False, end_with_dropout=True, rms_norm = True, end_with_norm=True)
-    return rad_lang_enc, True
-
-def get_path_img_encoder(args):
-    mil = EmbMIL(embed_dim=384, dropout=0.3, attn_dim = 256, proj_dim=args.emb_dim, loss_fn=None)
-    return mil, True
-
-def get_dense_fusion_model(args):
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-
-    get_enc_fns = {
-        "clinical": get_clinical_encoder, 
-        "clinical_imputed": get_clinical_encoder, 
-        "path_lang": get_path_lang_encoder, 
-        "rad_lang": get_rad_lang_encoder, 
-        "path_img": get_path_img_encoder, 
-    }
-
-    encs, casts = {}, {}
-    arg_dict = vars(args)
-    for mod, fn in get_enc_fns.items():
-        if arg_dict.get(mod, False): 
-            encs[mod], casts[mod] = fn(args)
-
-    model = DenseFusion(encs, emb_dim=args.emb_dim, hidden_dims=[32], autocast=casts, loss_fn=LOSS_FNS[args.loss_fn], device=device)
-    return model, device
-
-# --------------------------------------------------------
-
 def main(args):
-    args.wb_proj = f"{args.model} {args.wb_proj} {args.folds}"
+    if args.modality == "uni_path": 
+        args.path_lang = True
+        mod_name = "Unimodal Path"
+    elif args.modality == "uni_rad": 
+        args.rad_lang = True
+        mod_name = "Unimodal Rad"
+    elif args.modality == "uni_clin": 
+        args.clinical = True
+        mod_name = "Unimodal Clin"
+    else:
+        mod_name = []
+        for mod, n in zip([args.path_lang, args.rad_lang, args.clinical], ["Path", "Rad", "Clin"]):
+            if mod: mod_name.append(n)
+        
+        if len(mod_name) == 3: mod_name = "Trimodal"
+        else: mod_name = "Bimodal " + "+".join(mod_name)
+
+    args.wb_proj = f"{mod_name} {args.model} {args.wb_proj} {args.folds}"
     seed = args.seed
     torch.manual_seed(seed)
     np.random.seed(seed)
@@ -130,13 +107,20 @@ def main(args):
     kf = KFold(n_splits=args.folds, shuffle=True, random_state=args.seed)
     splits = kf.split(X=tv)
 
+    model_fns = {
+        "multi": get_dense_fusion_model,
+        "uni_path": get_unimodal_path,
+        "uni_rad": get_unimodal_rad,
+        "uni_clin": get_unimodal_clin
+    }
+
     for split, (train_inds, val_inds) in enumerate(splits):
         train_loader, valid_loader, test_loader = get_combined_loaders(args, dataset, train_inds, val_inds, test_inds)
 
         run_name = f"Split {split} "
 
         #NOTE: THE MODEL IS TRAINED AS LOG HAZARD PREDICTING
-        run_setup(args, get_dense_fusion_model, train_loader, valid_loader, test_loader, run_name = run_name)
+        run_setup(args, model_fns[args.modality], train_loader, valid_loader, test_loader, run_name = run_name)
        
 
 if __name__ == '__main__':
