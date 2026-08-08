@@ -2,7 +2,6 @@ $models = "biomedclip"
 # $models = "conch", "biomedclip"
 # $fusions = "weighted_sum"
 $target = "survival_days"
-$loss = "bce"
 
 conda activate multi
 
@@ -53,11 +52,12 @@ $models = "gemma", "qwen"
 $enc_dims = 768, 1024
 for ($i = 0; $i -lt $models.Count; $i++){
     $model, $enc_dim = $models[$i], $enc_dims[$i] 
-    python .\dense_fusion_train.py --loss_fn "cox_nll" --model $model --data_path "../${model}_multimodal_bins" --test_path "../${model}_multimodal_bins_rw" --enc_dim $enc_dim --clinical --path_lang --rad_lang --label_col $target --loss_fn $loss
-    $fusions = "naive_sum", "naive_avg", "weighted_sum"
-    foreach ($fusion in $fusions) {   
-        python .\emb_fusion_train.py --model $model --data_path "../${model}_multimodal_bins" --test_path "../${model}_multimodal_bins_rw" --enc_dim $enc_dim --fusion $fusion --clinical --path_lang --rad_lang --label_col $target --loss_fn $loss
-    }
+    python .\dense_fusion_train.py --loss_fn "cox_nll" --mix_data --batch_size 128 --lr 1e-3 --warmup_epochs 25 --model $model --data_path "../${model}_multimodal_bins" --test_path "../${model}_multimodal_bins_rw" --enc_dim $enc_dim --clinical --path_lang --rad_lang --label_col $target
+    python .\dense_fusion_train.py --loss_fn "cox_nll" --batch_size 128 --lr 1e-3 --warmup_epochs 25 --model $model --data_path "../${model}_multimodal_bins" --test_path "../${model}_multimodal_bins_rw" --enc_dim $enc_dim --clinical --path_lang --rad_lang --label_col $target
+    # $fusions = "naive_sum", "naive_avg", "weighted_sum"
+    # foreach ($fusion in $fusions) {   
+    #     python .\emb_fusion_train.py --model $model --data_path "../${model}_multimodal_bins" --test_path "../${model}_multimodal_bins_rw" --enc_dim $enc_dim --fusion $fusion --clinical --path_lang --rad_lang --label_col $target --loss_fn $loss
+    # }
 }
 
 # ""
