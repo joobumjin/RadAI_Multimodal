@@ -113,7 +113,7 @@ def test(model: torch.nn.Module,
 
 # --------------------------------------------------------
 
-def run_setup(args, model_constructor, train_loader, valid_loader, test_loader, run_name = None):
+def run_setup(args, model_constructor, train_loader, valid_loader, test_loader, run_name = None, return_keys = []):
     seed = args.seed
     torch.manual_seed(seed)
     np.random.seed(seed)
@@ -160,6 +160,8 @@ def run_setup(args, model_constructor, train_loader, valid_loader, test_loader, 
             config=config
         )
 
+    ret_metrics = {key: [] for key in return_keys} if len(ret_metrics) else None
+
     print(f"Start training for {args.epochs} epochs")
     pbar = trange(0, args.epochs, desc="Training Epochs", postfix={})
     for e in pbar:
@@ -179,6 +181,8 @@ def run_setup(args, model_constructor, train_loader, valid_loader, test_loader, 
 
         pbar.set_postfix(postfix)
 
+        for key in return_keys: ret_metrics[key].append(postfix[key])
+
         if early_stopper is not None:
             stop, best = early_stopper.update(postfix[stop_metric])
             if best:
@@ -186,7 +190,9 @@ def run_setup(args, model_constructor, train_loader, valid_loader, test_loader, 
                 pass
             elif stop:
                 print("Early stopping triggered!")
-                return
+                return ret_metrics
             
     if run is not None:
         run.finish()
+
+    return ret_metrics

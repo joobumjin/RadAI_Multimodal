@@ -3,6 +3,7 @@ import argparse
 import numpy as np
 from torch.utils.data import ConcatDataset
 from sklearn.model_selection import train_test_split, KFold
+import scipy.stats as stats
 
 from data import *
 from util import *
@@ -114,13 +115,28 @@ def main(args):
         "uni_clin": get_unimodal_clin
     }
 
+    metrics = defaultdict(lambda: [])
+
     for split, (train_inds, val_inds) in enumerate(splits):
         train_loader, valid_loader, test_loader = get_combined_loaders(args, dataset, train_inds, val_inds, test_inds)
 
         run_name = f"Split {split} "
 
         #NOTE: THE MODEL IS TRAINED AS LOG HAZARD PREDICTING
-        run_setup(args, model_fns[args.modality], train_loader, valid_loader, test_loader, run_name = run_name)
+        run = run_setup(args, model_fns[args.modality], train_loader, valid_loader, test_loader, run_name = run_name, return_keys=['Test AUC', 'Test C-Index'])
+        for key in run: metrics[key].append(run[key])
+
+    for key in metrics: metrics[key] = np.vstack(metrics(key))
+
+    avgs = {key: np.mean(arr, axis=0) for key, arr in metrics.items()}
+    errs = {key: stats.sem(arr, axis=0) for key, arr in metrics.items()}
+
+    avg_t = {key: torch.from_numpy(arr) for key, arr in avgs.items()}
+    top_k = {key: torch.topk(arr, 5) for key, arr in avg_t.items()}
+
+    print(f"Average Scores Across Splits: {avgs}")
+    print(f"Standard Error Across Splits: {errs}")
+    print(f"Top-k Average Inds: {top_k}")
        
 
 if __name__ == '__main__':
@@ -130,5 +146,8 @@ if __name__ == '__main__':
     if args.debug:
         args.epochs = 5
         args.disable_wandb = True
+
+    import warnings
+    warnings.filterwarnings("ignore", message="Ties in `time` detected")
 
     main(args)
