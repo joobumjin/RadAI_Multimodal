@@ -160,7 +160,7 @@ def run_setup(args, model_constructor, train_loader, valid_loader, test_loader, 
             config=config
         )
 
-    ret_metrics = {key: [] for key in return_keys} if len(ret_metrics) else None
+    ret_metrics = {key: [] for key in return_keys} if len(return_keys) else None
 
     print(f"Start training for {args.epochs} epochs")
     pbar = trange(0, args.epochs, desc="Training Epochs", postfix={})
