@@ -120,10 +120,12 @@ def main(args):
     for split, (train_inds, val_inds) in enumerate(splits):
         train_loader, valid_loader, test_loader = get_combined_loaders(args, dataset, train_inds, val_inds, test_inds)
 
-        run_name = f"Split {split} "
+        run_name = f"Split {split}"
 
         #NOTE: THE MODEL IS TRAINED AS LOG HAZARD PREDICTING
-        run = run_setup(args, model_fns[args.modality], train_loader, valid_loader, test_loader, run_name = run_name, return_keys=['Test AUC', 'Test C-Index'])
+        run = run_setup(args, model_fns[args.modality], train_loader, valid_loader, test_loader, run_name = run_name, return_keys=['Test AUC', 'Test C-Index'], ret_model=(split==4))
+        if split == 4:
+            model, device  = run.pop("model")
         for key in run: metrics[key].append(run[key])
 
     for key in metrics: metrics = {key: np.vstack(arr) for key, arr in metrics.items()}
@@ -138,6 +140,56 @@ def main(args):
     print(f"Average Scores Across Splits: {avgs}")
     print(f"Standard Error Across Splits: {errs}")
     print(f"Top-k Average Inds: {top_k}")
+
+
+    model.eval()
+
+    all_preds, all_deaths, all_times = [], [], []
+    # for loader in train_loader, valid_loader, test_loader:
+    for loader in train_loader, test_loader:
+        for batch in loader:
+            surviving = (batch["survival_right_censor"].numpy().squeeze(-1).astype(bool)) #true if could have lived longer
+            times = batch["survival_days"].numpy().squeeze(-1)
+            all_deaths.append(~surviving)
+            all_times.append(times)
+
+            for key in batch: batch[key] = batch[key].to(device)
+            with torch.inference_mode():
+                preds = model.predict(batch).detach().squeeze(-1).cpu().numpy() #predicted hazards
+                all_preds.append(preds)
+    
+    all_deaths, all_times, all_preds = [np.concatenate(l) for l in [all_deaths, all_times, all_preds]]
+
+    pred_bins = np.linspace(np.min(all_preds), np.max(all_preds), 8)
+    pred_binned = np.digitize(all_preds, pred_bins)
+
+    df = pd.DataFrame({"Death": all_deaths, "Time": all_times, "Pred Bins": pred_binned})
+
+    from lifelines import KaplanMeierFitter
+    import matplotlib.pyplot as plt
+    import seaborn as sns
+    sns.set_theme()
+
+    # Initialize the fitter
+    kmf = KaplanMeierFitter()
+
+    ax = plt.subplot(111)
+
+    # Fit and plot each group separately onto the same axis (ax)
+    #group by stratification and plot the time and event
+    for name, grouped_df in df.groupby("Pred Bins"):
+        kmf.fit(
+            grouped_df["Time"],
+            event_observed=grouped_df["Death"],
+            label=name,
+        )
+        kmf.plot_survival_function(ax=ax)
+        
+    plt.title("Trimodal Model Survival Curve")
+    plt.xlabel("Days Since Diagnosis")
+    plt.ylabel("Survival Probability")
+    plt.savefig("./km_curve.png")
+    plt.show()
        
 
 if __name__ == '__main__':

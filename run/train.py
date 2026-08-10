@@ -113,7 +113,7 @@ def test(model: torch.nn.Module,
 
 # --------------------------------------------------------
 
-def run_setup(args, model_constructor, train_loader, valid_loader, test_loader, run_name = None, return_keys = []):
+def run_setup(args, model_constructor, train_loader, valid_loader, test_loader, run_name = None, return_keys = [], ret_model=False):
     seed = args.seed
     torch.manual_seed(seed)
     np.random.seed(seed)
@@ -160,7 +160,7 @@ def run_setup(args, model_constructor, train_loader, valid_loader, test_loader, 
             config=config
         )
 
-    ret_metrics = {key: [] for key in return_keys} if len(return_keys) else None
+    ret_metrics = {key: [] for key in return_keys}
 
     print(f"Start training for {args.epochs} epochs")
     pbar = trange(0, args.epochs, desc="Training Epochs", postfix={})
@@ -194,5 +194,7 @@ def run_setup(args, model_constructor, train_loader, valid_loader, test_loader, 
             
     if run is not None:
         run.finish()
+
+    if ret_model: ret_metrics["model"] = model, device
 
     return ret_metrics
