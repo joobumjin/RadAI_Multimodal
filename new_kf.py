@@ -126,7 +126,7 @@ def main(args):
         run = run_setup(args, model_fns[args.modality], train_loader, valid_loader, test_loader, run_name = run_name, return_keys=['Test AUC', 'Test C-Index'])
         for key in run: metrics[key].append(run[key])
 
-    for key in metrics: metrics[key] = np.vstack(metrics(key))
+    for key in metrics: metrics = {key: np.vstack(arr) for key, arr in metrics.items()}
 
     avgs = {key: np.mean(arr, axis=0) for key, arr in metrics.items()}
     errs = {key: stats.sem(arr, axis=0) for key, arr in metrics.items()}
@@ -134,6 +134,7 @@ def main(args):
     avg_t = {key: torch.from_numpy(arr) for key, arr in avgs.items()}
     top_k = {key: torch.topk(arr, 5) for key, arr in avg_t.items()}
 
+    print(mod_name)
     print(f"Average Scores Across Splits: {avgs}")
     print(f"Standard Error Across Splits: {errs}")
     print(f"Top-k Average Inds: {top_k}")
