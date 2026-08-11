@@ -71,6 +71,39 @@ def get_args_parser():
 
 # --------------------------------------------------------
 
+def get_inds(args):
+    keys = ["slide_ids", "survival_days", "survival_right_censor"]
+
+    index   = np.load(f"{args.data_path}/index_arrays_labeled.npz", allow_pickle=True)
+    inds    = np.arange(len(index['survival_days']))
+
+    label_mask = ~np.isnan(index[args.label_col])
+    exclusion_mask = ~index["excluded"]
+    mask = label_mask & exclusion_mask
+    if "indicator" in args.label_col: 
+        for key in keys:
+            mask = mask & (~np.isnan(index[key]))
+
+    modality_mask = np.zeros_like(mask).astype(bool) if args.sparse else np.ones_like(mask).astype(bool)
+    combine_op = lambda x, y: x | y if args.sparse else x & y
+
+    arg_dict = vars(args)
+    for mod in ["clinical", "clinical_imputed"]:
+        if arg_dict.get(mod, False): 
+            modality_mask = combine_op(modality_mask, index[f'{mod}_mask'])
+    for mod in ["path_lang", "rad_lang", "path_img"]:
+        if arg_dict.get(mod, False): 
+            modality_mask = combine_op(modality_mask, (index[f'{mod}_mask']))
+
+    mask = mask & modality_mask
+
+    valid_inds = inds[mask]
+
+    return valid_inds
+
+# --------------------------------------------------------
+
+
 def main(args):
     if args.modality == "uni_path": 
         args.path_lang = True
@@ -97,15 +130,18 @@ def main(args):
     datasets = get_datasets(args)
     dataset = ConcatDataset(datasets) #this is prob a little mem inefficient
 
-    tv, test_inds = train_test_split(
-        np.arange(len(dataset)),
-        test_size=0.15,
-        random_state=args.seed,
-        #consider stratifying
-    )
-
 
     kf = KFold(n_splits=args.folds, shuffle=True, random_state=args.seed)
+
+    if args.mix_data:
+        tv, test_inds = train_test_split(
+            np.arange(len(dataset)),
+            test_size=0.15,
+            random_state=args.seed,
+        )
+    else:
+        tv = get_inds(args)
+
     splits = kf.split(X=tv)
 
     model_fns = {
@@ -118,7 +154,10 @@ def main(args):
     metrics = defaultdict(lambda: [])
 
     for split, (train_inds, val_inds) in enumerate(splits):
-        train_loader, valid_loader, test_loader = get_combined_loaders(args, dataset, train_inds, val_inds, test_inds)
+        if args.mix_data:
+            train_loader, valid_loader, test_loader = get_combined_loaders(args, dataset, train_inds, val_inds, test_inds)
+        else:
+            train_loader, valid_loader, test_loader = get_loaders(args, train_inds, val_inds)
 
         run_name = f"Split {split}"
 
