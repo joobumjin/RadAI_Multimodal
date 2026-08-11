@@ -91,6 +91,55 @@ def get_combined_loaders(args,
 
     return train_loader, val_loader, test_loader
 
+def get_subset_loaders(args, 
+                         tv_dataset: Dataset,
+                         train_inds, 
+                         validation_inds,
+                         test_set: Dataset):
+    bin_mods, extra_mods = [], []
+
+    arg_dict = vars(args)
+    for mod in ["clinical", "clinical_imputed"]:
+        if arg_dict.get(mod, False): 
+            extra_mods.append(mod)
+    for mod in ["path_lang", "rad_lang", "path_img"]:
+        if arg_dict.get(mod, False): 
+            bin_mods.append(mod)
+
+    loader_args = {
+        "batch_size": args.batch_size,
+        "pin_memory": args.pin_mem,
+        "num_workers": args.num_workers,
+        "collate_fn": default_collate if not args.path_img else lambda batch: collate_mixed(batch, ["label", *bin_mods, *extra_mods]),
+        "persistent_workers": args.num_workers > 0,
+        "drop_last": False,
+    }
+
+    train_set = Subset(tv_dataset, train_inds)
+    train_loader = DataLoader(train_set, shuffle=True, **loader_args)
+
+    if len(validation_inds): 
+        val_set = Subset(tv_dataset, validation_inds)
+        val_loader = DataLoader(val_set, shuffle=False, **loader_args)
+    else: val_loader = None
+
+    test_loader = DataLoader(test_set, shuffle=False, **loader_args)
+
+    stats = [[split, len(dset), len(loader)] 
+             for (split, dset, loader) 
+             in zip(["Train", "Test"], 
+                    [train_set, test_set], 
+                    [train_loader, test_loader])]
+    
+    if len(validation_inds):
+        valid_stats = ["Valid", len(val_set), len(val_loader)] 
+        stats = [stats[0], valid_stats, stats[1]]
+
+    headers = ["Split", "# Samples", "# Batches"]
+    print(tabulate(stats, headers=headers, tablefmt="grid"), "\n")
+
+    return train_loader, val_loader, test_loader
+
 
 def get_loaders(args: Namespace, 
                 train_inds, 

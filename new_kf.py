@@ -127,20 +127,20 @@ def main(args):
     torch.manual_seed(seed)
     np.random.seed(seed)
 
-    datasets = get_datasets(args)
-    dataset = ConcatDataset(datasets) #this is prob a little mem inefficient
-
-
     kf = KFold(n_splits=args.folds, shuffle=True, random_state=args.seed)
 
     if args.mix_data:
+        datasets = get_datasets(args)
+        dataset = ConcatDataset(datasets) #this is prob a little mem inefficient
+
         tv, test_inds = train_test_split(
             np.arange(len(dataset)),
             test_size=0.15,
             random_state=args.seed,
         )
     else:
-        tv = get_inds(args)
+        tv_set, test_set = get_datasets(args)
+        tv = np.arange(len(tv_set))
 
     splits = kf.split(X=tv)
 
@@ -157,7 +157,7 @@ def main(args):
         if args.mix_data:
             train_loader, valid_loader, test_loader = get_combined_loaders(args, dataset, train_inds, val_inds, test_inds)
         else:
-            train_loader, valid_loader, test_loader = get_loaders(args, train_inds, val_inds)
+            train_loader, valid_loader, test_loader = get_subset_loaders(args, tv_set, train_inds, val_inds, test_set)
 
         run_name = f"Split {split}"
 
