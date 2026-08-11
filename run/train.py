@@ -191,7 +191,7 @@ def run_setup(args, model_constructor, train_loader, valid_loader, test_loader, 
             elif stop:
                 print("Early stopping triggered!")
                 return ret_metrics
-            
+
     if run is not None:
         run.finish()
 

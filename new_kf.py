@@ -160,7 +160,7 @@ def main(args):
     
     all_deaths, all_times, all_preds = [np.concatenate(l) for l in [all_deaths, all_times, all_preds]]
 
-    pred_bins = np.linspace(np.min(all_preds), np.max(all_preds), 8)
+    pred_bins = np.linspace(np.min(all_preds), np.max(all_preds), 4)
     pred_binned = np.digitize(all_preds, pred_bins)
 
     df = pd.DataFrame({"Death": all_deaths, "Time": all_times, "Pred Bins": pred_binned})
@@ -183,7 +183,7 @@ def main(args):
             event_observed=grouped_df["Death"],
             label=name,
         )
-        kmf.plot_survival_function(ax=ax)
+        kmf.plot_survival_function(ax=ax, ci_show=False)
         
     plt.title("Trimodal Model Survival Curve")
     plt.xlabel("Days Since Diagnosis")
