@@ -7,9 +7,9 @@ from torch.utils.data import ConcatDataset
 from sklearn.model_selection import train_test_split
 
 from data import *
-from model import create_mlp, EmbMIL, DenseFusion, Unimodal
 from util import *
 from run import *
+from final_models import *
 
 def get_args_parser():
     parser = argparse.ArgumentParser('Supervised Panc Training', add_help=False)
@@ -35,7 +35,6 @@ def get_args_parser():
     parser.add_argument('--sparse',             action="store_true")
     parser.add_argument('--multi',              action="store_true")
     parser.add_argument('--clinical',           action="store_true")
-    parser.add_argument('--clinical_imputed',   action="store_true")
     parser.add_argument('--path_lang',          action="store_true")
     parser.add_argument('--rad_lang',           action="store_true")
     parser.add_argument('--path_img',           action="store_true")
@@ -72,115 +71,6 @@ def get_args_parser():
 
 # --------------------------------------------------------
 
-def get_inds(args):
-    keys = ["slide_ids", "survival_days", "survival_right_censor"]
-
-    index   = np.load(f"{args.data_path}/index_arrays_labeled.npz", allow_pickle=True)
-    inds    = np.arange(len(index['survival_days']))
-
-    label_mask = ~np.isnan(index[args.label_col])
-    exclusion_mask = ~index["excluded"]
-    mask = label_mask & exclusion_mask
-    if "indicator" in args.label_col: 
-        for key in keys:
-            mask = mask & (~np.isnan(index[key]))
-
-    modality_mask = np.zeros_like(mask).astype(bool) if args.sparse else np.ones_like(mask).astype(bool)
-    combine_op = lambda x, y: x | y if args.sparse else x & y
-
-    arg_dict = vars(args)
-    for mod in ["clinical", "clinical_imputed"]:
-        if arg_dict.get(mod, False): 
-            modality_mask = combine_op(modality_mask, index[f'{mod}_mask'])
-    for mod in ["path_lang", "rad_lang", "path_img"]:
-        if arg_dict.get(mod, False): 
-            modality_mask = combine_op(modality_mask, (index[f'{mod}_mask']))
-
-    mask = mask & modality_mask
-
-    valid_inds = inds[mask]
-    num_train = int(len(valid_inds) * args.train_split)
-    if not args.clinical_imputed: #standard random shuffle and select
-        np.random.shuffle(valid_inds)
-        
-        train_inds, validation_inds = valid_inds[:num_train], valid_inds[num_train:]
-    else: #only test on real samples, but can train on imputed data
-        orig = inds[~np.isnan(index['clinical']).any(axis=1) & mask]
-        np.random.shuffle(orig)
-
-        imputed = inds[np.isnan(index['clinical']).any(axis=1) & mask]
-
-        num_test = len(inds) - num_train
-        train_inds, validation_inds = np.hstack((orig[num_test:], imputed)), orig[:num_test]
-
-    return train_inds, validation_inds
-
-# --------------------------------------------------------
-
-def get_clinical_encoder(args):
-    # clin_enc = create_mlp(24, [128], args.emb_dim, act = nn.GELU(), dropout = 0.3, layer_norm = True)
-    clin_enc = create_mlp(24, [], args.emb_dim, act = nn.GELU(), dropout = 0.3, end_with_fc=False, end_with_dropout=True, rms_norm = True, end_with_norm=True)
-    return clin_enc, False
-
-def get_path_lang_encoder(args):
-    # path_lang_enc = create_mlp(args.enc_dim, [128], args.emb_dim, act = nn.GELU(), dropout = 0.4, layer_norm = True)
-    path_lang_enc = create_mlp(args.enc_dim, [], args.emb_dim, act = nn.GELU(), dropout = 0.3, end_with_fc=False, end_with_dropout=True, rms_norm = True, end_with_norm=True)
-    return path_lang_enc, True
-
-def get_rad_lang_encoder(args):
-    # rad_lang_enc = create_mlp(args.enc_dim, [128], args.emb_dim, act = nn.GELU(), dropout = 0.4, layer_norm = True)
-    rad_lang_enc = create_mlp(args.enc_dim, [], args.emb_dim, act = nn.GELU(), dropout = 0.3, end_with_fc=False, end_with_dropout=True, rms_norm = True, end_with_norm=True)
-    return rad_lang_enc, True
-
-def get_path_img_encoder(args):
-    mil = EmbMIL(embed_dim=384, dropout=0.3, attn_dim = 256, proj_dim=args.emb_dim, loss_fn=None)
-    return mil, True
-
-def get_dense_fusion_model(args):
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-
-    get_enc_fns = {
-        "clinical": get_clinical_encoder, 
-        "clinical_imputed": get_clinical_encoder, 
-        "path_lang": get_path_lang_encoder, 
-        "rad_lang": get_rad_lang_encoder, 
-        "path_img": get_path_img_encoder, 
-    }
-
-    encs, casts = {}, {}
-    arg_dict = vars(args)
-    for mod, fn in get_enc_fns.items():
-        if arg_dict.get(mod, False): 
-            encs[mod], casts[mod] = fn(args)
-
-    model = DenseFusion(encs, emb_dim=args.emb_dim, hidden_dims=[32], autocast=casts, loss_fn=LOSS_FNS[args.loss_fn], device=device)
-    return model, device
-
-# --------------------------------------------------------
-
-def get_unimodal_path(args):
-    model = Unimodal(args.enc_dim, [128, 32], 1, act = nn.GELU(), loss_fn=LOSS_FNS[args.loss_fn], rms_norm = True)
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-
-    model = model.to(device)
-    return model, device
-
-def get_unimodal_rad(args):
-    model = Unimodal(args.enc_dim, [128, 32], 1, act = nn.GELU(), loss_fn=LOSS_FNS[args.loss_fn], rms_norm = True, mod="rad_lang")
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-
-    model = model.to(device)
-    return model, device
-
-def get_unimodal_clin(args):
-    model = Unimodal(24, [64], 1, act = nn.GELU(), loss_fn=LOSS_FNS[args.loss_fn], rms_norm = True, mod="clinical") 
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-
-    model = model.to(device)
-    return model, device
-
-# --------------------------------------------------------
-
 def main(args):
     seed = args.seed
     torch.manual_seed(seed)
@@ -207,7 +97,16 @@ def main(args):
         train_loader, valid_loader, test_loader = get_combined_loaders(args, dataset, train_inds, val_inds, test_inds)
 
     else:
-        train_loader, valid_loader, test_loader = get_loaders(args, *get_inds(args))
+        tv_set, test_set = get_datasets(args)
+        tv = np.arange(len(tv_set))
+
+        train_inds, val_inds = train_test_split(
+            tv,
+            test_size=1-args.train_split,
+            random_state=args.seed,
+        )
+
+        train_loader, valid_loader, test_loader = get_subset_loaders(args, tv_set, train_inds, val_inds, test_set)
 
     run_name = args.run_name if args.run_name is not None else " - ".join([f"{args.emb_dim}e{", sparse" if args.sparse else ""}", f"{args.label_col}", f"{args.model} - "])
 

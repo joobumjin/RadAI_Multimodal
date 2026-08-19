@@ -5,6 +5,7 @@ data/*build*
 .vscode/
 paper/
 ignore/
+__dep/
 
 #nonpublic data 
 Notebooks/data.ipynb

@@ -21,15 +21,13 @@ def compile_split(model, loader, device):
     return [np.concatenate(l) for l in [split_deaths, split_times, split_preds]]
 
 
-def calculate_c_indices_auc(model: torch.nn.Module, train_loader, val_loader, test_loader, device, surv_yr=2.0, compile = None):
+def calculate_c_indices_auc(model: torch.nn.Module, train_loader, val_loader, test_loader, device, surv_yr=2.0, compile_fn = compile_split):
     """
     Required Loader Batch Keys:
     - "survival_right_censor": Right censor on event date
     - "survival_days"
     - Whatever else the model needs
     """
-    compile_fn = compile if compile is not None else compile_split    
-
     train = compile_fn(model, train_loader, device)
     num_train = len(train[0])
 

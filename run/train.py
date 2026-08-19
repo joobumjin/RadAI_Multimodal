@@ -131,7 +131,6 @@ def run_setup(args, model_constructor, train_loader, valid_loader, test_loader, 
             "Loss": args.loss_fn,
             "Seed": args.seed,
             "Clinical": args.clinical,
-            "Clinical Imputed": args.clinical_imputed,
             "Path Lang": args.path_lang,
             "Rad Lang": args.rad_lang,
             "Path Img": args.path_img,
@@ -143,7 +142,6 @@ def run_setup(args, model_constructor, train_loader, valid_loader, test_loader, 
 
         mods = []
         if args.clinical: mods.append("Clinical")
-        if args.clinical_imputed: mods.append("ClinImp")
         if args.path_lang: mods.append("Path Lang")
         if args.rad_lang: mods.append("Rad Lang")
         if args.path_img: mods.append("Path Img")
