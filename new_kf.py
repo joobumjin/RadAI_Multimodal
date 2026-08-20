@@ -162,7 +162,7 @@ def km_preds(all_deaths, all_times, all_preds):
 
 
 def bootstrap_cind_auc(args, test_samples, ci_res, auc_res):
-    def cind(*samples):
+    def cind(*samples, axis=0):
         for sample in samples: 
             if len(sample) != 3: print(sample)
         samples = list(np.unstack(np.stack(samples, axis=0), axis=-1)) #[n, 3] -> per sample, death, times, preds
@@ -171,7 +171,7 @@ def bootstrap_cind_auc(args, test_samples, ci_res, auc_res):
 
         return c
     
-    def auc(*samples):
+    def auc(*samples, axis=0):
         samples = list(np.unstack(np.stack(samples, axis=0), axis=-1)) #[n, 3] -> per sample, death, times, preds
         samples[0] = samples[0].astype(bool)
         surv_test = np.zeros(len(samples), dtype=[('event', bool), ('surv_time', float)])
