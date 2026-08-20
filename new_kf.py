@@ -126,7 +126,9 @@ def all_compile(model, device, train_loader, valid_loader, test_loader):
                 test_preds.append(preds)
     
     all = [torch.cat(l) for l in [all_deaths, all_times, all_preds]]
-    test = torch.stack([torch.cat(l) for l in [test_deaths, test_times, test_preds]], dim=-1).unbind() #list of samples, each dim 3
+    test = torch.stack([torch.cat(l) for l in [test_deaths, test_times, test_preds]], dim=-1)
+    print(f"Test: {test.shape}")
+    test = test.unbind() #list of samples, each dim 3
     return all, test
 
 def km_preds(all_deaths, all_times, all_preds):
