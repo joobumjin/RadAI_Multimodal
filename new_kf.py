@@ -161,13 +161,13 @@ def km_preds(all_deaths, all_times, all_preds):
 
 def bootstrap_cind_auc(args, test_samples, ci_res, auc_res):
     def cind(*samples):
-        samples = torch.stack(samples, dim=0).unbind(dim=-1) #[n, 3] -> per sample, death, times, preds
+        samples = np.unstack(np.stack(samples, dim=0), dim=-1) #[n, 3] -> per sample, death, times, preds
         c = concordance_index_censored(*samples)[0]
 
         return c
     
     def auc(*samples):
-        samples = torch.stack(samples, dim=0).unbind(dim=-1) #[n, 3] -> per sample, death, times, preds
+        samples = np.unstack(np.stack(samples, dim=0), dim=-1) #[n, 3] -> per sample, death, times, preds
         surv_test = np.zeros(len(samples), dtype=[('event', bool), ('surv_time', float)])
         surv_test['event'] = test[0]
         surv_test['surv_time'] = test[1]
