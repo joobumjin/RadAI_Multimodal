@@ -230,6 +230,8 @@ def main(args):
     ci_res, auc_res = None, None
 
     for split, (train_inds, val_inds) in enumerate(splits):
+        print(f"\n{"--" * 5}")
+        print(f"Split {split}")
         if args.mix_data:
             train_loader, valid_loader, test_loader = get_combined_loaders(args, dataset, train_inds, val_inds, test_inds)
         else:
@@ -238,7 +240,7 @@ def main(args):
         run_name = f"Split {split}"
 
         #NOTE: THE MODEL IS TRAINED AS LOG HAZARD PREDICTING
-        run = run_setup(args, model_fns[args.modality], train_loader, valid_loader, test_loader, run_name = run_name, return_keys=['Test AUC', 'Test C-Index'], ret_model=(split==4))
+        run = run_setup(args, model_fns[args.modality], train_loader, valid_loader, test_loader, run_name = run_name, return_keys=['Test AUC', 'Test C-Index'], ret_model=True)
         model, device = run.pop("model")
 
         for key in run: metrics[key].append(run[key])
