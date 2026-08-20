@@ -181,8 +181,8 @@ def bootstrap_cind_auc(args, test_samples, ci_res, auc_res):
 
         return auc
     
-    ci_res = stats.bootstrap(test_samples, cind, vectorized=False, bootstrap_result=ci_res)
-    auc_res = stats.bootstrap(test_samples, auc, vectorized=False, bootstrap_result=auc_res)
+    ci_res = stats.bootstrap(test_samples, cind, vectorized=True, bootstrap_result=ci_res)
+    auc_res = stats.bootstrap(test_samples, auc, vectorized=True, bootstrap_result=auc_res)
 
     return ci_res, auc_res
 
