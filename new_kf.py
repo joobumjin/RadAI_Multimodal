@@ -110,7 +110,7 @@ def all_compile(model, device, train_loader, valid_loader, test_loader):
     # for loader in train_loader, valid_loader, test_loader:
     for loader, testing in zip([train_loader, test_loader], [False, True]):
         for batch in loader:
-            surviving = (batch["survival_right_censor"].squeeze(-1).bool()) #true if could have lived longer
+            surviving = (batch["survival_right_censor"].squeeze(-1)) #true if could have lived longer
             times = batch["survival_days"].squeeze(-1)
             all_deaths.append(~surviving)
             all_times.append(times)
@@ -162,12 +162,14 @@ def km_preds(all_deaths, all_times, all_preds):
 def bootstrap_cind_auc(args, test_samples, ci_res, auc_res):
     def cind(*samples):
         samples = np.unstack(np.stack(samples, axis=0), axis=-1) #[n, 3] -> per sample, death, times, preds
+        samples[0] = samples[0].bool()
         c = concordance_index_censored(*samples)[0]
 
         return c
     
     def auc(*samples):
         samples = np.unstack(np.stack(samples, axis=0), axis=-1) #[n, 3] -> per sample, death, times, preds
+        samples[0] = samples[0].bool()
         surv_test = np.zeros(len(samples), dtype=[('event', bool), ('surv_time', float)])
         surv_test['event'] = test[0]
         surv_test['surv_time'] = test[1]
