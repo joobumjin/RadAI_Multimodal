@@ -162,14 +162,14 @@ def km_preds(all_deaths, all_times, all_preds):
 def bootstrap_cind_auc(args, test_samples, ci_res, auc_res):
     def cind(*samples):
         samples = np.unstack(np.stack(samples, axis=0), axis=-1) #[n, 3] -> per sample, death, times, preds
-        samples[0] = samples[0].bool()
+        samples[0] = samples[0].astype(bool)
         c = concordance_index_censored(*samples)[0]
 
         return c
     
     def auc(*samples):
         samples = np.unstack(np.stack(samples, axis=0), axis=-1) #[n, 3] -> per sample, death, times, preds
-        samples[0] = samples[0].bool()
+        samples[0] = samples[0].astype(bool)
         surv_test = np.zeros(len(samples), dtype=[('event', bool), ('surv_time', float)])
         surv_test['event'] = test[0]
         surv_test['surv_time'] = test[1]
