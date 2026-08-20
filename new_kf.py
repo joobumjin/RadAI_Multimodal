@@ -8,7 +8,7 @@ import scipy.stats as stats
 from data import *
 from util import *
 from run import *
-from dense_fusion_train import get_dense_fusion_model, get_unimodal_clin, get_unimodal_path, get_unimodal_rad
+from final_models import *
 
 def get_args_parser():
     parser = argparse.ArgumentParser('Supervised Panc Training', add_help=False)
@@ -103,6 +103,83 @@ def get_inds(args):
 
 # --------------------------------------------------------
 
+def all_compile(model, device, train_loader, valid_loader, test_loader):
+    model.eval()
+    all_preds, all_deaths, all_times = [], [], []
+    test_preds, test_deaths, test_times = [], [], []
+    # for loader in train_loader, valid_loader, test_loader:
+    for loader, testing in zip([train_loader, test_loader], [False, True]):
+        for batch in loader:
+            surviving = (batch["survival_right_censor"].squeeze(-1).bool()) #true if could have lived longer
+            times = batch["survival_days"].squeeze(-1)
+            all_deaths.append(~surviving)
+            all_times.append(times)
+
+            for key in batch: batch[key] = batch[key].to(device)
+            with torch.inference_mode():
+                preds = model.predict(batch).detach().squeeze(-1).cpu() #predicted hazards
+                all_preds.append(preds)
+
+            if testing:
+                test_deaths.append(~surviving)
+                test_times.append(times)
+                test_preds.append(preds)
+    
+    all = [torch.cat(l) for l in [all_deaths, all_times, all_preds]]
+    test = torch.stack([torch.cat(l) for l in [test_deaths, test_times, test_preds]], dim=-1).unbind() #list of samples, each dim 3
+    return all, test
+
+def km_preds(all_deaths, all_times, all_preds):
+    from lifelines import KaplanMeierFitter
+    import matplotlib.pyplot as plt
+    import seaborn as sns
+    sns.set_theme()
+
+    pred_bins = torch.linspace(torch.min(all_preds), torch.max(all_preds), 3)
+    pred_binned = torch.bucketize(all_preds, pred_bins)
+
+    df = pd.DataFrame({"Death": all_deaths, "Time": all_times, "Pred Bins": pred_binned})
+
+    # Initialize the fitter
+    kmf = KaplanMeierFitter()
+    ax = plt.subplot(111)
+
+    for name, grouped_df in df.groupby("Pred Bins"):
+        kmf.fit(
+            grouped_df["Time"],
+            event_observed=grouped_df["Death"],
+            label=name,
+        )
+        kmf.plot_survival_function(ax=ax, ci_show=False)
+        
+    plt.title("Trimodal Model Survival Curve")
+    plt.xlabel("Days Since Diagnosis")
+    plt.ylabel("Survival Probability")
+    plt.savefig("./km_curve.png")
+    plt.show()
+
+
+def bootstrap_cind_auc(args, test_samples, ci_res, auc_res):
+    def cind(*samples):
+        samples = torch.stack(samples, dim=0).unbind(dim=-1) #[n, 3] -> per sample, death, times, preds
+        c = concordance_index_censored(*samples)[0]
+
+        return c
+    
+    def auc(*samples):
+        samples = torch.stack(samples, dim=0).unbind(dim=-1) #[n, 3] -> per sample, death, times, preds
+        surv_test = np.zeros(len(samples), dtype=[('event', bool), ('surv_time', float)])
+        surv_test['event'] = test[0]
+        surv_test['surv_time'] = test[1]
+        auc = cumulative_dynamic_auc(surv_test, surv_test, test[2], [args.survival_years * 365.0], tied_tol=1e-08)[0][0]
+
+        return auc
+    
+    ci_res = stats.bootstrap(test_samples, cind, vectorized=False, bootstrap_result=ci_res)
+    auc_res = stats.bootstrap(test_samples, auc, vectorized=False, bootstrap_result=auc_res)
+
+    return ci_res, auc_res
+
 
 def main(args):
     if args.modality == "uni_path": 
@@ -123,9 +200,6 @@ def main(args):
         else: mod_name = "Bimodal " + "+".join(mod_name)
 
     args.wb_proj = f"{mod_name} {args.model} {args.wb_proj} {args.folds}"
-    seed = args.seed
-    torch.manual_seed(seed)
-    np.random.seed(seed)
 
     kf = KFold(n_splits=args.folds, shuffle=True, random_state=args.seed)
 
@@ -153,6 +227,8 @@ def main(args):
 
     metrics = defaultdict(lambda: [])
 
+    ci_res, auc_res = None, None
+
     for split, (train_inds, val_inds) in enumerate(splits):
         if args.mix_data:
             train_loader, valid_loader, test_loader = get_combined_loaders(args, dataset, train_inds, val_inds, test_inds)
@@ -163,9 +239,14 @@ def main(args):
 
         #NOTE: THE MODEL IS TRAINED AS LOG HAZARD PREDICTING
         run = run_setup(args, model_fns[args.modality], train_loader, valid_loader, test_loader, run_name = run_name, return_keys=['Test AUC', 'Test C-Index'], ret_model=(split==4))
-        if split == 4:
-            model, device  = run.pop("model")
+        model, device = run.pop("model")
+
         for key in run: metrics[key].append(run[key])
+
+        all, test = all_compile(model, device, train_loader, valid_loader, test_loader)
+        ci_res, auc_res = bootstrap_cind_auc(args, test, ci_res, auc_res)
+        if split == 4:
+            km_preds(*all)
 
     for key in metrics: metrics = {key: np.vstack(arr) for key, arr in metrics.items()}
 
@@ -176,12 +257,9 @@ def main(args):
     # top_k = {key: torch.topk(arr, 5) for key, arr in avg_t.items()}
 
     print(mod_name)
-
+    print(f"\n{"--" * 5}")
+    print(f"5-Fold Avg + 95% CI")
     selected = -1
-    # print(f"Average Scores Across Splits: {avgs[-1]}")
-    # print(f"Standard Error Across Splits: {errs[-1]}")
-    # print(f"Top-k Average Inds: {top_k}")
-
     auc_ci = stats.t.interval(confidence=.95, df=4, loc=avgs['Test AUC'][selected], scale=errs['Test AUC'][selected])
     auc_ci = [float(n) for n in auc_ci]
     c_ci = stats.t.interval(confidence=.95, df=4, loc=avgs['Test C-Index'][selected], scale=errs['Test C-Index'][selected])
@@ -191,54 +269,10 @@ def main(args):
     print(f"C Ind: {avgs['Test C-Index'][selected]:.2f} ({c_ci[0]:.2f}, {c_ci[1]:.2f})")
 
 
-    # model.eval()
-
-    # all_preds, all_deaths, all_times = [], [], []
-    # # for loader in train_loader, valid_loader, test_loader:
-    # for loader in train_loader, test_loader:
-    #     for batch in loader:
-    #         surviving = (batch["survival_right_censor"].numpy().squeeze(-1).astype(bool)) #true if could have lived longer
-    #         times = batch["survival_days"].numpy().squeeze(-1)
-    #         all_deaths.append(~surviving)
-    #         all_times.append(times)
-
-    #         for key in batch: batch[key] = batch[key].to(device)
-    #         with torch.inference_mode():
-    #             preds = model.predict(batch).detach().squeeze(-1).cpu().numpy() #predicted hazards
-    #             all_preds.append(preds)
-    
-    # all_deaths, all_times, all_preds = [np.concatenate(l) for l in [all_deaths, all_times, all_preds]]
-
-    # pred_bins = np.linspace(np.min(all_preds), np.max(all_preds), 4)
-    # pred_binned = np.digitize(all_preds, pred_bins)
-
-    # df = pd.DataFrame({"Death": all_deaths, "Time": all_times, "Pred Bins": pred_binned})
-
-    # from lifelines import KaplanMeierFitter
-    # import matplotlib.pyplot as plt
-    # import seaborn as sns
-    # sns.set_theme()
-
-    # # Initialize the fitter
-    # kmf = KaplanMeierFitter()
-
-    # ax = plt.subplot(111)
-
-    # # Fit and plot each group separately onto the same axis (ax)
-    # #group by stratification and plot the time and event
-    # for name, grouped_df in df.groupby("Pred Bins"):
-    #     kmf.fit(
-    #         grouped_df["Time"],
-    #         event_observed=grouped_df["Death"],
-    #         label=name,
-    #     )
-    #     kmf.plot_survival_function(ax=ax, ci_show=False)
-        
-    # plt.title("Trimodal Model Survival Curve")
-    # plt.xlabel("Days Since Diagnosis")
-    # plt.ylabel("Survival Probability")
-    # plt.savefig("./km_curve.png")
-    # plt.show()
+    print(f"\n{"--" * 5}")
+    print(f"Bootstrapped Avg + 95% CI")
+    print(f"AUC: {np.mean(auc_res.bootstrap_distribution)} ({auc_res.confidence_interval.low:.2f}, {auc_res.confidence_interval.high:.2f})")
+    print(f"C Ind: {np.mean(ci_res.bootstrap_distribution)} ({ci_res.confidence_interval.low:.2f}, {ci_res.confidence_interval.high:.2f})")
        
 
 if __name__ == '__main__':
@@ -251,5 +285,9 @@ if __name__ == '__main__':
 
     import warnings
     warnings.filterwarnings("ignore", message="Ties in `time` detected")
+
+    seed = args.seed
+    torch.manual_seed(seed)
+    np.random.seed(seed)
 
     main(args)
