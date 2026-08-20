@@ -163,7 +163,8 @@ def km_preds(all_deaths, all_times, all_preds):
 
 def bootstrap_cind_auc(args, test_samples, ci_res, auc_res):
     def cind(*samples):
-        print(samples)
+        for sample in samples: 
+            if len(sample) != 3: print(sample)
         samples = list(np.unstack(np.stack(samples, axis=0), axis=-1)) #[n, 3] -> per sample, death, times, preds
         samples[0] = samples[0].astype(bool)
         c = concordance_index_censored(*samples)[0]
