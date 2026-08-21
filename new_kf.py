@@ -121,7 +121,7 @@ def all_compile(model, device, train_loader, valid_loader, test_loader):
                 all_preds.append(preds)
 
             if testing:
-                test_deaths.append(~surviving.bool())
+                test_deaths.append(~(surviving.bool()))
                 test_times.append(times)
                 test_preds.append(preds)
     
@@ -161,11 +161,13 @@ def km_preds(all_deaths, all_times, all_preds):
 
 def bootstrap_cind_auc(args, test_samples, ci_res, auc_res):
     def cind(death, times, preds):
+        death = death.astype(bool)
         c = concordance_index_censored(death, times, preds)[0]
 
         return c
     
     def auc(death, times, preds):
+        death = death.astype(bool)
         surv_test = np.zeros(len(death), dtype=[('event', bool), ('surv_time', float)])
         surv_test['event'] = death
         surv_test['surv_time'] = times
@@ -173,8 +175,8 @@ def bootstrap_cind_auc(args, test_samples, ci_res, auc_res):
 
         return auc
     
-    ci_res = stats.bootstrap(test_samples, cind, vectorized=False, paired=True, bootstrap_result=ci_res)
-    auc_res = stats.bootstrap(test_samples, auc, vectorized=False, paired=True, bootstrap_result=auc_res)
+    ci_res = stats.bootstrap(test_samples, cind, vectorized=False, paired=True, bootstrap_result=ci_res, n_resamples=100)
+    auc_res = stats.bootstrap(test_samples, auc, vectorized=False, paired=True, bootstrap_result=auc_res, n_resamples=100)
 
     return ci_res, auc_res
 
