@@ -121,13 +121,12 @@ def all_compile(model, device, train_loader, valid_loader, test_loader):
                 all_preds.append(preds)
 
             if testing:
-                test_deaths.append(~surviving)
+                test_deaths.append(~surviving.bool())
                 test_times.append(times)
                 test_preds.append(preds)
     
     all = [torch.cat(l) for l in [all_deaths, all_times, all_preds]]
-    test = torch.stack([torch.cat(l) for l in [test_deaths, test_times, test_preds]], dim=-1)
-    print(f"Test: {test.shape}")
+    test = [torch.cat(l) for l in [test_deaths, test_times, test_preds]]
     test = test.unbind() #list of samples, each dim 3
     return all, test
 
@@ -162,27 +161,21 @@ def km_preds(all_deaths, all_times, all_preds):
 
 
 def bootstrap_cind_auc(args, test_samples, ci_res, auc_res):
-    def cind(*samples, axis=0):
-        for sample in samples: 
-            if len(sample) != 3: print(sample)
-        samples = list(np.unstack(np.stack(samples, axis=0), axis=-1)) #[n, 3] -> per sample, death, times, preds
-        samples[0] = samples[0].astype(bool)
-        c = concordance_index_censored(*samples)[0]
+    def cind(death, times, preds):
+        c = concordance_index_censored(death, times, preds)[0]
 
         return c
     
-    def auc(*samples, axis=0):
-        samples = list(np.unstack(np.stack(samples, axis=0), axis=-1)) #[n, 3] -> per sample, death, times, preds
-        samples[0] = samples[0].astype(bool)
-        surv_test = np.zeros(len(samples), dtype=[('event', bool), ('surv_time', float)])
-        surv_test['event'] = test[0]
-        surv_test['surv_time'] = test[1]
-        auc = cumulative_dynamic_auc(surv_test, surv_test, test[2], [args.survival_years * 365.0], tied_tol=1e-08)[0][0]
+    def auc(death, times, preds):
+        surv_test = np.zeros(len(death), dtype=[('event', bool), ('surv_time', float)])
+        surv_test['event'] = death
+        surv_test['surv_time'] = times
+        auc = cumulative_dynamic_auc(surv_test, surv_test, preds, [args.survival_years * DAYS_IN_YR], tied_tol=1e-08)[0][0]
 
         return auc
     
-    ci_res = stats.bootstrap(test_samples, cind, vectorized=True, bootstrap_result=ci_res)
-    auc_res = stats.bootstrap(test_samples, auc, vectorized=True, bootstrap_result=auc_res)
+    ci_res = stats.bootstrap(test_samples, cind, vectorized=False, paired=True, bootstrap_result=ci_res)
+    auc_res = stats.bootstrap(test_samples, auc, vectorized=False, paired=True, bootstrap_result=auc_res)
 
     return ci_res, auc_res
 

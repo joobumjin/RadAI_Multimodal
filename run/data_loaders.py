@@ -8,6 +8,8 @@ from torch.utils.data import Dataset, Subset, DataLoader
 
 from data import *
 
+DAYS_IN_YR = 365.2425
+
 def get_datasets(args: Namespace,
                  keys: list[str] = ["slide_ids", "survival_days", "survival_right_censor"],
                  label_key = "label"):
@@ -30,7 +32,7 @@ def get_datasets(args: Namespace,
         "bin_modality_keys": bin_mods,
         "extra_modality_keys": extra_mods,
         "allow_sparse_samples": args.sparse,
-        "label_fn": lambda dates: (dates < (365.2425 * args.survival_years)).astype(np.float32), #predict survival hazard
+        "label_fn": lambda dates: (dates < (DAYS_IN_YR * args.survival_years)).astype(np.float32), #predict survival hazard
         "label_key": label_key
     }
     train_set = MemmapDatasetMultimodal(**dataset_args)
@@ -184,7 +186,7 @@ def get_loaders(args: Namespace,
         "bin_modality_keys": bin_mods,
         "extra_modality_keys": extra_mods,
         "allow_sparse_samples": args.sparse,
-        "label_fn": lambda dates: (dates < (365.0 * args.survival_years)).astype(np.float32), #predict survival hazard
+        "label_fn": lambda dates: (dates < (DAYS_IN_YR  * args.survival_years)).astype(np.float32), #predict survival hazard
         "label_key": label_key
     }
     loader_args = {
@@ -218,11 +220,11 @@ def get_loaders(args: Namespace,
              in zip(["Train", "Test"], 
                     [train_set, test_set], 
                     [train_loader, test_loader],
-                    [np.sum(index[args.label_col][train_inds] < (args.survival_years * 365.0)), np.sum(test_index[args.label_col][test_mask] < (args.survival_years * 365.0))],
-                    [np.sum(index[args.label_col][train_inds] >= (args.survival_years * 365.0)), np.sum(test_index[args.label_col][test_mask] >= (args.survival_years * 365.0))])
+                    [np.sum(index[args.label_col][train_inds] < (args.survival_years * DAYS_IN_YR)), np.sum(test_index[args.label_col][test_mask] < (args.survival_years * DAYS_IN_YR))],
+                    [np.sum(index[args.label_col][train_inds] >= (args.survival_years * DAYS_IN_YR)), np.sum(test_index[args.label_col][test_mask] >= (args.survival_years * DAYS_IN_YR))])
             ]
     if len(validation_inds):
-        valid_stats = ["Valid", len(val_set), len(val_loader), np.sum(index[args.label_col][validation_inds] < (args.survival_years * 365.0)), np.sum(index[args.label_col][validation_inds] >= (args.survival_years * 365.0))] 
+        valid_stats = ["Valid", len(val_set), len(val_loader), np.sum(index[args.label_col][validation_inds] < (args.survival_years * DAYS_IN_YR )), np.sum(index[args.label_col][validation_inds] >= (args.survival_years * DAYS_IN_YR))] 
         stats = [stats[0], valid_stats, stats[1]]
 
     headers = ["Split", "# Samples", "# Batches", f"# Living < {args.survival_years}yr", f"# Living >= {args.survival_years} yr"]
@@ -301,7 +303,7 @@ def get_key_loaders(args: Namespace,
                     [train_loader, test_loader])
             ]
     if len(validation_inds):
-        valid_stats = ["Valid", len(val_set), len(val_loader), np.sum(index[args.label_col][validation_inds] < (args.survival_years * 365.0)), np.sum(index[args.label_col][validation_inds] >= (args.survival_years * 365.0))] 
+        valid_stats = ["Valid", len(val_set), len(val_loader), np.sum(index[args.label_col][validation_inds] < (args.survival_years * DAYS_IN_YR)), np.sum(index[args.label_col][validation_inds] >= (args.survival_years * DAYS_IN_YR))] 
         stats = [stats[0], valid_stats, stats[1]]
 
     headers = ["Split", "# Samples", "# Batches"]
@@ -370,7 +372,7 @@ def get_input_loader(args: Namespace, bin_mods, extra_mods, train_inds, validati
                     [train_loader, test_loader])
             ]
     if len(validation_inds):
-        valid_stats = ["Valid", len(val_set), len(val_loader), np.sum(index[args.label_col][validation_inds] < (args.survival_years * 365.0)), np.sum(index[args.label_col][validation_inds] >= (args.survival_years * 365.0))] 
+        valid_stats = ["Valid", len(val_set), len(val_loader), np.sum(index[args.label_col][validation_inds] < (args.survival_years * DAYS_IN_YR)), np.sum(index[args.label_col][validation_inds] >= (args.survival_years * DAYS_IN_YR))] 
         stats = [stats[0], valid_stats, stats[1]]
 
     headers = ["Split", "# Samples", "# Batches"]
