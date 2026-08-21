@@ -127,7 +127,6 @@ def all_compile(model, device, train_loader, valid_loader, test_loader):
     
     all = [torch.cat(l) for l in [all_deaths, all_times, all_preds]]
     test = [torch.cat(l) for l in [test_deaths, test_times, test_preds]]
-    test = test.unbind() #list of samples, each dim 3
     return all, test
 
 def km_preds(all_deaths, all_times, all_preds):
