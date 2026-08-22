@@ -179,7 +179,7 @@ def bootstrap_cind_auc(args, test_samples, ci_res, auc_res):
     # auc_res = stats.bootstrap(test_samples, auc, vectorized=False, paired=True, bootstrap_result=auc_res, n_resamples=175, method='percentile')
     
     if ci_res is None:
-        ci_res, auc_res = Bootstrap(cind, n_resample=100), Bootstrap(auc, n_resample=100)
+        ci_res, auc_res = Bootstrap("C-Index", cind, n_resample=100), Bootstrap("AUC", auc, n_resample=100)
 
     ci_res.add(test_samples)
     auc_res.add(test_samples)
@@ -283,8 +283,10 @@ def main(args):
 
     print(f"{"--" * 5}")
     print(f"Bootstrapped Avg + 95% CI")
-    print(f"AUC: {np.mean(auc_res.bootstrap_distribution):.2f} ({auc_res.confidence_interval.low:.2f}, {auc_res.confidence_interval.high:.2f})")
-    print(f"C Ind: {np.mean(ci_res.bootstrap_distribution):.2f} ({ci_res.confidence_interval.low:.2f}, {ci_res.confidence_interval.high:.2f})")
+    # print(f"AUC: {np.mean(auc_res.bootstrap_distribution):.2f} ({auc_res.confidence_interval.low:.2f}, {auc_res.confidence_interval.high:.2f})")
+    # print(f"C Ind: {np.mean(ci_res.bootstrap_distribution):.2f} ({ci_res.confidence_interval.low:.2f}, {ci_res.confidence_interval.high:.2f})")
+    print(str(auc_res))
+    print(str(ci_res))
        
 
 if __name__ == '__main__':
