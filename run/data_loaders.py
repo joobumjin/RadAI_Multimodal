@@ -89,7 +89,7 @@ def get_combined_loaders(args,
         stats = [stats[0], valid_stats, stats[1]]
 
     headers = ["Split", "# Samples", "# Batches"]
-    print(tabulate(stats, headers=headers, tablefmt="grid"), "\n")
+    # print(tabulate(stats, headers=headers, tablefmt="grid"), "\n")
 
     return train_loader, val_loader, test_loader
 
@@ -138,7 +138,7 @@ def get_subset_loaders(args,
         stats = [stats[0], valid_stats, stats[1]]
 
     headers = ["Split", "# Samples", "# Batches"]
-    print(tabulate(stats, headers=headers, tablefmt="grid"), "\n")
+    # print(tabulate(stats, headers=headers, tablefmt="grid"), "\n")
 
     return train_loader, val_loader, test_loader
 

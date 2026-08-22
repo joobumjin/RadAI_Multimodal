@@ -107,7 +107,7 @@ def all_compile(model, device, train_loader, valid_loader, test_loader):
     model.eval()
     all_preds, all_deaths, all_times = [], [], []
     test_preds, test_deaths, test_times = [], [], []
-    # for loader in train_loader, valid_loader, test_loader:
+    # for loader, testing in zip([train_loader, valid_loader, test_loader], [False, False, True]):
     for loader, testing in zip([train_loader, test_loader], [False, True]):
         for batch in loader:
             surviving = (batch["survival_right_censor"].squeeze(-1)) #true if could have lived longer
@@ -172,11 +172,11 @@ def bootstrap_cind_auc(args, test_samples, ci_res, auc_res):
         surv_test['event'] = death
         surv_test['surv_time'] = times
         auc = cumulative_dynamic_auc(surv_test, surv_test, preds, [args.survival_years * DAYS_IN_YR], tied_tol=1e-08)[0][0]
-
+        print(auc)
         return auc
     
-    ci_res = stats.bootstrap(test_samples, cind, vectorized=False, paired=True, bootstrap_result=ci_res, n_resamples=100)
-    auc_res = stats.bootstrap(test_samples, auc, vectorized=False, paired=True, bootstrap_result=auc_res, n_resamples=100)
+    ci_res = stats.bootstrap(test_samples, cind, vectorized=False, paired=True, bootstrap_result=ci_res, n_resamples=175, method='percentile')
+    auc_res = stats.bootstrap(test_samples, auc, vectorized=False, paired=True, bootstrap_result=auc_res, n_resamples=175, method='percentile')
 
     return ci_res, auc_res
 
@@ -232,6 +232,7 @@ def main(args):
     for split, (train_inds, val_inds) in enumerate(splits):
         print(f"\n{"--" * 5}")
         print(f"Split {split}")
+        # print(f"Validation Inds: {val_inds}")
         if args.mix_data:
             train_loader, valid_loader, test_loader = get_combined_loaders(args, dataset, train_inds, val_inds, test_inds)
         else:
@@ -243,11 +244,14 @@ def main(args):
         run = run_setup(args, model_fns[args.modality], train_loader, valid_loader, test_loader, run_name = run_name, return_keys=['Test AUC', 'Test C-Index'], ret_model=True)
         model, device = run.pop("model")
 
-        for key in run: metrics[key].append(run[key])
+        for key in run: 
+            metrics[key].append(run[key])
+            print(f"{key}: {run[key][-5:]}")
 
         all, test = all_compile(model, device, train_loader, valid_loader, test_loader)
+        # if split != 3:
         ci_res, auc_res = bootstrap_cind_auc(args, test, ci_res, auc_res)
-        if split == 4:
+        if split == 4 and mod_name == "Trimodal":
             km_preds(*all)
 
     for key in metrics: metrics = {key: np.vstack(arr) for key, arr in metrics.items()}
@@ -258,8 +262,8 @@ def main(args):
     # avg_t = {key: torch.from_numpy(arr) for key, arr in avgs.items()}
     # top_k = {key: torch.topk(arr, 5) for key, arr in avg_t.items()}
 
-    print(mod_name)
-    print(f"\n{"--" * 5}")
+    print(f"\n{mod_name}")
+    print(f"{"--" * 5}")
     print(f"5-Fold Avg + 95% CI")
     selected = -1
     auc_ci = stats.t.interval(confidence=.95, df=4, loc=avgs['Test AUC'][selected], scale=errs['Test AUC'][selected])
@@ -271,10 +275,10 @@ def main(args):
     print(f"C Ind: {avgs['Test C-Index'][selected]:.2f} ({c_ci[0]:.2f}, {c_ci[1]:.2f})")
 
 
-    print(f"\n{"--" * 5}")
+    print(f"{"--" * 5}")
     print(f"Bootstrapped Avg + 95% CI")
-    print(f"AUC: {np.mean(auc_res.bootstrap_distribution)} ({auc_res.confidence_interval.low:.2f}, {auc_res.confidence_interval.high:.2f})")
-    print(f"C Ind: {np.mean(ci_res.bootstrap_distribution)} ({ci_res.confidence_interval.low:.2f}, {ci_res.confidence_interval.high:.2f})")
+    print(f"AUC: {np.mean(auc_res.bootstrap_distribution):.2f} ({auc_res.confidence_interval.low:.2f}, {auc_res.confidence_interval.high:.2f})")
+    print(f"C Ind: {np.mean(ci_res.bootstrap_distribution):.2f} ({ci_res.confidence_interval.low:.2f}, {ci_res.confidence_interval.high:.2f})")
        
 
 if __name__ == '__main__':
