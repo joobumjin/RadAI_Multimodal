@@ -165,7 +165,7 @@ def bootstrap_cind_auc(args, test_samples, ci_res, auc_res):
         c = concordance_index_censored(death, times, preds)[0]
 
         return c
-    
+
     def auc(death, times, preds):
         death = death.astype(bool)
         surv_test = np.zeros(len(death), dtype=[('event', bool), ('surv_time', float)])
@@ -175,8 +175,14 @@ def bootstrap_cind_auc(args, test_samples, ci_res, auc_res):
         print(auc)
         return auc
     
-    ci_res = stats.bootstrap(test_samples, cind, vectorized=False, paired=True, bootstrap_result=ci_res, n_resamples=175, method='percentile')
-    auc_res = stats.bootstrap(test_samples, auc, vectorized=False, paired=True, bootstrap_result=auc_res, n_resamples=175, method='percentile')
+    # ci_res = stats.bootstrap(test_samples, cind, vectorized=False, paired=True, bootstrap_result=ci_res, n_resamples=175, method='percentile')
+    # auc_res = stats.bootstrap(test_samples, auc, vectorized=False, paired=True, bootstrap_result=auc_res, n_resamples=175, method='percentile')
+    
+    if ci_res is None:
+        ci_res, auc_res = Bootstrap(cind, n_resample=100), Bootstrap(auc, n_resample=100)
+
+    ci_res.add(test_samples)
+    auc_res.add(test_samples)
 
     return ci_res, auc_res
 
