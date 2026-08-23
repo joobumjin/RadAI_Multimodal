@@ -105,29 +105,26 @@ def get_inds(args):
 
 def all_compile(model, device, train_loader, valid_loader, test_loader):
     model.eval()
-    all_preds, all_deaths, all_times = [], [], []
+    train_preds, train_deaths, train_times = [], [], []
     test_preds, test_deaths, test_times = [], [], []
     # for loader, testing in zip([train_loader, valid_loader, test_loader], [False, False, True]):
-    for loader, testing in zip([train_loader, test_loader], [False, True]):
+    for loader, (preds, deaths, times) in zip([train_loader, test_loader], [(train_preds, train_deaths, train_times), (test_preds, test_deaths, test_times)]):
         for batch in loader:
             surviving = (batch["survival_right_censor"].squeeze(-1)) #true if could have lived longer
             times = batch["survival_days"].squeeze(-1)
-            all_deaths.append(~surviving)
-            all_times.append(times)
+            deaths.append(~surviving)
+            times.append(times)
 
             for key in batch: batch[key] = batch[key].to(device)
             with torch.inference_mode():
                 preds = model.predict(batch).detach().squeeze(-1).cpu() #predicted hazards
-                all_preds.append(preds)
-
-            if testing:
-                test_deaths.append(~(surviving.bool()))
-                test_times.append(times)
-                test_preds.append(preds)
+                preds.append(preds)
     
-    all = [torch.cat(l) for l in [all_deaths, all_times, all_preds]]
+    train = [torch.cat(l) for l in [train_deaths, train_times, train_preds]]
     test = [torch.cat(l) for l in [test_deaths, test_times, test_preds]]
-    return all, test
+
+    all = [torch.cat(l) for l in [(train_deaths, test_deaths), (train_times, test_times), (train_preds, test_preds)]]
+    return all, train, test
 
 def km_preds(all_deaths, all_times, all_preds):
     from lifelines import KaplanMeierFitter
@@ -159,7 +156,11 @@ def km_preds(all_deaths, all_times, all_preds):
     plt.show()
 
 
-def bootstrap_cind_auc(args, test_samples, ci_res, auc_res):
+def bootstrap_cind_auc(args, train_samples, test_samples, ci_res, auc_res):
+    surv_train = np.zeros(len(train_samples[0]), dtype=[('event', bool), ('surv_time', float)])
+    surv_train['event'] = train_samples[0]
+    surv_train['surv_time'] = train_samples[1]
+
     def cind(death, times, preds):
         death = death.astype(bool)
         c = concordance_index_censored(death, times, preds)[0]
@@ -171,7 +172,7 @@ def bootstrap_cind_auc(args, test_samples, ci_res, auc_res):
         surv_test = np.zeros(len(death), dtype=[('event', bool), ('surv_time', float)])
         surv_test['event'] = death
         surv_test['surv_time'] = times
-        auc = cumulative_dynamic_auc(surv_test, surv_test, preds, [args.survival_years * DAYS_IN_YR], tied_tol=1e-08)[0][0]
+        auc = cumulative_dynamic_auc(surv_train, surv_test, preds, [args.survival_years * DAYS_IN_YR], tied_tol=1e-08)[0][0]
         return auc
     
     # ci_res = stats.bootstrap(test_samples, cind, vectorized=False, paired=True, bootstrap_result=ci_res, n_resamples=175, method='percentile')
@@ -253,9 +254,9 @@ def main(args):
             metrics[key].append(run[key])
             print(f"{key}: {run[key][-5:]}")
 
-        all, test = all_compile(model, device, train_loader, valid_loader, test_loader)
+        all, train, test = all_compile(model, device, train_loader, valid_loader, test_loader)
         # if split != 3:
-        ci_res, auc_res = bootstrap_cind_auc(args, test, ci_res, auc_res)
+        ci_res, auc_res = bootstrap_cind_auc(args, train, test, ci_res, auc_res)
         if split == 4 and mod_name == "Trimodal":
             km_preds(*all)
 

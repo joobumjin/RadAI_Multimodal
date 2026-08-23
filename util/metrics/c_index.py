@@ -2,6 +2,8 @@ import numpy as np
 import torch
 
 from sksurv.metrics import concordance_index_censored, cumulative_dynamic_auc
+# from torchsurv.metrics.cindex import ConcordanceIndex
+# from torchsurv.metrics.auc import Auc
 
 def compile_split(model, loader, device):
     model.eval()
