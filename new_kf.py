@@ -133,7 +133,7 @@ def km_preds(all_deaths, all_times, all_preds):
     import seaborn as sns
     sns.set_theme()
 
-    all_preds = torch.exp(all_preds)
+    # all_preds = torch.exp(all_preds)
     pred_bins = torch.linspace(torch.min(all_preds), torch.max(all_preds), 3)
     pred_binned = torch.bucketize(all_preds, pred_bins)
 
@@ -168,7 +168,6 @@ def bootstrap_cind_auc(args, train_samples, test_samples, ci_res, auc_res, n_res
 
     def cind(death, times, preds):
         death = death.bool()
-        # c = concordance_index_censored(death, times, preds)[0]
 
         cindex = ConcordanceIndex()
         c = cindex(preds, death, times)
@@ -176,10 +175,6 @@ def bootstrap_cind_auc(args, train_samples, test_samples, ci_res, auc_res, n_res
 
     def auc(death, times, preds):
         death = death.bool()
-        # surv_test = np.zeros(len(death), dtype=[('event', bool), ('surv_time', float)])
-        # surv_test['event'] = death
-        # surv_test['surv_time'] = times
-        # a = cumulative_dynamic_auc(surv_train, surv_test, preds, [args.survival_years * DAYS_IN_YR])[0][0]
 
         auc = Auc()
         a = auc(preds, death, times, new_time = torch.ones((1,)) * args.survival_years * DAYS_IN_YR)
@@ -189,7 +184,8 @@ def bootstrap_cind_auc(args, train_samples, test_samples, ci_res, auc_res, n_res
     # auc_res = stats.bootstrap(test_samples, auc, vectorized=False, paired=True, bootstrap_result=auc_res, n_resamples=175, method='percentile')
     
     if ci_res is None:
-        ci_res, auc_res = Bootstrap("C-Index", cind, n_resample=n_resample), Bootstrap("AUC", auc, n_resample=n_resample)
+        ci_res = Bootstrap("C-Index", cind, n_resample=n_resample)
+        auc_res = Bootstrap("AUC", auc, n_resample=n_resample)
 
     ci_res.add(*test_samples)
     auc_res.add(*test_samples)

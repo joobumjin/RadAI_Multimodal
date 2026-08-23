@@ -22,13 +22,17 @@ class Bootstrap:
             sample = resample(np.arange(batch, dtype=int), replace=True, n_samples=batch, stratify=data[0]).astype(int)
             sample_data = [d[sample] for d in data]
 
-            # try:
+            # failed = True
+            # while failed:
+            #     print("trying again")
+                # try:
             res = self.fn(*sample_data)
-            # except ValueError:
-            #     print("Error with statistic, resampling")
-            #     sample = resample(np.arange(batch, dtype=int), replace=True, n_samples=batch, stratify=data[0]).astype(int)
-            #     sample_data = [d[sample] for d in data]
-            #     res = self.fn(*sample_data)
+                # except Exception:
+                #     print("Error with statistic, resampling")
+                #     sample = resample(np.arange(batch, dtype=int), replace=True, n_samples=batch, stratify=data[0]).astype(int)
+                #     sample_data = [d[sample] for d in data]
+                # else:
+                #     failed = torch.isnan(res).any().item()
 
             self.entries.append(res)
 
