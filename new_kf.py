@@ -167,7 +167,7 @@ def bootstrap_cind_auc(args, train_samples, test_samples, ci_res, auc_res, n_res
     surv_train['surv_time'] = train_samples[1]
 
     def cind(death, times, preds):
-        death = death.astype(bool)
+        death = death.bool()
         # c = concordance_index_censored(death, times, preds)[0]
 
         cindex = ConcordanceIndex()
@@ -175,14 +175,14 @@ def bootstrap_cind_auc(args, train_samples, test_samples, ci_res, auc_res, n_res
         return c
 
     def auc(death, times, preds):
-        death = death.astype(bool)
+        death = death.bool()
         # surv_test = np.zeros(len(death), dtype=[('event', bool), ('surv_time', float)])
         # surv_test['event'] = death
         # surv_test['surv_time'] = times
         # a = cumulative_dynamic_auc(surv_train, surv_test, preds, [args.survival_years * DAYS_IN_YR])[0][0]
 
         auc = Auc()
-        a = auc(preds, death, times)
+        a = auc(preds, death, times, new_time = torch.ones((1,)) * args.survival_years * DAYS_IN_YR)
         return a
     
     # ci_res = stats.bootstrap(test_samples, cind, vectorized=False, paired=True, bootstrap_result=ci_res, n_resamples=175, method='percentile')

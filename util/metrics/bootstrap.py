@@ -1,3 +1,4 @@
+import torch
 import numpy as np
 from sklearn.utils import resample
 import scipy.stats as stats
@@ -19,15 +20,15 @@ class Bootstrap:
         #calculate statistic for each resample
         for _ in range(self.n_resample):
             sample = resample(np.arange(batch, dtype=int), replace=True, n_samples=batch, stratify=data[0]).astype(int)
-            sample_data = [d[sample].numpy() for d in data]
+            sample_data = [d[sample] for d in data]
 
-            try:
-                res = self.fn(*sample_data)
-            except ValueError:
-                print("Error with statistic, resampling")
-                sample = resample(np.arange(batch, dtype=int), replace=True, n_samples=batch, stratify=data[0]).astype(int)
-                sample_data = [d[sample].numpy() for d in data]
-                res = self.fn(*sample_data)
+            # try:
+            res = self.fn(*sample_data)
+            # except ValueError:
+            #     print("Error with statistic, resampling")
+            #     sample = resample(np.arange(batch, dtype=int), replace=True, n_samples=batch, stratify=data[0]).astype(int)
+            #     sample_data = [d[sample] for d in data]
+            #     res = self.fn(*sample_data)
 
             self.entries.append(res)
 
@@ -35,7 +36,7 @@ class Bootstrap:
         self.avg = np.mean(self.entries)
         self.err = stats.sem(self.entries)
 
-        self.ci = [float(n) for n in stats.t.interval(confidence=.95, df=len(self.entries)-1, loc=self.avg, scale=self.err)]
+        self.ci = [float(n.item()) for n in stats.t.interval(confidence=.95, df=len(self.entries)-1, loc=self.avg, scale=self.err)]
 
     def __str__(self):
         return f"{self.name}: {self.avg:.2f} ({self.ci[0]:.2f}, {self.ci[1]:.2f})"
