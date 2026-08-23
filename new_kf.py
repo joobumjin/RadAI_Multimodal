@@ -158,30 +158,38 @@ def km_preds(all_deaths, all_times, all_preds):
     plt.show()
 
 
-def bootstrap_cind_auc(args, train_samples, test_samples, ci_res, auc_res):
+def bootstrap_cind_auc(args, train_samples, test_samples, ci_res, auc_res, n_resample=100):
+    from torchsurv.metrics.cindex import ConcordanceIndex
+    from torchsurv.metrics.auc import Auc
+
     surv_train = np.zeros(len(train_samples[0]), dtype=[('event', bool), ('surv_time', float)])
     surv_train['event'] = train_samples[0]
     surv_train['surv_time'] = train_samples[1]
 
     def cind(death, times, preds):
         death = death.astype(bool)
-        c = concordance_index_censored(death, times, preds)[0]
+        # c = concordance_index_censored(death, times, preds)[0]
 
+        cindex = ConcordanceIndex()
+        c = cindex(preds, death, times)
         return c
 
     def auc(death, times, preds):
         death = death.astype(bool)
-        surv_test = np.zeros(len(death), dtype=[('event', bool), ('surv_time', float)])
-        surv_test['event'] = death
-        surv_test['surv_time'] = times
-        auc = cumulative_dynamic_auc(surv_train, surv_test, preds, [args.survival_years * DAYS_IN_YR])[0][0]
-        return auc
+        # surv_test = np.zeros(len(death), dtype=[('event', bool), ('surv_time', float)])
+        # surv_test['event'] = death
+        # surv_test['surv_time'] = times
+        # a = cumulative_dynamic_auc(surv_train, surv_test, preds, [args.survival_years * DAYS_IN_YR])[0][0]
+
+        auc = Auc()
+        a = auc(preds, death, times)
+        return a
     
     # ci_res = stats.bootstrap(test_samples, cind, vectorized=False, paired=True, bootstrap_result=ci_res, n_resamples=175, method='percentile')
     # auc_res = stats.bootstrap(test_samples, auc, vectorized=False, paired=True, bootstrap_result=auc_res, n_resamples=175, method='percentile')
     
     if ci_res is None:
-        ci_res, auc_res = Bootstrap("C-Index", cind, n_resample=100), Bootstrap("AUC", auc, n_resample=100)
+        ci_res, auc_res = Bootstrap("C-Index", cind, n_resample=n_resample), Bootstrap("AUC", auc, n_resample=n_resample)
 
     ci_res.add(*test_samples)
     auc_res.add(*test_samples)
