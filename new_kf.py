@@ -172,7 +172,6 @@ def bootstrap_cind_auc(args, test_samples, ci_res, auc_res):
         surv_test['event'] = death
         surv_test['surv_time'] = times
         auc = cumulative_dynamic_auc(surv_test, surv_test, preds, [args.survival_years * DAYS_IN_YR], tied_tol=1e-08)[0][0]
-        print(auc)
         return auc
     
     # ci_res = stats.bootstrap(test_samples, cind, vectorized=False, paired=True, bootstrap_result=ci_res, n_resamples=175, method='percentile')
@@ -181,8 +180,8 @@ def bootstrap_cind_auc(args, test_samples, ci_res, auc_res):
     if ci_res is None:
         ci_res, auc_res = Bootstrap("C-Index", cind, n_resample=100), Bootstrap("AUC", auc, n_resample=100)
 
-    ci_res.add(test_samples)
-    auc_res.add(test_samples)
+    ci_res.add(*test_samples)
+    auc_res.add(*test_samples)
 
     return ci_res, auc_res
 

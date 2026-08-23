@@ -17,9 +17,9 @@ class Bootstrap:
         batch = len(data[0])
 
         #calculate statistic for each resample
-        for _ in self.n_resample:
-            sample = resample(np.arange(batch), replace=True, n_samples=batch)
-            sample_data = [d[sample] for d in data]
+        for _ in range(self.n_resample):
+            sample = resample(np.arange(batch, dtype=int), replace=True, n_samples=batch).astype(int)
+            sample_data = [d[sample].numpy() for d in data]
             res = self.fn(*sample_data)
 
             self.entries.append(res)
