@@ -124,7 +124,7 @@ def all_compile(model, device, train_loader, valid_loader, test_loader):
     train = [torch.cat(l) for l in [train_deaths, train_times, train_preds]]
     test = [torch.cat(l) for l in [test_deaths, test_times, test_preds]]
 
-    all = [torch.cat(l) for l in zip([train, test])]
+    all = [torch.cat(l) for l in zip(train, test)]
     return all, train, test
 
 def km_preds(all_deaths, all_times, all_preds):
@@ -133,7 +133,7 @@ def km_preds(all_deaths, all_times, all_preds):
     import seaborn as sns
     sns.set_theme()
 
-    all_preds = np.exp(all_preds)
+    all_preds = torch.exp(all_preds)
     pred_bins = torch.linspace(torch.min(all_preds), torch.max(all_preds), 3)
     pred_binned = torch.bucketize(all_preds, pred_bins)
 
@@ -289,6 +289,7 @@ def main(args):
     # print(f"C Ind: {np.mean(ci_res.bootstrap_distribution):.2f} ({ci_res.confidence_interval.low:.2f}, {ci_res.confidence_interval.high:.2f})")
     print(str(auc_res))
     print(str(ci_res))
+    print(f"From {len(ci_res.entries)} bootstrap samples")
        
 
 if __name__ == '__main__':

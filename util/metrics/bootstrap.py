@@ -18,9 +18,16 @@ class Bootstrap:
 
         #calculate statistic for each resample
         for _ in range(self.n_resample):
-            sample = resample(np.arange(batch, dtype=int), replace=True, n_samples=batch).astype(int)
+            sample = resample(np.arange(batch, dtype=int), replace=True, n_samples=batch, stratify=data[0]).astype(int)
             sample_data = [d[sample].numpy() for d in data]
-            res = self.fn(*sample_data)
+
+            try:
+                res = self.fn(*sample_data)
+            except ValueError:
+                print("Error with statistic, resampling")
+                sample = resample(np.arange(batch, dtype=int), replace=True, n_samples=batch, stratify=data[0]).astype(int)
+                sample_data = [d[sample].numpy() for d in data]
+                res = self.fn(*sample_data)
 
             self.entries.append(res)
 
