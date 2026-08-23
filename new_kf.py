@@ -108,17 +108,18 @@ def all_compile(model, device, train_loader, valid_loader, test_loader):
     train_preds, train_deaths, train_times = [], [], []
     test_preds, test_deaths, test_times = [], [], []
     # for loader, testing in zip([train_loader, valid_loader, test_loader], [False, False, True]):
-    for loader, (preds, deaths, times) in zip([train_loader, test_loader], [(train_preds, train_deaths, train_times), (test_preds, test_deaths, test_times)]):
+    for loader, (split_preds, split_deaths, split_times) in zip([train_loader, test_loader], 
+                                                    [(train_preds, train_deaths, train_times), (test_preds, test_deaths, test_times)]):
         for batch in loader:
             surviving = (batch["survival_right_censor"].squeeze(-1)) #true if could have lived longer
             times = batch["survival_days"].squeeze(-1)
-            deaths.append(~surviving)
-            times.append(times)
+            split_deaths.append(~surviving)
+            split_times.append(times)
 
             for key in batch: batch[key] = batch[key].to(device)
             with torch.inference_mode():
                 preds = model.predict(batch).detach().squeeze(-1).cpu() #predicted hazards
-                preds.append(preds)
+                split_preds.append(preds)
     
     train = [torch.cat(l) for l in [train_deaths, train_times, train_preds]]
     test = [torch.cat(l) for l in [test_deaths, test_times, test_preds]]
@@ -172,7 +173,7 @@ def bootstrap_cind_auc(args, train_samples, test_samples, ci_res, auc_res):
         surv_test = np.zeros(len(death), dtype=[('event', bool), ('surv_time', float)])
         surv_test['event'] = death
         surv_test['surv_time'] = times
-        auc = cumulative_dynamic_auc(surv_train, surv_test, preds, [args.survival_years * DAYS_IN_YR], tied_tol=1e-08)[0][0]
+        auc = cumulative_dynamic_auc(surv_train, surv_test, preds, [args.survival_years * DAYS_IN_YR])[0][0]
         return auc
     
     # ci_res = stats.bootstrap(test_samples, cind, vectorized=False, paired=True, bootstrap_result=ci_res, n_resamples=175, method='percentile')
