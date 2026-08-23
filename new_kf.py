@@ -109,7 +109,7 @@ def all_compile(model, device, train_loader, valid_loader, test_loader):
     test_preds, test_deaths, test_times = [], [], []
     # for loader, testing in zip([train_loader, valid_loader, test_loader], [False, False, True]):
     for loader, (split_preds, split_deaths, split_times) in zip([train_loader, test_loader], 
-                                                    [(train_preds, train_deaths, train_times), (test_preds, test_deaths, test_times)]):
+                                                                [(train_preds, train_deaths, train_times), (test_preds, test_deaths, test_times)]):
         for batch in loader:
             surviving = (batch["survival_right_censor"].squeeze(-1)) #true if could have lived longer
             times = batch["survival_days"].squeeze(-1)
@@ -124,7 +124,7 @@ def all_compile(model, device, train_loader, valid_loader, test_loader):
     train = [torch.cat(l) for l in [train_deaths, train_times, train_preds]]
     test = [torch.cat(l) for l in [test_deaths, test_times, test_preds]]
 
-    all = [torch.cat(l) for l in [(train_deaths, test_deaths), (train_times, test_times), (train_preds, test_preds)]]
+    all = [torch.cat(l) for l in zip([train, test])]
     return all, train, test
 
 def km_preds(all_deaths, all_times, all_preds):
@@ -133,6 +133,7 @@ def km_preds(all_deaths, all_times, all_preds):
     import seaborn as sns
     sns.set_theme()
 
+    all_preds = np.exp(all_preds)
     pred_bins = torch.linspace(torch.min(all_preds), torch.max(all_preds), 3)
     pred_binned = torch.bucketize(all_preds, pred_bins)
 
@@ -253,7 +254,7 @@ def main(args):
 
         for key in run: 
             metrics[key].append(run[key])
-            print(f"{key}: {run[key][-5:]}")
+            # print(f"{key}: {run[key][-5:]}")
 
         all, train, test = all_compile(model, device, train_loader, valid_loader, test_loader)
         # if split != 3:
