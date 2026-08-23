@@ -162,10 +162,6 @@ def bootstrap_cind_auc(args, train_samples, test_samples, ci_res, auc_res, n_res
     from torchsurv.metrics.cindex import ConcordanceIndex
     from torchsurv.metrics.auc import Auc
 
-    surv_train = np.zeros(len(train_samples[0]), dtype=[('event', bool), ('surv_time', float)])
-    surv_train['event'] = train_samples[0]
-    surv_train['surv_time'] = train_samples[1]
-
     def cind(death, times, preds):
         death = death.bool()
 

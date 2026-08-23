@@ -1,26 +1,24 @@
-import numpy as np
 import torch
 
-from sksurv.metrics import concordance_index_censored, cumulative_dynamic_auc
-# from torchsurv.metrics.cindex import ConcordanceIndex
-# from torchsurv.metrics.auc import Auc
+from torchsurv.metrics.cindex import ConcordanceIndex
+from torchsurv.metrics.auc import Auc
 
 def compile_split(model, loader, device):
     model.eval()
 
     split_preds, split_deaths, split_times = [], [], []
     for batch in loader:
-        surviving = (batch["survival_right_censor"].numpy().squeeze(-1).astype(bool)) #true if could have lived longer
-        times = batch["survival_days"].numpy().squeeze(-1)
+        surviving = (batch["survival_right_censor"].squeeze(-1).astype(bool)) #true if could have lived longer
+        times = batch["survival_days"].squeeze(-1)
         split_deaths.append(~surviving)
         split_times.append(times)
 
         for key in batch: batch[key] = batch[key].to(device)
         with torch.inference_mode():
-            preds = model.predict(batch).detach().squeeze(-1).cpu().numpy() #predicted hazards
+            preds = model.predict(batch).detach().squeeze(-1).cpu() #predicted hazards
             split_preds.append(preds)
     
-    return [np.concatenate(l) for l in [split_deaths, split_times, split_preds]]
+    return [torch.cat(l) for l in [split_deaths, split_times, split_preds]]
 
 
 def calculate_c_indices_auc(model: torch.nn.Module, train_loader, val_loader, test_loader, device, surv_yr=2.0, compile_fn = compile_split):
@@ -30,52 +28,49 @@ def calculate_c_indices_auc(model: torch.nn.Module, train_loader, val_loader, te
     - "survival_days"
     - Whatever else the model needs
     """
-    train = compile_fn(model, train_loader, device)
-    num_train = len(train[0])
+    DAYS_IN_YR = 365.2425
+
+    train_deaths, train_times, train_preds = compile_fn(model, train_loader, device)
+    num_train = len(train_deaths)
 
     if val_loader is not None:        
-        val = compile_fn(model, val_loader, device)
-        num_val = len(val[0])
+        val_deaths, val_times, val_preds = compile_fn(model, val_loader, device)
+        num_val = len(val_deaths)
     else:
-        val = []
+        val_deaths, val_times, val_preds = [], [], []
         num_val = 0
 
-    test = compile_fn(model, test_loader, device)
-    num_test = len(test[0])
+    test_deaths, test_times, test_preds = compile_fn(model, test_loader, device)
+    num_test = len(test_deaths)
 
-    train_c, _, _, _, _ = concordance_index_censored(*train)
-    val_c = concordance_index_censored(*val)[0] if len(val) else None
-    test_c, _, _, _, _ = concordance_index_censored(*test)
+    train_cindex = ConcordanceIndex()
+    train_c = train_cindex(train_preds, train_deaths, train_times)
+    train_auc = Auc()
+    train_a = train_auc(train_preds, train_deaths, train_times, new_time = torch.ones((1,)) * surv_yr * DAYS_IN_YR)
 
-    surv_train  = np.zeros(num_train,   dtype=[('event', bool), ('surv_time', float)])
-    surv_val    = np.zeros(num_val,     dtype=[('event', bool), ('surv_time', float)])
-    surv_test   = np.zeros(num_test,    dtype=[('event', bool), ('surv_time', float)])
+    if num_val:
+        val_cindex = ConcordanceIndex()
+        val_c = val_cindex(val_preds, val_deaths, val_times)
+        val_auc = Auc()
+        val_a = val_auc(val_preds, val_deaths, val_times, new_time = torch.ones((1,)) * surv_yr * DAYS_IN_YR)
+    else:
+        val_c = None
+        val_a = None
 
-    surv_train['event'] = train[0]
-    surv_train['surv_time'] = train[1]
-
-    if num_val > 0:
-        surv_val['event'] = val[0]
-        surv_val['surv_time'] = val[1]
-
-    surv_tv = np.concatenate((surv_train, surv_val))
-
-    surv_test['event'] = test[0]
-    surv_test['surv_time'] = test[1]
-
-    train_auc, _    = cumulative_dynamic_auc(surv_tv,   surv_train, train[2],   [surv_yr * 365.0], tied_tol=1e-08)
-    val_auc         = cumulative_dynamic_auc(surv_tv,   surv_val,   val[2],     [surv_yr * 365.0], tied_tol=1e-08)[0] if len(val) else None
-    test_auc, _     = cumulative_dynamic_auc(surv_test, surv_test,  test[2],    [surv_yr * 365.0], tied_tol=1e-08)
+    test_cindex = ConcordanceIndex()
+    test_c = test_cindex(test_preds, test_deaths, test_times)
+    test_auc = Auc()
+    test_a = test_auc(test_preds, test_deaths, test_times, new_time = torch.ones((1,)) * surv_yr * DAYS_IN_YR)
 
     ret = {
         "Train C-Index": train_c, 
         "Test C-Index": test_c, 
-        "Train AUC": train_auc[0], 
-        "Test AUC": test_auc[0], 
+        "Train AUC": train_a, 
+        "Test AUC": test_a, 
     }
 
-    if len(val): 
+    if num_val: 
         ret["Validation C-Index"] = val_c
-        ret["Validation AUC"] = val_auc[0]
+        ret["Validation AUC"] = val_a
 
     return ret
