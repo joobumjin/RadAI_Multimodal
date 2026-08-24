@@ -44,3 +44,35 @@ class Bootstrap:
 
     def __str__(self):
         return f"{self.name}: {self.avg:.3f} ({self.ci[0]:.3f}, {self.ci[1]:.3f})"
+
+def bootstrap_cind_auc(args, test_samples, ci_res, auc_res, n_resample=100):
+    from torchsurv.metrics.cindex import ConcordanceIndex
+    from torchsurv.metrics.auc import Auc
+
+    DAYS_IN_YR = 365.2425
+
+    def cind(death, times, preds):
+        death = death.bool()
+
+        cindex = ConcordanceIndex()
+        c = cindex(preds, death, times)
+        return c
+
+    def auc(death, times, preds):
+        death = death.bool()
+
+        auc = Auc()
+        a = auc(preds, death, times, new_time = torch.ones((1,)) * args.survival_years * DAYS_IN_YR)
+        return a
+    
+    # ci_res = stats.bootstrap(test_samples, cind, vectorized=False, paired=True, bootstrap_result=ci_res, n_resamples=175, method='percentile')
+    # auc_res = stats.bootstrap(test_samples, auc, vectorized=False, paired=True, bootstrap_result=auc_res, n_resamples=175, method='percentile')
+    
+    if ci_res is None:
+        ci_res = Bootstrap("C-Index", cind, n_resample=n_resample)
+        auc_res = Bootstrap("AUC", auc, n_resample=n_resample)
+
+    ci_res.add(*test_samples)
+    auc_res.add(*test_samples)
+
+    return ci_res, auc_res

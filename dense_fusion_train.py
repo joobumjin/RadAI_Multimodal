@@ -1,8 +1,6 @@
-import os
 import argparse
 
 import numpy as np
-from torch import nn
 from torch.utils.data import ConcatDataset
 from sklearn.model_selection import train_test_split
 
@@ -118,8 +116,22 @@ def main(args):
     }
 
     #NOTE: THE MODEL IS TRAINED AS LOG HAZARD PREDICTING
-    run_setup(args, model_fns[args.modality], train_loader, valid_loader, test_loader, run_name = run_name)
-       
+    run = run_setup(args, model_fns[args.modality], train_loader, valid_loader, test_loader, run_name = run_name, return_keys=['Test AUC', 'Test C-Index'], ret_model=True)
+    model, device = run.pop("model")
+    print(run)
+
+    train = compile_split(model, train_loader, device)
+    val = compile_split(model, valid_loader, device)
+    test = compile_split(model, test_loader, device)
+
+    ci_res, auc_res = bootstrap_cind_auc(args, test, None, None)
+
+    print(f"{"--" * 5}")
+    print(f"Bootstrapped Avg + 95% CI")
+    print(str(auc_res))
+    print(str(ci_res))
+    print(f"From {len(ci_res.entries)} bootstrap samples")
+
 
 if __name__ == '__main__':
     parser  = get_args_parser()

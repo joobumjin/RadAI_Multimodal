@@ -71,124 +71,6 @@ def get_args_parser():
 
 # --------------------------------------------------------
 
-def get_inds(args):
-    keys = ["slide_ids", "survival_days", "survival_right_censor"]
-
-    index   = np.load(f"{args.data_path}/index_arrays_labeled.npz", allow_pickle=True)
-    inds    = np.arange(len(index['survival_days']))
-
-    label_mask = ~np.isnan(index[args.label_col])
-    exclusion_mask = ~index["excluded"]
-    mask = label_mask & exclusion_mask
-    if "indicator" in args.label_col: 
-        for key in keys:
-            mask = mask & (~np.isnan(index[key]))
-
-    modality_mask = np.zeros_like(mask).astype(bool) if args.sparse else np.ones_like(mask).astype(bool)
-    combine_op = lambda x, y: x | y if args.sparse else x & y
-
-    arg_dict = vars(args)
-    for mod in ["clinical", "clinical_imputed"]:
-        if arg_dict.get(mod, False): 
-            modality_mask = combine_op(modality_mask, index[f'{mod}_mask'])
-    for mod in ["path_lang", "rad_lang", "path_img"]:
-        if arg_dict.get(mod, False): 
-            modality_mask = combine_op(modality_mask, (index[f'{mod}_mask']))
-
-    mask = mask & modality_mask
-
-    valid_inds = inds[mask]
-
-    return valid_inds
-
-# --------------------------------------------------------
-
-def all_compile(model, device, train_loader, valid_loader, test_loader):
-    model.eval()
-    train_preds, train_deaths, train_times = [], [], []
-    test_preds, test_deaths, test_times = [], [], []
-    # for loader, testing in zip([train_loader, valid_loader, test_loader], [False, False, True]):
-    for loader, (split_preds, split_deaths, split_times) in zip([train_loader, test_loader], 
-                                                                [(train_preds, train_deaths, train_times), (test_preds, test_deaths, test_times)]):
-        for batch in loader:
-            surviving = (batch["survival_right_censor"].squeeze(-1)) #true if could have lived longer
-            times = batch["survival_days"].squeeze(-1)
-            split_deaths.append(~surviving)
-            split_times.append(times)
-
-            for key in batch: batch[key] = batch[key].to(device)
-            with torch.inference_mode():
-                preds = model.predict(batch).detach().squeeze(-1).cpu() #predicted hazards
-                split_preds.append(preds)
-    
-    train = [torch.cat(l) for l in [train_deaths, train_times, train_preds]]
-    test = [torch.cat(l) for l in [test_deaths, test_times, test_preds]]
-
-    all = [torch.cat(l) for l in zip(train, test)]
-    return all, train, test
-
-def km_preds(all_deaths, all_times, all_preds):
-    from lifelines import KaplanMeierFitter
-    import matplotlib.pyplot as plt
-    import seaborn as sns
-    sns.set_theme()
-
-    # all_preds = torch.exp(all_preds)
-    pred_bins = torch.linspace(torch.min(all_preds), torch.max(all_preds), 3)
-    pred_binned = torch.bucketize(all_preds, pred_bins)
-
-    df = pd.DataFrame({"Death": all_deaths, "Time": all_times, "Pred Bins": pred_binned})
-
-    # Initialize the fitter
-    kmf = KaplanMeierFitter()
-    ax = plt.subplot(111)
-
-    for name, grouped_df in df.groupby("Pred Bins"):
-        kmf.fit(
-            grouped_df["Time"],
-            event_observed=grouped_df["Death"],
-            label=name,
-        )
-        kmf.plot_survival_function(ax=ax, ci_show=False)
-        
-    plt.title("Trimodal Model Survival Curve")
-    plt.xlabel("Days Since Diagnosis")
-    plt.ylabel("Survival Probability")
-    plt.savefig("./km_curve.png")
-    # plt.show()
-
-
-def bootstrap_cind_auc(args, train_samples, test_samples, ci_res, auc_res, n_resample=100):
-    from torchsurv.metrics.cindex import ConcordanceIndex
-    from torchsurv.metrics.auc import Auc
-
-    def cind(death, times, preds):
-        death = death.bool()
-
-        cindex = ConcordanceIndex()
-        c = cindex(preds, death, times)
-        return c
-
-    def auc(death, times, preds):
-        death = death.bool()
-
-        auc = Auc()
-        a = auc(preds, death, times, new_time = torch.ones((1,)) * args.survival_years * DAYS_IN_YR)
-        return a
-    
-    # ci_res = stats.bootstrap(test_samples, cind, vectorized=False, paired=True, bootstrap_result=ci_res, n_resamples=175, method='percentile')
-    # auc_res = stats.bootstrap(test_samples, auc, vectorized=False, paired=True, bootstrap_result=auc_res, n_resamples=175, method='percentile')
-    
-    if ci_res is None:
-        ci_res = Bootstrap("C-Index", cind, n_resample=n_resample)
-        auc_res = Bootstrap("AUC", auc, n_resample=n_resample)
-
-    ci_res.add(*test_samples)
-    auc_res.add(*test_samples)
-
-    return ci_res, auc_res
-
-
 def main(args):
     if args.modality == "uni_path": 
         args.path_lang = True
@@ -256,9 +138,14 @@ def main(args):
             metrics[key].append(run[key])
             # print(f"{key}: {run[key][-5:]}")
 
-        all, train, test = all_compile(model, device, train_loader, valid_loader, test_loader)
+        train = compile_split(model, train_loader, device)
+        val = compile_split(model, valid_loader, device)
+        test = compile_split(model, test_loader, device)
+
+        all = [torch.cat(l) for l in zip(train, test)]
+
         # if split != 3:
-        ci_res, auc_res = bootstrap_cind_auc(args, train, test, ci_res, auc_res)
+        ci_res, auc_res = bootstrap_cind_auc(args, test, ci_res, auc_res)
         if split == 4 and mod_name == "Trimodal":
             km_preds(*all)
 
