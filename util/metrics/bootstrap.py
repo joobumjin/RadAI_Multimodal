@@ -1,10 +1,12 @@
+from typing import Optional
+
 import torch
 import numpy as np
 from sklearn.utils import resample
 import scipy.stats as stats
 
 class Bootstrap:
-    def __init__(self, name: str, fn: callable, n_resample=999):
+    def __init__(self, name: str, fn: callable, stratify: Optional[callable], n_resample=999):
         self.name = name
 
         self.entries = []
@@ -12,14 +14,16 @@ class Bootstrap:
         self.err = None
         self.ci = None
         self.fn = fn
+        self.stratify = stratify
         self.n_resample = n_resample
 
     def add(self, *data):
         batch = len(data[0])
+        strat = self.stratify(data) if self.stratify is not None else None
 
         #calculate statistic for each resample
         for _ in range(self.n_resample):
-            sample = resample(np.arange(batch, dtype=int), replace=True, n_samples=batch, stratify=data[1] < 2 * 365.2425).astype(int)
+            sample = resample(np.arange(batch, dtype=int), replace=True, n_samples=batch, stratify=strat).astype(int)
             sample_data = [d[sample] for d in data]
 
             # failed = True
@@ -50,6 +54,7 @@ def bootstrap_cind_auc(args, test_samples, ci_res, auc_res, n_resample=100):
     from torchsurv.metrics.auc import Auc
 
     DAYS_IN_YR = 365.2425
+    strat = lambda data: data[1] > args.survival_years * DAYS_IN_YR
 
     def cind(death, times, preds):
         death = death.bool()
@@ -69,8 +74,8 @@ def bootstrap_cind_auc(args, test_samples, ci_res, auc_res, n_resample=100):
     # auc_res = stats.bootstrap(test_samples, auc, vectorized=False, paired=True, bootstrap_result=auc_res, n_resamples=175, method='percentile')
     
     if ci_res is None:
-        ci_res = Bootstrap("C-Index", cind, n_resample=n_resample)
-        auc_res = Bootstrap("AUC", auc, n_resample=n_resample)
+        ci_res = Bootstrap("C-Index", cind, stratify=strat, n_resample=n_resample)
+        auc_res = Bootstrap("AUC", auc, stratify=strat, n_resample=n_resample)
 
     ci_res.add(*test_samples)
     auc_res.add(*test_samples)

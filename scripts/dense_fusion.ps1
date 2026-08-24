@@ -9,39 +9,6 @@ conda activate multi
 # python .\dense_fusion_train.py --model $models --sparse --path_lang --clinical --rad_lang --label_col $target --loss_fn $loss --debug
 # python .\emb_fusion_train.py --model $models --sparse --path_lang --clinical --rad_lang --label_col $target --loss_fn $loss --debug
 
-# # clinical only
-# foreach ($model in $models) {
-#     python .\dense_fusion_train.py --model $model --clinical  --label_col $target --loss_fn $loss
-# }
-
-# # langauge only
-# foreach ($model in $models) {
-#     python .\dense_fusion_train.py --model $model --path_lang --rad_lang --label_col $target --loss_fn $loss
-# }
-
-# # clin + path lang
-# foreach ($model in $models) {
-#     python .\dense_fusion_train.py --model $model --clinical --path_lang --label_col $target --loss_fn $loss
-# }
-
-# # clin + rad lang
-# foreach ($model in $models) {
-#     python .\dense_fusion_train.py --model $model --clinical --rad_lang --label_col $target --loss_fn $loss
-# }
-
-#all 3
-# foreach ($model in $models) {
-#     python .\dense_fusion_train.py --model $model --clinical --path_lang --rad_lang --label_col $target --loss_fn $loss
-# }
-
-# foreach ($model in $models) {
-#     python .\dense_fusion_train.py --model $model --emb_dim 32 --sparse --clinical --path_lang --rad_lang --label_col $target --loss_fn $loss
-#     $fusions = "naive_sum", "naive_avg", "weighted_sum"
-#     foreach ($fusion in $fusions) {   
-#         python .\emb_fusion_train.py --model $model --fusion $fusion --sparse --clinical --path_lang --rad_lang --label_col $target --loss_fn $loss
-#     }
-# }
-
 ""
 "Standard Dense"
 # python .\dense_fusion_train.py --debug --loss_fn "cox_nll" --model "gemma" --data_path "../gemma_multimodal_bins" --test_path "../gemma_multimodal_bins_rw" --enc_dim 768 --clinical --path_lang --rad_lang --label_col $target --loss_fn $loss
