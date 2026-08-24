@@ -155,7 +155,7 @@ def km_preds(all_deaths, all_times, all_preds):
     plt.xlabel("Days Since Diagnosis")
     plt.ylabel("Survival Probability")
     plt.savefig("./km_curve.png")
-    plt.show()
+    # plt.show()
 
 
 def bootstrap_cind_auc(args, train_samples, test_samples, ci_res, auc_res, n_resample=100):
