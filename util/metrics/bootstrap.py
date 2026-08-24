@@ -19,7 +19,7 @@ class Bootstrap:
 
         #calculate statistic for each resample
         for _ in range(self.n_resample):
-            sample = resample(np.arange(batch, dtype=int), replace=True, n_samples=batch, stratify=data[0]).astype(int)
+            sample = resample(np.arange(batch, dtype=int), replace=True, n_samples=batch, stratify=data[1] < 2 * 365.2425).astype(int)
             sample_data = [d[sample] for d in data]
 
             # failed = True
@@ -43,4 +43,4 @@ class Bootstrap:
         self.ci = [float(n.item()) for n in stats.t.interval(confidence=.95, df=len(self.entries)-1, loc=self.avg, scale=self.err)]
 
     def __str__(self):
-        return f"{self.name}: {self.avg:.2f} ({self.ci[0]:.2f}, {self.ci[1]:.2f})"
+        return f"{self.name}: {self.avg:.3f} ({self.ci[0]:.3f}, {self.ci[1]:.3f})"
