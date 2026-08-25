@@ -6,7 +6,7 @@ from sklearn.utils import resample
 import scipy.stats as stats
 
 class Bootstrap:
-    def __init__(self, name: str, fn: callable, stratify: Optional[callable], n_resample=999):
+    def __init__(self, name: str, fn: callable, stratify: Optional[callable], n_resample=999, random_state: Optional[int] = None):
         self.name = name
 
         self.entries = []
@@ -16,6 +16,7 @@ class Bootstrap:
         self.fn = fn
         self.stratify = stratify
         self.n_resample = n_resample
+        self.rand_state = random_state
 
     def add(self, *data):
         batch = len(data[0])
@@ -23,7 +24,7 @@ class Bootstrap:
 
         #calculate statistic for each resample
         for _ in range(self.n_resample):
-            sample = resample(np.arange(batch, dtype=int), replace=True, n_samples=batch, stratify=strat).astype(int)
+            sample = resample(np.arange(batch, dtype=int), replace=True, n_samples=batch, stratify=strat, random_state=self.rand_state).astype(int)
             sample_data = [d[sample] for d in data]
 
             # failed = True
@@ -74,8 +75,8 @@ def bootstrap_cind_auc(args, test_samples, ci_res, auc_res, n_resample=100):
     # auc_res = stats.bootstrap(test_samples, auc, vectorized=False, paired=True, bootstrap_result=auc_res, n_resamples=175, method='percentile')
     
     if ci_res is None:
-        ci_res = Bootstrap("C-Index", cind, stratify=strat, n_resample=n_resample)
-        auc_res = Bootstrap("AUC", auc, stratify=strat, n_resample=n_resample)
+        ci_res = Bootstrap("C-Index", cind, stratify=strat, n_resample=n_resample, random_state=args.seed)
+        auc_res = Bootstrap("AUC", auc, stratify=strat, n_resample=n_resample, random_state=args.seed)
 
     ci_res.add(*test_samples)
     auc_res.add(*test_samples)
