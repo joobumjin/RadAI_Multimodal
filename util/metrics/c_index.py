@@ -46,13 +46,14 @@ def calculate_c_indices_auc(model: torch.nn.Module, train_loader, val_loader, te
     train_cindex = ConcordanceIndex()
     train_c = train_cindex(train_preds, train_deaths, train_times)
     train_auc = Auc()
-    train_a = train_auc(train_preds, train_deaths, train_times, new_time = torch.ones((1,)) * surv_yr * DAYS_IN_YR)
+    new_time = torch.ones((1,),) * surv_yr * DAYS_IN_YR
+    train_a = train_auc(train_preds, train_deaths, train_times, new_time = new_time)
 
     if num_val:
         val_cindex = ConcordanceIndex()
         val_c = val_cindex(val_preds, val_deaths, val_times)
         val_auc = Auc()
-        val_a = val_auc(val_preds, val_deaths, val_times, new_time = torch.ones((1,)) * surv_yr * DAYS_IN_YR)
+        val_a = val_auc(val_preds, val_deaths, val_times, new_time = new_time)
     else:
         val_c = None
         val_a = None
@@ -60,7 +61,7 @@ def calculate_c_indices_auc(model: torch.nn.Module, train_loader, val_loader, te
     test_cindex = ConcordanceIndex()
     test_c = test_cindex(test_preds, test_deaths, test_times)
     test_auc = Auc()
-    test_a = test_auc(test_preds, test_deaths, test_times, new_time = torch.ones((1,)) * surv_yr * DAYS_IN_YR)
+    test_a = test_auc(test_preds, test_deaths, test_times, new_time = new_time)
 
     ret = {
         "Train C-Index": train_c, 

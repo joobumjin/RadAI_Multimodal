@@ -50,7 +50,7 @@ class Bootstrap:
     def __str__(self):
         return f"{self.name}: {self.avg:.3f} ({self.ci[0]:.3f}, {self.ci[1]:.3f})"
 
-def bootstrap_cind_auc(args, test_samples, ci_res, auc_res, n_resample=100):
+def bootstrap_cind_auc(args, test_samples, ci_res, auc_res, n_resample=200):
     from torchsurv.metrics.cindex import ConcordanceIndex
     from torchsurv.metrics.auc import Auc
 
@@ -68,11 +68,12 @@ def bootstrap_cind_auc(args, test_samples, ci_res, auc_res, n_resample=100):
         death = death.bool()
 
         auc = Auc()
-        a = auc(preds, death, times, new_time = torch.ones((1,)) * args.survival_years * DAYS_IN_YR)
+        new_time = torch.ones((1,), device=death.device) * args.survival_years * DAYS_IN_YR
+        a = auc(preds, death, times, new_time = new_time)
         return a
     
-    # ci_res = stats.bootstrap(test_samples, cind, vectorized=False, paired=True, bootstrap_result=ci_res, n_resamples=175, method='percentile')
-    # auc_res = stats.bootstrap(test_samples, auc, vectorized=False, paired=True, bootstrap_result=auc_res, n_resamples=175, method='percentile')
+    # ci_res = stats.bootstrap(test_samples, cind, vectorized=False, paired=True, bootstrap_result=ci_res, n_resamples=n_resample, method='percentile', rng=args.seed)
+    # auc_res = stats.bootstrap(test_samples, auc, vectorized=False, paired=True, bootstrap_result=auc_res, n_resamples=n_resample, method='percentile', rng=args.seed)
     
     if ci_res is None:
         ci_res = Bootstrap("C-Index", cind, stratify=strat, n_resample=n_resample, random_state=args.seed)

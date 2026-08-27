@@ -131,7 +131,9 @@ def main(args):
         run_name = f"Split {split}"
 
         #NOTE: THE MODEL IS TRAINED AS LOG HAZARD PREDICTING
-        run = run_setup(args, model_fns[args.modality], train_loader, valid_loader, test_loader, run_name = run_name, return_keys=['Test AUC', 'Test C-Index'], ret_model=True)
+        run = run_setup(args, model_fns[args.modality], train_loader, valid_loader, test_loader, 
+                        run_name = run_name, return_keys=['Test AUC', 'Test C-Index'], ret_model=True,
+                        early_stop = (190 if mod_name=="Trimodal" else None))
         model, device = run.pop("model")
 
         for key in run: 
@@ -146,7 +148,7 @@ def main(args):
 
         # if split != 3:
         ci_res, auc_res = bootstrap_cind_auc(args, test, ci_res, auc_res)
-        if split == 4 and mod_name == "Trimodal":
+        if split == 4 and mod_name == "Trimodal" and args.mix_data:
             km_preds(*all)
 
     for key in metrics: metrics = {key: np.vstack(arr) for key, arr in metrics.items()}
@@ -157,7 +159,7 @@ def main(args):
     # avg_t = {key: torch.from_numpy(arr) for key, arr in avgs.items()}
     # top_k = {key: torch.topk(arr, 5) for key, arr in avg_t.items()}
 
-    print(f"\n{mod_name}")
+    print(f"\n{mod_name}{', mix data' if args.mix_data else ', inst. sep.'} - {args.survival_years}yr")
     print(f"{"--" * 5}")
     print(f"5-Fold Avg + 95% CI")
     selected = -1
@@ -166,14 +168,15 @@ def main(args):
     c_ci = stats.t.interval(confidence=.95, df=4, loc=avgs['Test C-Index'][selected], scale=errs['Test C-Index'][selected])
     c_ci = [float(n) for n in c_ci]
 
-    print(f"AUC: {avgs['Test AUC'][selected]:.2f} ({auc_ci[0]:.2f}, {auc_ci[1]:.2f})")
-    print(f"C Ind: {avgs['Test C-Index'][selected]:.2f} ({c_ci[0]:.2f}, {c_ci[1]:.2f})")
+    print(f"AUC: {avgs['Test AUC'][selected]:.2f} ({auc_ci[0]:.3f}, {auc_ci[1]:.3f})")
+    print(f"C Ind: {avgs['Test C-Index'][selected]:.2f} ({c_ci[0]:.3f}, {c_ci[1]:.3f})")
 
 
     print(f"{"--" * 5}")
     print(f"Bootstrapped Avg + 95% CI")
-    # print(f"AUC: {np.mean(auc_res.bootstrap_distribution):.2f} ({auc_res.confidence_interval.low:.2f}, {auc_res.confidence_interval.high:.2f})")
-    # print(f"C Ind: {np.mean(ci_res.bootstrap_distribution):.2f} ({ci_res.confidence_interval.low:.2f}, {ci_res.confidence_interval.high:.2f})")
+    # print(f"AUC: {np.mean(auc_res.bootstrap_distribution):.2f} ({auc_res.confidence_interval.low}, {auc_res.confidence_interval.high})")
+    # print(f"C Ind: {np.mean(ci_res.bootstrap_distribution):.2f} ({ci_res.confidence_interval.low}, {ci_res.confidence_interval.high})")
+    # print(f"From {len(ci_res.bootstrap_distribution)} bootstrap samples")
     print(str(auc_res))
     print(str(ci_res))
     print(f"From {len(ci_res.entries)} bootstrap samples")

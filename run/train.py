@@ -113,7 +113,7 @@ def test(model: torch.nn.Module,
 
 # --------------------------------------------------------
 
-def run_setup(args, model_constructor, train_loader, valid_loader, test_loader, run_name = None, return_keys = [], ret_model=False):
+def run_setup(args, model_constructor, train_loader, valid_loader, test_loader, run_name = None, return_keys = [], ret_model=False, early_stop=None):
     seed = args.seed
     torch.manual_seed(seed)
     np.random.seed(seed)
@@ -190,7 +190,7 @@ def run_setup(args, model_constructor, train_loader, valid_loader, test_loader, 
                 print("Early stopping triggered!")
                 return ret_metrics
 
-        # if e == 190: break
+        if early_stop is not None and e == early_stop: break
 
     if run is not None:
         run.finish()
