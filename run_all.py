@@ -7,43 +7,43 @@ from new_kf import *
 
 def all_args():
     arg = defaultdict(lambda: {})
-    arg["mix"]["tri"] = '--disable_wandb --mix_data --data_path "../gemma_multimodal_bins" --test_path "../gemma_multimodal_bins_rw" --enc_dim 768 --clinical --path_lang --rad_lang'.split()
+    arg["mix"]["tri"] = '--disable_wandb --mix_data --clinical --path_lang --rad_lang'.split()
 
     #bimodal
-    arg["mix"]["pr"] = '--disable_wandb --mix_data --data_path "../gemma_multimodal_bins" --test_path "../gemma_multimodal_bins_rw" --enc_dim 768 --rad_lang --path_lang'.split()
-    arg["mix"]["pc"] = '--disable_wandb --mix_data --data_path "../gemma_multimodal_bins" --test_path "../gemma_multimodal_bins_rw" --enc_dim 768 --path_lang --clinical'.split()
-    arg["mix"]["rc"] = '--disable_wandb --mix_data --data_path "../gemma_multimodal_bins" --test_path "../gemma_multimodal_bins_rw" --enc_dim 768 --rad_lang --clinical'.split()
+    arg["mix"]["pr"] = '--disable_wandb --mix_data --rad_lang --path_lang'.split()
+    arg["mix"]["pc"] = '--disable_wandb --mix_data --path_lang --clinical'.split()
+    arg["mix"]["rc"] = '--disable_wandb --mix_data --rad_lang --clinical'.split()
 
     #unimodal
-    arg["mix"]["p"] = '--disable_wandb --mix_data --modality uni_path --data_path "../gemma_multimodal_bins" --test_path "../gemma_multimodal_bins_rw" --enc_dim 768'.split()
-    arg["mix"]["r"] = '--disable_wandb --mix_data --modality uni_rad --data_path "../gemma_multimodal_bins" --test_path "../gemma_multimodal_bins_rw" --enc_dim 768'.split()
-    arg["mix"]["c"] = '--disable_wandb --mix_data --modality uni_clin --data_path "../gemma_multimodal_bins" --test_path "../gemma_multimodal_bins_rw" --enc_dim 768'.split()
+    arg["mix"]["p"] = '--disable_wandb --mix_data --modality uni_path'.split()
+    arg["mix"]["r"] = '--disable_wandb --mix_data --modality uni_rad'.split()
+    arg["mix"]["c"] = '--disable_wandb --mix_data --modality uni_clin'.split()
 
     # trimodal
-    arg["mix3"]["tri"] = '--disable_wandb --mix_data --survival_years 3 --data_path "../gemma_multimodal_bins" --test_path "../gemma_multimodal_bins_rw" --enc_dim 768 --clinical --path_lang --rad_lang'.split()
+    arg["mix3"]["tri"] = '--disable_wandb --mix_data --survival_years 3 --clinical --path_lang --rad_lang'.split()
 
     # bimodal
-    arg["mix3"]["pr"] = '--disable_wandb --mix_data --survival_years 3 --data_path "../gemma_multimodal_bins" --test_path "../gemma_multimodal_bins_rw" --enc_dim 768 --rad_lang --path_lang'.split()
-    arg["mix3"]["pc"] = '--disable_wandb --mix_data --survival_years 3 --data_path "../gemma_multimodal_bins" --test_path "../gemma_multimodal_bins_rw" --enc_dim 768 --path_lang --clinical'.split()
-    arg["mix3"]["rc"] = '--disable_wandb --mix_data --survival_years 3 --data_path "../gemma_multimodal_bins" --test_path "../gemma_multimodal_bins_rw" --enc_dim 768 --rad_lang --clinical'.split()
+    arg["mix3"]["pr"] = '--disable_wandb --mix_data --survival_years 3 --rad_lang --path_lang'.split()
+    arg["mix3"]["pc"] = '--disable_wandb --mix_data --survival_years 3 --path_lang --clinical'.split()
+    arg["mix3"]["rc"] = '--disable_wandb --mix_data --survival_years 3 --rad_lang --clinical'.split()
 
     # unimodal
-    arg["mix3"]["p"] = '--disable_wandb --mix_data --survival_years 3 --modality uni_path --data_path "../gemma_multimodal_bins" --test_path "../gemma_multimodal_bins_rw" --enc_dim 768'.split()
-    arg["mix3"]["r"] = '--disable_wandb --mix_data --survival_years 3 --modality uni_rad --data_path "../gemma_multimodal_bins" --test_path "../gemma_multimodal_bins_rw" --enc_dim 768'.split()
-    arg["mix3"]["c"] = '--disable_wandb --mix_data --survival_years 3 --modality uni_clin --data_path "../gemma_multimodal_bins" --test_path "../gemma_multimodal_bins_rw" --enc_dim 768'.split()
+    arg["mix3"]["p"] = '--disable_wandb --mix_data --survival_years 3 --modality uni_path'.split()
+    arg["mix3"]["r"] = '--disable_wandb --mix_data --survival_years 3 --modality uni_rad'.split()
+    arg["mix3"]["c"] = '--disable_wandb --mix_data --survival_years 3 --modality uni_clin'.split()
 
     #trimodal
-    arg["iso"]["tri"] = '--disable_wandb --data_path "../gemma_multimodal_bins" --test_path "../gemma_multimodal_bins_rw" --enc_dim 768 --clinical --path_lang --rad_lang'.split()
+    arg["iso"]["tri"] = '--disable_wandb --clinical --path_lang --rad_lang'.split()
 
     #bimodal
-    arg["iso"]["pr"] = '--disable_wandb --data_path "../gemma_multimodal_bins" --test_path "../gemma_multimodal_bins_rw" --enc_dim 768 --rad_lang --path_lang'.split()
-    arg["iso"]["pc"] = '--disable_wandb --data_path "../gemma_multimodal_bins" --test_path "../gemma_multimodal_bins_rw" --enc_dim 768 --path_lang --clinical'.split()
-    arg["iso"]["rc"] = '--disable_wandb --data_path "../gemma_multimodal_bins" --test_path "../gemma_multimodal_bins_rw" --enc_dim 768 --rad_lang --clinical'.split()
+    arg["iso"]["pr"] = '--disable_wandb --rad_lang --path_lang'.split()
+    arg["iso"]["pc"] = '--disable_wandb --path_lang --clinical'.split()
+    arg["iso"]["rc"] = '--disable_wandb --rad_lang --clinical'.split()
 
     #unimodal
-    arg["iso"]["p"] = '--disable_wandb --modality uni_path --loss_fn "cox_nll" --batch_size 128 --data_path "../gemma_multimodal_bins" --test_path "../gemma_multimodal_bins_rw" --enc_dim 768'.split()
-    arg["iso"]["r"] = '--disable_wandb --modality uni_rad --loss_fn "cox_nll" --batch_size 128 --data_path "../gemma_multimodal_bins" --test_path "../gemma_multimodal_bins_rw" --enc_dim 768'.split()
-    arg["iso"]["c"] = '--disable_wandb --modality uni_clin --loss_fn "cox_nll" --batch_size 128 --data_path "../gemma_multimodal_bins" --test_path "../gemma_multimodal_bins_rw" --enc_dim 768'.split()
+    arg["iso"]["p"] = '--disable_wandb --modality uni_path '.split()
+    arg["iso"]["r"] = '--disable_wandb --modality uni_rad'.split()
+    arg["iso"]["c"] = '--disable_wandb --modality uni_clin '.split()
 
     return arg
 
