@@ -15,9 +15,9 @@ def get_args_parser():
 
     parser.add_argument('--seed',               type=int,   default=0)
       
-    parser.add_argument('--batch_size',         type=int,   default=16)
-    parser.add_argument('--loss_fn',            type=str,   default="bce", choices=list(LOSS_FNS.keys()))
-    parser.add_argument('--model',              type=str,   default="conch", choices=['conch', 'biomedclip', 'gemma', 'qwen'])
+    parser.add_argument('--batch_size',         type=int,   default=128)
+    parser.add_argument('--loss_fn',            type=str,   default="cox_nll", choices=list(LOSS_FNS.keys()))
+    parser.add_argument('--model',              type=str,   default="gemma", choices=['gemma', 'qwen'])
     # parser.add_argument('--data_path',          type=str,   default="../{model}_path_rad_text_embs")
     parser.add_argument('--data_path',          type=str,   default="../updated_multimodal_bins")
     parser.add_argument('--test_path',          type=str,   default="../multimodal_bins_rw")
@@ -51,11 +51,11 @@ def get_args_parser():
     parser.add_argument('--censor_col',         type=str,   default="right_censor")
 
     # Optimizer parameters
-    parser.add_argument('--lr',                 type=float, default=1e-4,   metavar='LR',
+    parser.add_argument('--lr',                 type=float, default=1e-3,   metavar='LR',
                         help='learning rate (absolute lr)')
     parser.add_argument('--min_lr',             type=float, default=1e-7,   metavar='LR',
                         help='lower lr bound for cyclic schedulers that hit 0')
-    parser.add_argument('--warmup_epochs',      type=int,   default=50,     metavar='N',
+    parser.add_argument('--warmup_epochs',      type=int,   default=25,     metavar='N',
                         help='epochs to warmup LR')
     parser.add_argument('--warmup_start',       type=float, default=1e-2,   metavar='N',
                         help='epochs to warmup LR')
