@@ -72,6 +72,9 @@ def get_args_parser():
 # --------------------------------------------------------
 
 def main(args):
+    import warnings
+    warnings.filterwarnings("ignore", message="Ties in `time` detected")
+
     seed = args.seed
     torch.manual_seed(seed)
     np.random.seed(seed)
@@ -197,8 +200,5 @@ if __name__ == '__main__':
     if args.debug:
         args.epochs = 5
         args.disable_wandb = True
-
-    import warnings
-    warnings.filterwarnings("ignore", message="Ties in `time` detected")
 
     main(args)
