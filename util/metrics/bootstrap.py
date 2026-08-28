@@ -21,10 +21,11 @@ class Bootstrap:
     def add(self, *data):
         batch = len(data[0])
         strat = self.stratify(data) if self.stratify is not None else None
+        seeds = np.random.SeedSequence(self.rand_state).generate_state(self.n_resample)
 
         #calculate statistic for each resample
-        for _ in range(self.n_resample):
-            sample = resample(np.arange(batch, dtype=int), replace=True, n_samples=batch, stratify=strat, random_state=self.rand_state).astype(int)
+        for seed in seeds:
+            sample = resample(np.arange(batch, dtype=int), replace=True, n_samples=batch, stratify=strat, random_state=seed).astype(int)
             sample_data = [d[sample] for d in data]
 
             # failed = True
@@ -50,7 +51,7 @@ class Bootstrap:
     def __str__(self):
         return f"{self.name}: {self.avg:.3f} ({self.ci[0]:.3f}, {self.ci[1]:.3f})"
 
-def bootstrap_cind_auc(args, test_samples, ci_res, auc_res, n_resample=200):
+def bootstrap_cind_auc(args, test_samples, ci_res, auc_res, n_resample=100):
     from torchsurv.metrics.cindex import ConcordanceIndex
     from torchsurv.metrics.auc import Auc
 
@@ -68,12 +69,11 @@ def bootstrap_cind_auc(args, test_samples, ci_res, auc_res, n_resample=200):
         death = death.bool()
 
         auc = Auc()
-        new_time = torch.ones((1,), device=death.device) * args.survival_years * DAYS_IN_YR
-        a = auc(preds, death, times, new_time = new_time)
+        a = auc(preds, death, times, new_time = torch.ones((1,)) * args.survival_years * DAYS_IN_YR)
         return a
     
-    # ci_res = stats.bootstrap(test_samples, cind, vectorized=False, paired=True, bootstrap_result=ci_res, n_resamples=n_resample, method='percentile', rng=args.seed)
-    # auc_res = stats.bootstrap(test_samples, auc, vectorized=False, paired=True, bootstrap_result=auc_res, n_resamples=n_resample, method='percentile', rng=args.seed)
+    # ci_res = stats.bootstrap(test_samples, cind, vectorized=False, paired=True, bootstrap_result=ci_res, n_resamples=175, method='percentile')
+    # auc_res = stats.bootstrap(test_samples, auc, vectorized=False, paired=True, bootstrap_result=auc_res, n_resamples=175, method='percentile')
     
     if ci_res is None:
         ci_res = Bootstrap("C-Index", cind, stratify=strat, n_resample=n_resample, random_state=args.seed)
