@@ -1,6 +1,5 @@
 from argparse import Namespace
 from functools import reduce
-from typing import Optional
 
 from tabulate import tabulate
 import numpy as np

@@ -72,6 +72,10 @@ def get_args_parser():
 # --------------------------------------------------------
 
 def main(args):
+    seed = args.seed
+    torch.manual_seed(seed)
+    np.random.seed(seed)
+    
     if args.modality == "uni_path": 
         args.path_lang = True
         mod_name = "Unimodal Path"
@@ -168,8 +172,10 @@ def main(args):
     c_ci = stats.t.interval(confidence=.95, df=4, loc=avgs['Test C-Index'][selected], scale=errs['Test C-Index'][selected])
     c_ci = [float(n) for n in c_ci]
 
-    print(f"AUC: {avgs['Test AUC'][selected]:.2f} ({auc_ci[0]:.3f}, {auc_ci[1]:.3f})")
-    print(f"C Ind: {avgs['Test C-Index'][selected]:.2f} ({c_ci[0]:.3f}, {c_ci[1]:.3f})")
+    auc5fold = f"{avgs['Test AUC'][selected]:.2f} ({auc_ci[0]:.3f}, {auc_ci[1]:.3f})"
+    ci5fold = f"{avgs['Test C-Index'][selected]:.2f} ({c_ci[0]:.3f}, {c_ci[1]:.3f})"
+    print(f"AUC: {auc5fold}")
+    print(f"C Ind: {ci5fold}")
 
 
     print(f"{"--" * 5}")
@@ -180,6 +186,8 @@ def main(args):
     print(str(auc_res))
     print(str(ci_res))
     print(f"From {len(ci_res.entries)} bootstrap samples")
+
+    return mod_name, [auc5fold, ci5fold], [str(auc_res).split(":")[1], str(ci_res).split(":")[1]]
        
 
 if __name__ == '__main__':
@@ -192,9 +200,5 @@ if __name__ == '__main__':
 
     import warnings
     warnings.filterwarnings("ignore", message="Ties in `time` detected")
-
-    seed = args.seed
-    torch.manual_seed(seed)
-    np.random.seed(seed)
 
     main(args)
