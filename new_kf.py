@@ -136,8 +136,8 @@ def main(args):
 
         #NOTE: THE MODEL IS TRAINED AS LOG HAZARD PREDICTING
         run = run_setup(args, model_fns[args.modality], train_loader, valid_loader, test_loader, 
-                        run_name = run_name, return_keys=['Test AUC', 'Test C-Index'], ret_model=True,
-                        early_stop = (190 if mod_name=="Trimodal" else None))
+                        run_name = run_name, return_keys=['Test AUC', 'Test C-Index'], ret_model=True, early_stop = None)
+                        # early_stop = (190 if mod_name=="Trimodal" else None))
         model, device = run.pop("model")
 
         for key in run: 
