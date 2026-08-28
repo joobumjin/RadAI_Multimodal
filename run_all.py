@@ -125,13 +125,23 @@ def run_all():
 
         tables[setup] = [summ5, summB]
 
-    for setup, t in tables.items():
-        print(setup)
-        print()
-        print("5Fold CV")
-        print(t[0])
-        print("Bootstrap")
-        print(t[1])
+    with open('./out.md', 'a', encoding="utf-8") as f:
+        for setup, t in tables.items():
+            print(setup)
+            print()
+            print("5Fold CV")
+            print(t[0].to_markdown())
+            print("Bootstrap")
+            print(t[1].to_markdown())
+
+            f.write("\n")
+            f.write(f"# {setup}")
+            f.write("\n")
+            f.write(f"## 5Fold CV")
+            f.write(t[0].to_markdown())
+            f.write("## Bootstrap")
+            f.write(t[1].to_markdown())
+
 
 
 if __name__ == '__main__':
