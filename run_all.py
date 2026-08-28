@@ -66,44 +66,44 @@ def get_args_parser():
 
 def all_args():
     arg = defaultdict(lambda: {})
-    arg["mix"]["tri"] = '--disable_wandb --mix_data --survival_years 2 --loss_fn "cox_nll" --batch_size 128 --lr 1e-3 --warmup_epochs 25 --model gemma --data_path "../gemma_multimodal_bins" --test_path "../gemma_multimodal_bins_rw" --enc_dim 768 --clinical --path_lang --rad_lang --label_col $target'.split(" ")
+    arg["mix"]["tri"] = '--disable_wandb --mix_data --survival_years 2 --loss_fn "cox_nll" --batch_size 128 --lr 1e-3 --warmup_epochs 25 --model gemma --data_path "../gemma_multimodal_bins" --test_path "../gemma_multimodal_bins_rw" --enc_dim 768 --clinical --path_lang --rad_lang'.split('')
 
     #bimodal
-    arg["mix"]["pr"] = '--disable_wandb --mix_data --loss_fn "cox_nll" --batch_size 128 --lr 1e-3 --warmup_epochs 25 --model gemma --data_path "../gemma_multimodal_bins" --test_path "../gemma_multimodal_bins_rw" --enc_dim 768 --rad_lang --path_lang --label_col $target'.split(" ")
-    arg["mix"]["pc"] = '--disable_wandb --mix_data --loss_fn "cox_nll" --batch_size 128 --lr 1e-3 --warmup_epochs 25 --model gemma --data_path "../gemma_multimodal_bins" --test_path "../gemma_multimodal_bins_rw" --enc_dim 768 --path_lang --clinical --label_col $target'.split(" ")
-    arg["mix"]["rc"] = '--disable_wandb --mix_data --loss_fn "cox_nll" --batch_size 128 --lr 1e-3 --warmup_epochs 25 --model gemma --data_path "../gemma_multimodal_bins" --test_path "../gemma_multimodal_bins_rw" --enc_dim 768 --rad_lang --clinical --label_col $target'.split(" ")
+    arg["mix"]["pr"] = '--disable_wandb --mix_data --loss_fn "cox_nll" --batch_size 128 --lr 1e-3 --warmup_epochs 25 --model gemma --data_path "../gemma_multimodal_bins" --test_path "../gemma_multimodal_bins_rw" --enc_dim 768 --rad_lang --path_lang'.split('')
+    arg["mix"]["pc"] = '--disable_wandb --mix_data --loss_fn "cox_nll" --batch_size 128 --lr 1e-3 --warmup_epochs 25 --model gemma --data_path "../gemma_multimodal_bins" --test_path "../gemma_multimodal_bins_rw" --enc_dim 768 --path_lang --clinical'.split('')
+    arg["mix"]["rc"] = '--disable_wandb --mix_data --loss_fn "cox_nll" --batch_size 128 --lr 1e-3 --warmup_epochs 25 --model gemma --data_path "../gemma_multimodal_bins" --test_path "../gemma_multimodal_bins_rw" --enc_dim 768 --rad_lang --clinical'.split('')
 
     #unimodal
-    arg["mix"]["p"] = '--disable_wandb --mix_data --modality uni_path --loss_fn "cox_nll" --batch_size 128 --lr 1e-3 --warmup_epochs 25 --model gemma --data_path "../gemma_multimodal_bins" --test_path "../gemma_multimodal_bins_rw" --enc_dim 768 --label_col $target'.split(" ")
-    arg["mix"]["r"] = '--disable_wandb --mix_data --modality uni_rad --loss_fn "cox_nll" --batch_size 128 --lr 1e-3 --warmup_epochs 25 --model gemma --data_path "../gemma_multimodal_bins" --test_path "../gemma_multimodal_bins_rw" --enc_dim 768 --label_col $target'.split(" ")
-    arg["mix"]["c"] = '--disable_wandb --mix_data --modality uni_clin --loss_fn "cox_nll" --batch_size 128 --lr 1e-3 --warmup_epochs 25 --model gemma --data_path "../gemma_multimodal_bins" --test_path "../gemma_multimodal_bins_rw" --enc_dim 768 --label_col $target'.split(" ")
+    arg["mix"]["p"] = '--disable_wandb --mix_data --modality uni_path --loss_fn "cox_nll" --batch_size 128 --lr 1e-3 --warmup_epochs 25 --model gemma --data_path "../gemma_multimodal_bins" --test_path "../gemma_multimodal_bins_rw" --enc_dim 768'.split('')
+    arg["mix"]["r"] = '--disable_wandb --mix_data --modality uni_rad --loss_fn "cox_nll" --batch_size 128 --lr 1e-3 --warmup_epochs 25 --model gemma --data_path "../gemma_multimodal_bins" --test_path "../gemma_multimodal_bins_rw" --enc_dim 768'.split('')
+    arg["mix"]["c"] = '--disable_wandb --mix_data --modality uni_clin --loss_fn "cox_nll" --batch_size 128 --lr 1e-3 --warmup_epochs 25 --model gemma --data_path "../gemma_multimodal_bins" --test_path "../gemma_multimodal_bins_rw" --enc_dim 768'.split('')
 
 
     # trimodal
-    arg["mix3"]["tri"] = '--disable_wandb --mix_data --survival_years 3 --loss_fn "cox_nll" --batch_size 128 --lr 1e-3 --warmup_epochs 25 --model gemma --data_path "../gemma_multimodal_bins" --test_path "../gemma_multimodal_bins_rw" --enc_dim 768 --clinical --path_lang --rad_lang --label_col $target'.split(" ")
+    arg["mix3"]["tri"] = '--disable_wandb --mix_data --survival_years 3 --loss_fn "cox_nll" --batch_size 128 --lr 1e-3 --warmup_epochs 25 --model gemma --data_path "../gemma_multimodal_bins" --test_path "../gemma_multimodal_bins_rw" --enc_dim 768 --clinical --path_lang --rad_lang'.split('')
 
     # bimodal
-    arg["mix3"]["pr"] = '--disable_wandb --mix_data --survival_years 3 --loss_fn "cox_nll" --batch_size 128 --lr 1e-3 --warmup_epochs 25 --model gemma --data_path "../gemma_multimodal_bins" --test_path "../gemma_multimodal_bins_rw" --enc_dim 768 --rad_lang --path_lang --label_col $target'.split(" ")
-    arg["mix3"]["pc"] = '--disable_wandb --mix_data --survival_years 3 --loss_fn "cox_nll" --batch_size 128 --lr 1e-3 --warmup_epochs 25 --model gemma --data_path "../gemma_multimodal_bins" --test_path "../gemma_multimodal_bins_rw" --enc_dim 768 --path_lang --clinical --label_col $target'.split(" ")
-    arg["mix3"]["rc"] = '--disable_wandb --mix_data --survival_years 3 --loss_fn "cox_nll" --batch_size 128 --lr 1e-3 --warmup_epochs 25 --model gemma --data_path "../gemma_multimodal_bins" --test_path "../gemma_multimodal_bins_rw" --enc_dim 768 --rad_lang --clinical --label_col $target'.split(" ")
+    arg["mix3"]["pr"] = '--disable_wandb --mix_data --survival_years 3 --loss_fn "cox_nll" --batch_size 128 --lr 1e-3 --warmup_epochs 25 --model gemma --data_path "../gemma_multimodal_bins" --test_path "../gemma_multimodal_bins_rw" --enc_dim 768 --rad_lang --path_lang'.split('')
+    arg["mix3"]["pc"] = '--disable_wandb --mix_data --survival_years 3 --loss_fn "cox_nll" --batch_size 128 --lr 1e-3 --warmup_epochs 25 --model gemma --data_path "../gemma_multimodal_bins" --test_path "../gemma_multimodal_bins_rw" --enc_dim 768 --path_lang --clinical'.split('')
+    arg["mix3"]["rc"] = '--disable_wandb --mix_data --survival_years 3 --loss_fn "cox_nll" --batch_size 128 --lr 1e-3 --warmup_epochs 25 --model gemma --data_path "../gemma_multimodal_bins" --test_path "../gemma_multimodal_bins_rw" --enc_dim 768 --rad_lang --clinical'.split('')
 
     # unimodal
-    arg["mix3"]["p"] = '--disable_wandb --mix_data --survival_years 3 --modality uni_path --loss_fn "cox_nll" --batch_size 128 --lr 1e-3 --warmup_epochs 25 --model gemma --data_path "../gemma_multimodal_bins" --test_path "../gemma_multimodal_bins_rw" --enc_dim 768 --label_col $target'.split(" ")
-    arg["mix3"]["r"] = '--disable_wandb --mix_data --survival_years 3 --modality uni_rad --loss_fn "cox_nll" --batch_size 128 --lr 1e-3 --warmup_epochs 25 --model gemma --data_path "../gemma_multimodal_bins" --test_path "../gemma_multimodal_bins_rw" --enc_dim 768 --label_col $target'.split(" ")
-    arg["mix3"]["c"] = '--disable_wandb --mix_data --survival_years 3 --modality uni_clin --loss_fn "cox_nll" --batch_size 128 --lr 1e-3 --warmup_epochs 25 --model gemma --data_path "../gemma_multimodal_bins" --test_path "../gemma_multimodal_bins_rw" --enc_dim 768 --label_col $target'.split(" ")
+    arg["mix3"]["p"] = '--disable_wandb --mix_data --survival_years 3 --modality uni_path --loss_fn "cox_nll" --batch_size 128 --lr 1e-3 --warmup_epochs 25 --model gemma --data_path "../gemma_multimodal_bins" --test_path "../gemma_multimodal_bins_rw" --enc_dim 768'.split('')
+    arg["mix3"]["r"] = '--disable_wandb --mix_data --survival_years 3 --modality uni_rad --loss_fn "cox_nll" --batch_size 128 --lr 1e-3 --warmup_epochs 25 --model gemma --data_path "../gemma_multimodal_bins" --test_path "../gemma_multimodal_bins_rw" --enc_dim 768'.split('')
+    arg["mix3"]["c"] = '--disable_wandb --mix_data --survival_years 3 --modality uni_clin --loss_fn "cox_nll" --batch_size 128 --lr 1e-3 --warmup_epochs 25 --model gemma --data_path "../gemma_multimodal_bins" --test_path "../gemma_multimodal_bins_rw" --enc_dim 768'.split('')
 
     #trimodal
-    arg["iso"]["tri"] = '--disable_wandb --loss_fn "cox_nll" --batch_size 128 --lr 1e-3 --warmup_epochs 25 --model gemma --data_path "../gemma_multimodal_bins" --test_path "../gemma_multimodal_bins_rw" --enc_dim 768 --clinical --path_lang --rad_lang --label_col $target'.split(" ")
+    arg["iso"]["tri"] = '--disable_wandb --loss_fn "cox_nll" --batch_size 128 --lr 1e-3 --warmup_epochs 25 --model gemma --data_path "../gemma_multimodal_bins" --test_path "../gemma_multimodal_bins_rw" --enc_dim 768 --clinical --path_lang --rad_lang'.split('')
 
     #bimodal
-    arg["iso"]["pr"] = '--disable_wandb --loss_fn "cox_nll" --batch_size 128 --lr 1e-3 --warmup_epochs 25 --model gemma --data_path "../gemma_multimodal_bins" --test_path "../gemma_multimodal_bins_rw" --enc_dim 768 --rad_lang --path_lang --label_col $target'.split(" ")
-    arg["iso"]["pc"] = '--disable_wandb --loss_fn "cox_nll" --batch_size 128 --lr 1e-3 --warmup_epochs 25 --model gemma --data_path "../gemma_multimodal_bins" --test_path "../gemma_multimodal_bins_rw" --enc_dim 768 --path_lang --clinical --label_col $target'.split(" ")
-    arg["iso"]["rc"] = '--disable_wandb --loss_fn "cox_nll" --batch_size 128 --lr 1e-3 --warmup_epochs 25 --model gemma --data_path "../gemma_multimodal_bins" --test_path "../gemma_multimodal_bins_rw" --enc_dim 768 --rad_lang --clinical --label_col $target'.split(" ")
+    arg["iso"]["pr"] = '--disable_wandb --loss_fn "cox_nll" --batch_size 128 --lr 1e-3 --warmup_epochs 25 --model gemma --data_path "../gemma_multimodal_bins" --test_path "../gemma_multimodal_bins_rw" --enc_dim 768 --rad_lang --path_lang'.split('')
+    arg["iso"]["pc"] = '--disable_wandb --loss_fn "cox_nll" --batch_size 128 --lr 1e-3 --warmup_epochs 25 --model gemma --data_path "../gemma_multimodal_bins" --test_path "../gemma_multimodal_bins_rw" --enc_dim 768 --path_lang --clinical'.split('')
+    arg["iso"]["rc"] = '--disable_wandb --loss_fn "cox_nll" --batch_size 128 --lr 1e-3 --warmup_epochs 25 --model gemma --data_path "../gemma_multimodal_bins" --test_path "../gemma_multimodal_bins_rw" --enc_dim 768 --rad_lang --clinical'.split('')
 
     #unimodal
-    arg["iso"]["p"] = '--disable_wandb --modality uni_path --loss_fn "cox_nll" --batch_size 128 --lr 1e-3 --warmup_epochs 25 --model gemma --data_path "../gemma_multimodal_bins" --test_path "../gemma_multimodal_bins_rw" --enc_dim 768 --label_col $target'.split(" ")
-    arg["iso"]["r"] = '--disable_wandb --modality uni_rad --loss_fn "cox_nll" --batch_size 128 --lr 1e-3 --warmup_epochs 25 --model gemma --data_path "../gemma_multimodal_bins" --test_path "../gemma_multimodal_bins_rw" --enc_dim 768 --label_col $target'.split(" ")
-    arg["iso"]["c"] = '--disable_wandb --modality uni_clin --loss_fn "cox_nll" --batch_size 128 --lr 1e-3 --warmup_epochs 25 --model gemma --data_path "../gemma_multimodal_bins" --test_path "../gemma_multimodal_bins_rw" --enc_dim 768 --label_col $target'.split(" ")
+    arg["iso"]["p"] = '--disable_wandb --modality uni_path --loss_fn "cox_nll" --batch_size 128 --lr 1e-3 --warmup_epochs 25 --model gemma --data_path "../gemma_multimodal_bins" --test_path "../gemma_multimodal_bins_rw" --enc_dim 768'.split('')
+    arg["iso"]["r"] = '--disable_wandb --modality uni_rad --loss_fn "cox_nll" --batch_size 128 --lr 1e-3 --warmup_epochs 25 --model gemma --data_path "../gemma_multimodal_bins" --test_path "../gemma_multimodal_bins_rw" --enc_dim 768'.split('')
+    arg["iso"]["c"] = '--disable_wandb --modality uni_clin --loss_fn "cox_nll" --batch_size 128 --lr 1e-3 --warmup_epochs 25 --model gemma --data_path "../gemma_multimodal_bins" --test_path "../gemma_multimodal_bins_rw" --enc_dim 768'.split('')
 
     return arg
 
@@ -117,7 +117,7 @@ def run_all():
         summ5 = pd.DataFrame(index=["AUC", "C-Index"])
         summB = pd.DataFrame(index=["AUC", "C-Index"])
 
-        for args in runs:
+        for _, args in runs.items():
             args = parser.parse_args(args)
             mod, res5, resB = main(args)
             summ5[mod] = res5
