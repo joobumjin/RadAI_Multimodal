@@ -1,9 +1,9 @@
-import argparse
 from collections import defaultdict
 
 import pandas as pd
 
-from new_kf import *
+import new_kf
+import km_stage
 
 def all_args():
     arg = defaultdict(lambda: {})
@@ -19,6 +19,9 @@ def all_args():
     arg["mix"]["r"] = '--disable_wandb --mix_data --modality uni_rad'.split()
     arg["mix"]["c"] = '--disable_wandb --mix_data --modality uni_clin'.split()
 
+    #km stage
+    arg["mix"]["km"] = '--mix_data'.split()
+
     # trimodal
     arg["mix3"]["tri"] = '--disable_wandb --mix_data --survival_years 3 --clinical --path_lang --rad_lang'.split()
 
@@ -31,6 +34,9 @@ def all_args():
     arg["mix3"]["p"] = '--disable_wandb --mix_data --survival_years 3 --modality uni_path'.split()
     arg["mix3"]["r"] = '--disable_wandb --mix_data --survival_years 3 --modality uni_rad'.split()
     arg["mix3"]["c"] = '--disable_wandb --mix_data --survival_years 3 --modality uni_clin'.split()
+
+    #km stage
+    arg["mix3"]["km"] = '--mix_data --survival_years 3'.split()
 
     #trimodal
     arg["iso"]["tri"] = '--disable_wandb --clinical --path_lang --rad_lang'.split()
@@ -45,11 +51,12 @@ def all_args():
     arg["iso"]["r"] = '--disable_wandb --modality uni_rad'.split()
     arg["iso"]["c"] = '--disable_wandb --modality uni_clin '.split()
 
+    #km stage
+    arg["iso"]["km"] = ''.split()
+
     return arg
 
 def run_all():
-    parser = get_args_parser()
-
     arg_set = all_args()
     tables = {}
 
@@ -57,9 +64,17 @@ def run_all():
         summ5 = pd.DataFrame(index=["AUC", "C-Index"])
         summB = pd.DataFrame(index=["AUC", "C-Index"])
 
-        for _, args in runs.items():
+        for n, args in runs.items():
+            if n != "km": 
+                parser = new_kf.get_args_parser()
+                main_fn = new_kf.main
+
+            else:
+                parser = km_stage.get_args_parser()
+                main_fn = km_stage.main
+
             args = parser.parse_args(args)
-            mod, res5, resB = main(args)
+            mod, res5, resB = main_fn(args)
             summ5[mod] = res5
             summB[mod] = resB
 
@@ -67,6 +82,7 @@ def run_all():
 
     with open('./out.md', 'a', encoding="utf-8") as f:
         for setup, t in tables.items():
+            print("\n--------")
             print(setup)
             print()
             print("5Fold CV")
@@ -81,8 +97,6 @@ def run_all():
             f.write(t[0].to_markdown())
             f.write("## Bootstrap")
             f.write(t[1].to_markdown())
-
-
 
 if __name__ == '__main__':
     run_all()
