@@ -5,7 +5,6 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 from model.modules import *
-from model.losses import *
 
 class LinearModel(nn.Module):
     def __init__(self, 

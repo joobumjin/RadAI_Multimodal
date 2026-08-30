@@ -1,7 +1,7 @@
 import torch
 from torchsurv.metrics.cindex import ConcordanceIndex
 from torchsurv.metrics.auc import Auc
-from consts import *
+from util.consts import *
 
 def compile_split(model, loader, device):
     model.eval()

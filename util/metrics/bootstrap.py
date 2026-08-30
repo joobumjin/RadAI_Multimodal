@@ -5,8 +5,8 @@ import numpy as np
 from sklearn.utils import resample
 import scipy.stats as stats
 
-from consts import * 
-from c_index import cind, auc
+from util.consts import * 
+from .c_index import cind, auc
 
 class Bootstrap:
     def __init__(self, name: str, fn: callable, stratify: Optional[callable], n_resample=999, random_state: Optional[int] = None):
