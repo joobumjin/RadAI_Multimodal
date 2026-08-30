@@ -18,7 +18,6 @@ def get_args_parser():
     parser.add_argument('--batch_size',         type=int,   default=128)
     parser.add_argument('--loss_fn',            type=str,   default="cox_nll", choices=list(LOSS_FNS.keys()))
     parser.add_argument('--model',              type=str,   default="gemma", choices=['gemma', 'qwen'])
-    # parser.add_argument('--data_path',          type=str,   default="../{model}_path_rad_text_embs")
     parser.add_argument('--data_path',          type=str,   default="../gemma_multimodal_bins")
     parser.add_argument('--test_path',          type=str,   default="../gemma_multimodal_bins_rw")
     parser.add_argument('--epochs',             type=int,   default=200)
@@ -139,7 +138,7 @@ def main(args):
         #NOTE: THE MODEL IS TRAINED AS LOG HAZARD PREDICTING
         run = run_setup(args, model_fns[args.modality], train_loader, valid_loader, test_loader, 
                         run_name = run_name, return_keys=['Test AUC', 'Test C-Index'], ret_model=True, #early_stop = None)
-                        early_stop = (192 if mod_name=="Trimodal" else None))
+                        early_stop = (191 if mod_name=="Trimodal" else None))
                         #best: 191
         model, device = run.pop("model")
 
@@ -180,9 +179,6 @@ def main(args):
 
     print(f"{"--" * 5}")
     print(f"Bootstrapped Avg + 95% CI")
-    # print(f"AUC: {np.mean(auc_res.bootstrap_distribution):.2f} ({auc_res.confidence_interval.low}, {auc_res.confidence_interval.high})")
-    # print(f"C Ind: {np.mean(ci_res.bootstrap_distribution):.2f} ({ci_res.confidence_interval.low}, {ci_res.confidence_interval.high})")
-    # print(f"From {len(ci_res.bootstrap_distribution)} bootstrap samples")
     print(str(auc_res))
     print(str(ci_res))
     print(f"From {len(ci_res.entries)} bootstrap samples")

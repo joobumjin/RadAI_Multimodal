@@ -31,7 +31,7 @@ def auc(death, times, preds, yrs):
     death = death.bool()
 
     auc = Auc()
-    a = auc(preds, death, times, new_time = torch.ones((1,)) * yrs * DAYS_IN_YR)[0]
+    a = auc(preds, death, times, new_time = torch.tensor(yrs * DAYS_IN_YR))[0]
     return a
 
 
@@ -44,7 +44,7 @@ def calculate_c_indices_auc(model: torch.nn.Module, train_loader, val_loader, te
     """
     train_deaths, train_times, train_preds = compile_fn(model, train_loader, device)
 
-    if val_loader is not None:        
+    if val_loader is not None:
         val_deaths, val_times, val_preds = compile_fn(model, val_loader, device)
         num_val = len(val_deaths)
     else:
@@ -54,7 +54,7 @@ def calculate_c_indices_auc(model: torch.nn.Module, train_loader, val_loader, te
     test_deaths, test_times, test_preds = compile_fn(model, test_loader, device)
 
     train_c = cind(train_deaths, train_times, train_preds)
-    train_a = auc(train_preds, train_deaths, train_times, surv_yr)
+    train_a = auc(train_deaths, train_times, train_preds, surv_yr)
 
     if num_val:
         val_c = cind(val_deaths, val_times, val_preds)

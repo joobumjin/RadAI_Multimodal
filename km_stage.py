@@ -7,14 +7,11 @@ from torch.utils.data import DataLoader
 from torch.utils.data import ConcatDataset
 from sklearn.model_selection import train_test_split, KFold
 from lifelines import KaplanMeierFitter
-import matplotlib.pyplot as plt
 import scipy.stats as stats
-from torchsurv.metrics.cindex import ConcordanceIndex
-from torchsurv.metrics.auc import Auc
 
 from data import *
 from run import *
-from util import bootstrap_cind_auc
+from util import bootstrap_cind_auc, cind, auc
 
 
 def get_args_parser():
@@ -111,22 +108,20 @@ def main(args):
 
         df_km_2yr = test['Stage'].map(dict(km_risk[args.survival_years * DAYS_IN_YR]))
 
-        cindex = ConcordanceIndex()
-        cind = cindex(
+        cval = cind(
             torch.from_numpy(df_km_2yr.to_numpy()), 
             torch.from_numpy(test['Survival Event'].to_numpy(dtype=bool)), 
             torch.from_numpy(test['Survival Time'].to_numpy())
         )
 
-        auc = Auc()
         a = auc(
             torch.from_numpy(df_km_2yr.to_numpy()), 
             torch.from_numpy(test['Survival Event'].to_numpy(dtype=bool)), 
             torch.from_numpy(test['Survival Time'].to_numpy()),
-            new_time = torch.ones((1,)) * args.survival_years * DAYS_IN_YR
+            args.survival_years
         )[0]
 
-        cinds.append(cind)
+        cinds.append(cval)
         aucs.append(a)
 
         test_samples = [torch.from_numpy(test['Survival Event'].to_numpy(dtype=bool)), 

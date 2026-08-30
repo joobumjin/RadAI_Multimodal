@@ -80,7 +80,7 @@ def run_all():
 
         tables[setup] = [summ5, summB]
 
-    with open('./out.md', 'a', encoding="utf-8") as f:
+    with open('./out.md', 'w', encoding="utf-8") as f:
         for setup, t in tables.items():
             print("\n--------")
             print(setup)
