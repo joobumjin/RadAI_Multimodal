@@ -29,7 +29,8 @@ def get_args_parser():
     parser.add_argument('--mix_data',           action="store_true", 
                         help="Combine and then shuffle the train and test data")
     
-    parser.add_argument('--test_split',        type=float, default=.15)
+    parser.add_argument('--test_split',         type=float, default=.15)
+    parser.add_argument('--sparse',             action="store_true")
 
     parser.add_argument('--label_col',          type=str,   default="survival_days")
     parser.add_argument('--survival_years',     type=int,   default=2)
@@ -79,7 +80,7 @@ def build_data(args):
 
 
 def main(args):
-    tv_df, test_df, tv, test_inds = build_data()
+    tv_df, test_df, tv, test_inds = build_data(args)
 
     test = test_df.iloc[test_inds]
 
@@ -91,7 +92,8 @@ def main(args):
 
     ci_res, auc_res = None, None
 
-    for _, (train_inds, val_inds) in enumerate(splits):
+    for split, (train_inds, val_inds) in enumerate(splits):
+        print(f"Split {split}")
         train, val = tv_df.iloc[train_inds], tv_df.iloc[val_inds]
         kmf = KaplanMeierFitter()
         s_prop = {}
@@ -122,7 +124,7 @@ def main(args):
             torch.from_numpy(test['Survival Event'].to_numpy(dtype=bool)), 
             torch.from_numpy(test['Survival Time'].to_numpy()),
             new_time = torch.ones((1,)) * args.survival_years * DAYS_IN_YR
-        )
+        )[0]
 
         cinds.append(cind)
         aucs.append(a)
@@ -140,8 +142,8 @@ def main(args):
 
     auc_ci = stats.t.interval(confidence=.95, df=4, loc=auc_avg, scale=auc_err)
     c_ci = stats.t.interval(confidence=.95, df=4, loc=ci_avg, scale=ci_err)
-    auc5fold = f"{auc_avg:.2f} ({auc_ci[0]}, {auc_ci[1]})"
-    ci5fold = f"{ci_avg:.3f} ({c_ci[0]}, {c_ci[1]})"
+    auc5fold = f"{auc_avg:.3f} ({auc_ci[0]:.3f}, {auc_ci[1]:.3f})"
+    ci5fold = f"{ci_avg:.3f} ({c_ci[0]:.3f}, {c_ci[1]:.3f})"
 
     print(f"5-Fold Avg + 95% CI")
     print(f"AUC: {auc5fold}")

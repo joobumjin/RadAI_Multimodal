@@ -6,8 +6,7 @@ import numpy as np
 from torch.utils.data import Dataset, Subset, DataLoader
 
 from data import *
-
-DAYS_IN_YR = 365.2425
+from consts import *
 
 def get_datasets(args: Namespace,
                  keys: list[str] = ["slide_ids", "survival_days", "survival_right_censor"],

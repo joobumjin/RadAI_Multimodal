@@ -5,7 +5,7 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 from model.modules import *
-from model.losses import *
+from util import losses
 
 class EmbPred(nn.Module):
     def __init__(self, 
@@ -57,7 +57,7 @@ class EmbProjector(nn.Module):
                  projector_hidden: int = 384,
                  projected_dim: int = 256,
                  predictor_hidden: list[int] = [128],
-                 ssl_loss_fn: Callable = InfoNCELoss(),
+                 ssl_loss_fn: Callable = losses.InfoNCELoss(),
                  class_loss_fn: Callable = F.mse_loss,
     ):
         super().__init__()

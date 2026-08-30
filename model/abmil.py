@@ -5,7 +5,7 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 from model.modules import *
-from model.losses import *
+from util import losses
 
 class EmbMIL(nn.Module):
     def __init__(self, 
@@ -139,7 +139,7 @@ class SSLEmbMIL(nn.Module):
                  num_predictor_layers: int = 1,
                  pred_dim: int = 1,
                  pred_hidden: int = 128,
-                 ssl_loss_fn: Callable = InfoNCELoss(),
+                 ssl_loss_fn: Callable = losses.InfoNCELoss(),
                  class_loss_fn: Callable = F.mse_loss,
     ):
         super().__init__()

@@ -139,8 +139,9 @@ def main(args):
 
         #NOTE: THE MODEL IS TRAINED AS LOG HAZARD PREDICTING
         run = run_setup(args, model_fns[args.modality], train_loader, valid_loader, test_loader, 
-                        run_name = run_name, return_keys=['Test AUC', 'Test C-Index'], ret_model=True, early_stop = None)
-                        # early_stop = (190 if mod_name=="Trimodal" else None))
+                        run_name = run_name, return_keys=['Test AUC', 'Test C-Index'], ret_model=True, #early_stop = None)
+                        early_stop = (192 if mod_name=="Trimodal" else None))
+                        #best: 191
         model, device = run.pop("model")
 
         for key in run: 
@@ -154,7 +155,7 @@ def main(args):
         all = [torch.cat(l) for l in zip(train, test)]
 
         # if split != 3:
-        ci_res, auc_res = bootstrap_cind_auc(args, test, ci_res, auc_res)
+        ci_res, auc_res = bootstrap_cind_auc(args, test, ci_res, auc_res, n_resample=9999)
         if split == 4 and mod_name == "Trimodal" and args.mix_data:
             km_preds(*all)
 
@@ -162,9 +163,6 @@ def main(args):
 
     avgs = {key: np.mean(arr, axis=0) for key, arr in metrics.items()}
     errs = {key: stats.sem(arr, axis=0) for key, arr in metrics.items()}
-
-    # avg_t = {key: torch.from_numpy(arr) for key, arr in avgs.items()}
-    # top_k = {key: torch.topk(arr, 5) for key, arr in avg_t.items()}
 
     print(f"\n{mod_name}{', mix data' if args.mix_data else ', inst. sep.'} - {args.survival_years}yr")
     print(f"{"--" * 5}")

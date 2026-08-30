@@ -4,6 +4,7 @@ import torch
 import numpy as np
 from sklearn.utils import resample
 import scipy.stats as stats
+from consts import *
 
 class Bootstrap:
     def __init__(self, name: str, fn: callable, stratify: Optional[callable], n_resample=999, random_state: Optional[int] = None):
@@ -27,19 +28,7 @@ class Bootstrap:
         for seed in seeds:
             sample = resample(np.arange(batch, dtype=int), replace=True, n_samples=batch, stratify=strat, random_state=seed).astype(int)
             sample_data = [d[sample] for d in data]
-
-            # failed = True
-            # while failed:
-            #     print("trying again")
-                # try:
             res = self.fn(*sample_data)
-                # except Exception:
-                #     print("Error with statistic, resampling")
-                #     sample = resample(np.arange(batch, dtype=int), replace=True, n_samples=batch, stratify=data[0]).astype(int)
-                #     sample_data = [d[sample] for d in data]
-                # else:
-                #     failed = torch.isnan(res).any().item()
-
             self.entries.append(res)
 
         #aggregate
@@ -55,8 +44,9 @@ def bootstrap_cind_auc(args, test_samples, ci_res, auc_res, n_resample=100):
     from torchsurv.metrics.cindex import ConcordanceIndex
     from torchsurv.metrics.auc import Auc
 
-    DAYS_IN_YR = 365.2425
-    strat = lambda data: data[1] > args.survival_years * DAYS_IN_YR
+    def strat(data):
+        yrs = data[1] > args.survival_years * DAYS_IN_YR
+        return data[0] * 2 + yrs #binary encode
 
     def cind(death, times, preds):
         death = death.bool()
