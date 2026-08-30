@@ -32,8 +32,7 @@ def get_regression_metrics(split: str):
 def train_one_epoch(model: torch.nn.Module,
                     train_loader: Iterable,
                     optimizer: optim.Optimizer, scheduler: optim.lr_scheduler.LRScheduler,
-                    device: str,
-                    args: Namespace):
+                    device: str):
     model.train(True)
     optimizer.zero_grad()
 
@@ -62,8 +61,7 @@ def train_one_epoch(model: torch.nn.Module,
 def train_one_epoch_list(model: torch.nn.Module, 
                          train_loader: Iterable, 
                          optimizer: optim.Optimizer, scheduler: optim.lr_scheduler.LRScheduler, 
-                         device: str, 
-                         args: Namespace):
+                         device: str):
     model.train(True)
     optimizer.zero_grad()
 
@@ -92,7 +90,6 @@ def train_one_epoch_list(model: torch.nn.Module,
 def test(model: torch.nn.Module, 
          data_loader: Iterable, 
          device: str, 
-         args: Namespace,
          split: str = "Test"):
     model.eval()
 
@@ -163,12 +160,12 @@ def run_setup(args, model_constructor, train_loader, valid_loader, test_loader, 
     print(f"Start training for {args.epochs} epochs")
     pbar = trange(0, args.epochs, desc="Training Epochs", postfix={})
     for e in pbar:
-        train_stats = train_one_epoch(model, train_loader, optimizer, scheduler, device, args)
+        train_stats = train_one_epoch(model, train_loader, optimizer, scheduler, device)
         if valid_loader is not None:
-            valid_stats = test(model, valid_loader, device, args=args, split="Valid") 
+            valid_stats = test(model, valid_loader, device, split="Valid") 
         else:
             valid_stats = {}
-        test_stats = test(model, test_loader, device, args=args, split="Test")
+        test_stats = test(model, test_loader, device, split="Test")
 
         c_ind_auc = calculate_c_indices_auc(model, train_loader, valid_loader, test_loader, device, surv_yr=args.survival_years)
 
@@ -182,11 +179,8 @@ def run_setup(args, model_constructor, train_loader, valid_loader, test_loader, 
         for key in return_keys: ret_metrics[key].append(postfix[key])
 
         if early_stopper is not None:
-            stop, best = early_stopper.update(postfix[stop_metric])
-            if best:
-                # save_model(model, args.save_path)
-                pass
-            elif stop:
+            stop, _ = early_stopper.update(postfix[stop_metric])
+            if stop:
                 print("Early stopping triggered!")
                 return ret_metrics
 

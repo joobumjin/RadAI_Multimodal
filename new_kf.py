@@ -129,7 +129,6 @@ def main(args):
     for split, (train_inds, val_inds) in enumerate(splits):
         print(f"\n{"--" * 5}")
         print(f"Split {split}")
-        # print(f"Validation Inds: {val_inds}")
         if args.mix_data:
             train_loader, valid_loader, test_loader = get_combined_loaders(args, dataset, train_inds, val_inds, test_inds)
         else:

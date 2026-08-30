@@ -1,6 +1,7 @@
 import torch
 from torchsurv.metrics.cindex import ConcordanceIndex
 from torchsurv.metrics.auc import Auc
+from consts import *
 
 def compile_split(model, loader, device):
     model.eval()
@@ -19,6 +20,20 @@ def compile_split(model, loader, device):
     
     return [torch.cat(l) for l in [split_deaths, split_times, split_preds]]
 
+def cind(death, times, preds):
+    death = death.bool()
+
+    cindex = ConcordanceIndex()
+    c = cindex(preds, death, times)
+    return c
+
+def auc(death, times, preds, yrs):
+    death = death.bool()
+
+    auc = Auc()
+    a = auc(preds, death, times, new_time = torch.ones((1,)) * yrs * DAYS_IN_YR)[0]
+    return a
+
 
 def calculate_c_indices_auc(model: torch.nn.Module, train_loader, val_loader, test_loader, device, surv_yr=2.0, compile_fn = compile_split):
     """
@@ -27,8 +42,6 @@ def calculate_c_indices_auc(model: torch.nn.Module, train_loader, val_loader, te
     - "survival_days"
     - Whatever else the model needs
     """
-    DAYS_IN_YR = 365.2425
-
     train_deaths, train_times, train_preds = compile_fn(model, train_loader, device)
 
     if val_loader is not None:        
@@ -40,25 +53,18 @@ def calculate_c_indices_auc(model: torch.nn.Module, train_loader, val_loader, te
 
     test_deaths, test_times, test_preds = compile_fn(model, test_loader, device)
 
-    train_cindex = ConcordanceIndex()
-    train_c = train_cindex(train_preds, train_deaths, train_times)
-    train_auc = Auc()
-    new_time = torch.ones((1,),) * surv_yr * DAYS_IN_YR
-    train_a = train_auc(train_preds, train_deaths, train_times, new_time = new_time)[0]
+    train_c = cind(train_deaths, train_times, train_preds)
+    train_a = auc(train_preds, train_deaths, train_times, surv_yr)
 
     if num_val:
-        val_cindex = ConcordanceIndex()
-        val_c = val_cindex(val_preds, val_deaths, val_times)
-        val_auc = Auc()
-        val_a = val_auc(val_preds, val_deaths, val_times, new_time = new_time)[0]
+        val_c = cind(val_deaths, val_times, val_preds)
+        val_a = auc(val_deaths, val_times, val_preds, surv_yr)
     else:
         val_c = None
         val_a = None
 
-    test_cindex = ConcordanceIndex()
-    test_c = test_cindex(test_preds, test_deaths, test_times)
-    test_auc = Auc()
-    test_a = test_auc(test_preds, test_deaths, test_times, new_time = new_time)[0]
+    test_c = cind(test_deaths, test_times, test_preds)
+    test_a = auc(test_deaths, test_times, test_preds, surv_yr)
 
     ret = {
         "Train C-Index": train_c, 
