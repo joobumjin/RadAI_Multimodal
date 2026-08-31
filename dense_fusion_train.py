@@ -75,11 +75,18 @@ def main(args):
         datasets = get_datasets(args)
         dataset = ConcatDataset(datasets) #this is prob a little mem inefficient
 
+        all_loader = DataLoader(dataset)
+        strat = []
+        for s in all_loader:
+            time = s['survival_days'] > args.survival_years * DAYS_IN_YR
+            event = not s['survival_right_censor']
+            strat.append(event * 2 + time)
+
         tv, test_inds = train_test_split(
             np.arange(len(dataset)),
             test_size=0.15,
             random_state=args.seed,
-            #consider stratifying
+            stratify=strat
         )
 
         train_inds, val_inds = tv, []
