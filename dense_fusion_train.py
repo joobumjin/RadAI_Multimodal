@@ -77,16 +77,11 @@ def main(args):
 
         tv, test_inds = train_test_split(
             np.arange(len(dataset)),
-            test_size=0.08,
+            test_size=0.15,
             random_state=args.seed,
             #consider stratifying
         )
 
-        # train_inds, val_inds = train_test_split(
-        #     tv,
-        #     test_size=0.08,
-        #     random_state=args.seed
-        # )
         train_inds, val_inds = tv, []
 
         train_loader, valid_loader, test_loader = get_combined_loaders(args, dataset, train_inds, val_inds, test_inds)
@@ -114,13 +109,12 @@ def main(args):
         "uni_clin": get_unimodal_clin
     }
 
-    #NOTE: THE MODEL IS TRAINED AS LOG HAZARD PREDICTING
     run = run_setup(args, model_fns[args.modality], train_loader, valid_loader, test_loader, run_name = run_name, return_keys=['Test AUC', 'Test C-Index'], ret_model=True)
     model, device = run.pop("model")
     print(run)
 
-    train = compile_split(model, train_loader, device)
-    val = compile_split(model, valid_loader, device)
+    # train = compile_split(model, train_loader, device)
+    # val = compile_split(model, valid_loader, device)
     test = compile_split(model, test_loader, device)
 
     ci_res, auc_res = bootstrap_cind_auc(args, test, None, None)

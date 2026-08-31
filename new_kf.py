@@ -133,7 +133,6 @@ def main(args):
 
         run_name = f"Split {split}"
 
-        #NOTE: THE MODEL IS TRAINED AS LOG HAZARD PREDICTING
         run = run_setup(args, model_fns[args.modality], train_loader, valid_loader, test_loader, 
                         run_name = run_name, return_keys=['Test AUC', 'Test C-Index'], ret_model=True, #early_stop = None)
                         early_stop = (191 if mod_name=="Trimodal" else None))
