@@ -107,15 +107,15 @@ def main(args):
         df_km_2yr = test['Stage'].map(dict(km_risk[args.survival_years * DAYS_IN_YR]))
 
         cval = cind(
-            torch.from_numpy(df_km_2yr.to_numpy()), 
             torch.from_numpy(test['Survival Event'].to_numpy(dtype=bool)), 
-            torch.from_numpy(test['Survival Time'].to_numpy())
+            torch.from_numpy(test['Survival Time'].to_numpy()),
+            torch.from_numpy(df_km_2yr.to_numpy()), 
         )
 
         a = auc(
-            torch.from_numpy(df_km_2yr.to_numpy()), 
             torch.from_numpy(test['Survival Event'].to_numpy(dtype=bool)), 
             torch.from_numpy(test['Survival Time'].to_numpy()),
+            torch.from_numpy(df_km_2yr.to_numpy()), 
             args.survival_years
         )[0]
 
