@@ -5,8 +5,8 @@ conda activate multi
 # python .\dense_fusion_train.py --debug --clinical --path_lang --rad_lang
 
 
-python .\dense_fusion_train.py --run_name "Full Multi" --mix_data --clinical --path_lang --rad_lang 
-python .\dense_fusion_train.py --run_name "Bimodal" --mix_data --clinical --path_lang
+python .\dense_fusion_train.py --disable_wandb --run_name "Full Multi" --mix_data --clinical --path_lang --rad_lang 
+# python .\dense_fusion_train.py --run_name "Bimodal" --mix_data --clinical --path_lang
 # python .\dense_fusion_train.py --clinical --path_lang --rad_lang
 # $fusions = "naive_sum", "naive_avg", "weighted_sum"
 # foreach ($fusion in $fusions) {   

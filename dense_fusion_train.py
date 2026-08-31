@@ -111,13 +111,12 @@ def main(args):
 
     run = run_setup(args, model_fns[args.modality], train_loader, valid_loader, test_loader, run_name = run_name, return_keys=['Test AUC', 'Test C-Index'], ret_model=True)
     model, device = run.pop("model")
-    print(run)
 
     # train = compile_split(model, train_loader, device)
     # val = compile_split(model, valid_loader, device)
     test = compile_split(model, test_loader, device)
 
-    ci_res, auc_res = bootstrap_cind_auc(args, test, None, None)
+    ci_res, auc_res = bootstrap_cind_auc(args, test, None, None, 9999)
 
     print(f"{"--" * 5}")
     print(f"Bootstrapped Avg + 95% CI")
