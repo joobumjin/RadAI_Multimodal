@@ -50,7 +50,7 @@ class LogitFusion(nn.Module):
     """
     Logit-level fusion using an nn.Module 
     """
-    def __init__(self, encoders: Dict[str, nn.Module], autocast: Dict[str, bool], fusion_fn: Fuser, loss_fn: nn.Module, device: str):
+    def __init__(self, encoders: Dict[str, nn.Module], autocast: Dict[str, bool], fusion_fn: Fuser, loss_fn: nn.Module, device: torch.device):
         super().__init__()
 
         self.autocast = autocast
@@ -86,7 +86,7 @@ class EmbFusion(nn.Module):
     """
     Embedding-level fusion using an nn.Module 
     """
-    def __init__(self, encoders: Dict[str, nn.Module], emb_dim: int, hidden_dims: List[int], autocast: Dict[str, bool], fusion_fn: Fuser, loss_fn: Optional[nn.Module], device: str):
+    def __init__(self, encoders: Dict[str, nn.Module], emb_dim: int, hidden_dims: List[int], autocast: Dict[str, bool], fusion_fn: Fuser, loss_fn: Optional[nn.Module], device: torch.device):
         super().__init__()
 
         self.autocast = autocast

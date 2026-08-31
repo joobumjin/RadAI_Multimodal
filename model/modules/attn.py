@@ -1,7 +1,4 @@
-import torch
-from torch.nn import functional as F
-from torch import nn
-
+from torch import Tensor, nn
 
 class GlobalAttention(nn.Module):
     """
@@ -13,7 +10,7 @@ class GlobalAttention(nn.Module):
         num_classes: number of classes
     """
 
-    def __init__(self, L=1024, D=256, dropout=0., num_classes=1):
+    def __init__(self, L: int = 1024, D: int = 256, dropout: float = 0., num_classes: int = 1):
         super().__init__()
 
         self.attn = nn.Sequential(nn.Linear(L, D),
@@ -21,7 +18,7 @@ class GlobalAttention(nn.Module):
                                   nn.Dropout(dropout),
                                   nn.Linear(D, num_classes))
 
-    def forward(self, x):
+    def forward(self, x: Tensor) -> Tensor:
         return self.attn(x)  # N x num_classes
 
 class GlobalGatedAttention(nn.Module):
@@ -34,7 +31,7 @@ class GlobalGatedAttention(nn.Module):
         num_classes: number of classes
     """
 
-    def __init__(self, L=1024, D=256, dropout=0., num_classes=1):
+    def __init__(self, L:int = 1024, D: int = 256, dropout: float = 0., num_classes: int = 1):
         super().__init__()
 
         self.attn_a = [
@@ -53,7 +50,7 @@ class GlobalGatedAttention(nn.Module):
         self.attn_b = nn.Sequential(*self.attn_b)
         self.attn_c = nn.Linear(D, num_classes)
 
-    def forward(self, x):
+    def forward(self, x: Tensor) -> Tensor:
         a = self.attn_a(x)
         b = self.attn_b(x)
         A = a.mul(b)

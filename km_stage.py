@@ -29,9 +29,7 @@ def get_args_parser():
     parser.add_argument('--test_split',         type=float, default=.15)
     parser.add_argument('--sparse',             action="store_true")
 
-    parser.add_argument('--label_col',          type=str,   default="survival_days")
     parser.add_argument('--survival_years',     type=int,   default=2)
-    parser.add_argument('--censor_col',         type=str,   default="right_censor")
     return parser
 
 def build_data(args):

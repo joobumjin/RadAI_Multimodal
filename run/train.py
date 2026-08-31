@@ -1,5 +1,4 @@
 from argparse import Namespace
-from typing import Iterable
 from collections import defaultdict
 
 import wandb
@@ -7,6 +6,7 @@ from tqdm import trange
 import numpy as np
 from torch.nn import functional as F
 from torch import optim
+from torch.utils.data import DataLoader
 
 from data import *
 from util import *
@@ -29,10 +29,8 @@ def get_regression_metrics(split: str):
 
 # --------------------------------------------------------
 
-def train_one_epoch(model: torch.nn.Module,
-                    train_loader: Iterable,
-                    optimizer: optim.Optimizer, scheduler: optim.lr_scheduler.LRScheduler,
-                    device: str):
+def train_one_epoch(model: torch.nn.Module, device: torch.device, train_loader: DataLoader,
+                    optimizer: optim.Optimizer, scheduler: optim.lr_scheduler.LRScheduler,):
     model.train(True)
     optimizer.zero_grad()
 
@@ -58,10 +56,8 @@ def train_one_epoch(model: torch.nn.Module,
 
     return {k: meter.avg for k, meter in metrics.items()}
 
-def train_one_epoch_list(model: torch.nn.Module, 
-                         train_loader: Iterable, 
-                         optimizer: optim.Optimizer, scheduler: optim.lr_scheduler.LRScheduler, 
-                         device: str):
+def train_one_epoch_list(model: torch.nn.Module, device: torch.device, train_loader: DataLoader, 
+                         optimizer: optim.Optimizer, scheduler: optim.lr_scheduler.LRScheduler, ):
     model.train(True)
     optimizer.zero_grad()
 
@@ -87,10 +83,7 @@ def train_one_epoch_list(model: torch.nn.Module,
 
     return {k: meter.avg for k, meter in metrics.items()}
 
-def test(model: torch.nn.Module, 
-         data_loader: Iterable, 
-         device: str, 
-         split: str = "Test"):
+def test(model: torch.nn.Module, device: torch.device, data_loader: DataLoader, split: str = "Test"):
     model.eval()
 
     metrics, fns = get_bool_metrics(split)
@@ -110,7 +103,9 @@ def test(model: torch.nn.Module,
 
 # --------------------------------------------------------
 
-def run_setup(args, model_constructor, train_loader, valid_loader, test_loader, run_name = None, return_keys = [], ret_model=False, early_stop=None):
+def run_setup(args: Namespace, model_constructor: callable, 
+              train_loader: DataLoader, valid_loader: DataLoader, test_loader: DataLoader, 
+              run_name: Optional[str] = None, return_keys: list = [], ret_model: bool = False, early_stop: Optional[int] = None):
     seed = args.seed
     torch.manual_seed(seed)
     np.random.seed(seed)
@@ -160,14 +155,14 @@ def run_setup(args, model_constructor, train_loader, valid_loader, test_loader, 
     print(f"Start training for {args.epochs} epochs")
     pbar = trange(0, args.epochs, desc="Training Epochs", postfix={})
     for e in pbar:
-        train_stats = train_one_epoch(model, train_loader, optimizer, scheduler, device)
+        train_stats = train_one_epoch(model, device, train_loader, optimizer, scheduler)
         if valid_loader is not None:
-            valid_stats = test(model, valid_loader, device, split="Valid") 
+            valid_stats = test(model, device, valid_loader, split="Valid") 
         else:
             valid_stats = {}
-        test_stats = test(model, test_loader, device, split="Test")
+        test_stats = test(model, device, test_loader, split="Test")
 
-        c_ind_auc = calculate_c_indices_auc(model, train_loader, valid_loader, test_loader, device, surv_yr=args.survival_years)
+        c_ind_auc = calculate_c_indices_auc(model, device, train_loader, valid_loader, test_loader, surv_yr=args.survival_years)
 
         postfix = {**train_stats, **valid_stats, **test_stats, **c_ind_auc}
 

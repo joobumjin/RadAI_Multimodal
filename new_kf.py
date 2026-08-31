@@ -45,9 +45,7 @@ def get_args_parser():
     parser.add_argument('--pin_mem',            type=bool,  default=True)
     parser.add_argument('--train_split',        type=float, default=.85)
 
-    parser.add_argument('--label_col',          type=str,   default="survival_days")
     parser.add_argument('--survival_years',     type=int,   default=2)
-    parser.add_argument('--censor_col',         type=str,   default="right_censor")
 
     # Optimizer parameters
     parser.add_argument('--lr',                 type=float, default=1e-3,   metavar='LR',
@@ -152,7 +150,6 @@ def main(args):
 
         all = [torch.cat(l) for l in zip(train, test)]
 
-        # if split != 3:
         ci_res, auc_res = bootstrap_cind_auc(args, test, ci_res, auc_res, n_resample=9999)
         if split == 4 and mod_name == "Trimodal" and args.mix_data:
             km_preds(*all)

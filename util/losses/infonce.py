@@ -6,7 +6,7 @@ class InfoNCELoss(torch.nn.Module):
     InfoNCE Loss On Paired Samples
     Assumes that z1 and z2 are encoded versions of 2 different views of the same samples.
     """
-    def __init__(self, temperature=0.3):
+    def __init__(self, temperature: float = 0.3):
         super(InfoNCELoss, self).__init__()
         self.temperature = temperature
 

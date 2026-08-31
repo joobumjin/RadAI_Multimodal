@@ -23,19 +23,19 @@ class MLP(nn.Module):
         return self.seq(x)
 
 def create_mlp(
-        in_dim=768, 
-        hid_dims=[512, 512], 
-        out_dim=512, 
-        act=nn.ReLU(),
-        dropout=0.,
-        end_with_fc=True, 
-        end_with_dropout=False,
-        bias=True,
-        batch_norm=False,
-        layer_norm=False,
-        rms_norm=False,
-        end_with_norm=False,
-    ):
+        in_dim: int = 768, 
+        hid_dims: list[int] = [512, 512], 
+        out_dim: int = 512, 
+        act: nn.Module = nn.ReLU(),
+        dropout: float = 0.,
+        end_with_fc: bool = True, 
+        end_with_dropout: bool = False,
+        bias: bool = True,
+        batch_norm: bool = False,
+        layer_norm: bool = False,
+        rms_norm: bool = False,
+        end_with_norm: bool = False,
+    ) -> MLP:
 
     layers = []
     

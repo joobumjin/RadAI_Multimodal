@@ -1,5 +1,4 @@
 from argparse import Namespace
-from functools import reduce
 
 from tabulate import tabulate
 import numpy as np
@@ -10,7 +9,12 @@ from util.consts import *
 
 def get_datasets(args: Namespace,
                  keys: list[str] = ["slide_ids", "survival_days", "survival_right_censor"],
-                 label_key = "label"):
+                )-> tuple[Dataset, Dataset]:
+                #  label_key: str = "label") -> tuple[Dataset, Dataset]:
+    """
+    Returns the train and test Datasets as dictated by args
+    """
+
     bin_mods, extra_mods = [], []
 
     arg_dict = vars(args)
@@ -25,13 +29,13 @@ def get_datasets(args: Namespace,
         "data_dir": args.data_path,
         "return_key": True,
         "keys": keys,
-        "label_column": args.label_col,
-        "label_dtype": np.float32,
+        # "label_column": args.label_col,
+        # "label_dtype": np.float32,
         "bin_modality_keys": bin_mods,
         "extra_modality_keys": extra_mods,
         "allow_sparse_samples": args.sparse,
-        "label_fn": lambda dates: (dates < (DAYS_IN_YR * args.survival_years)).astype(np.float32), #predict survival hazard
-        "label_key": label_key
+        # "label_fn": lambda dates: (dates < (DAYS_IN_YR * args.survival_years)).astype(np.float32), #predict survival hazard
+        # "label_key": label_key
     }
     train_set = MemmapDatasetMultimodal(**dataset_args)
 
@@ -43,11 +47,16 @@ def get_datasets(args: Namespace,
 
 # --------------------------------------------------------
 
-def get_combined_loaders(args, 
+def get_combined_loaders(args: Namespace, 
                          dataset: Dataset,
-                         train_inds, 
-                         validation_inds, 
-                         test_inds):
+                         train_inds: np.ndarray, 
+                         validation_inds: np.ndarray, 
+                         test_inds: np.ndarray,
+                         verbose: bool = False) -> tuple[DataLoader, DataLoader, DataLoader]:
+    """
+    Given a combined dataset, splits and returns train, val, and test laoders
+    """
+
     bin_mods, extra_mods = [], []
 
     arg_dict = vars(args)
@@ -89,15 +98,21 @@ def get_combined_loaders(args,
         stats = [stats[0], valid_stats, stats[1]]
 
     headers = ["Split", "# Samples", "# Batches"]
-    # print(tabulate(stats, headers=headers, tablefmt="grid"), "\n")
+    if verbose:
+        print(tabulate(stats, headers=headers, tablefmt="grid"), "\n")
 
     return train_loader, val_loader, test_loader
 
-def get_subset_loaders(args, 
-                         tv_dataset: Dataset,
-                         train_inds, 
-                         validation_inds,
-                         test_set: Dataset):
+def get_subset_loaders(args: Namespace, 
+                       tv_dataset: Dataset,
+                       train_inds: np.ndarray, 
+                       validation_inds: np.ndarray,
+                       test_set: Dataset,
+                       verbose: bool = False) -> tuple[DataLoader, DataLoader, DataLoader]:
+    """
+    Given separate train+val and test datasets, splits and returns train, val, and test laoders
+    """
+    
     bin_mods, extra_mods = [], []
 
     arg_dict = vars(args)
@@ -138,6 +153,7 @@ def get_subset_loaders(args,
         stats = [stats[0], valid_stats, stats[1]]
 
     headers = ["Split", "# Samples", "# Batches"]
-    # print(tabulate(stats, headers=headers, tablefmt="grid"), "\n")
+    if verbose:
+        print(tabulate(stats, headers=headers, tablefmt="grid"), "\n")
 
     return train_loader, val_loader, test_loader

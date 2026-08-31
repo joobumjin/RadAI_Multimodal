@@ -1,6 +1,7 @@
 from typing import Optional
+from argparse import Namespace
 
-import torch
+from torch import Tensor
 import numpy as np
 from sklearn.utils import resample
 import scipy.stats as stats
@@ -9,9 +10,20 @@ from util.consts import *
 from .c_index import cind, auc
 
 class Bootstrap:
-    def __init__(self, name: str, fn: callable, stratify: Optional[callable], n_resample=999, random_state: Optional[int] = None):
-        self.name = name
+    """
+    Manual Bootstrapping calculation
+    Statefully keeps track of average, error, and 95% confidence interval
+    """
 
+    def __init__(self, name: str, fn: callable, stratify: Optional[callable], n_resample: int = 999, random_state: Optional[int] = None):
+        """
+        params:
+        - name: name of the statistic 
+        - fn: the statstic which will be bootstrap analyzed
+        - stratify: optional function to stratify data
+        - n_resample: how many times to run bootstrap resampling
+        """
+        self.name = name
         self.entries = []
         self.avg = None
         self.err = None
@@ -22,6 +34,9 @@ class Bootstrap:
         self.rand_state = random_state
 
     def add(self, *data):
+        """
+        Takes data, calculates bootstrap values, adds those bootstrap values to entries, and updates average, error, and 95% CI
+        """
         batch = len(data[0])
         strat = self.stratify(data) if self.stratify is not None else None
         seeds = np.random.SeedSequence(self.rand_state).generate_state(self.n_resample)
@@ -42,7 +57,19 @@ class Bootstrap:
     def __str__(self):
         return f"{self.name}: {self.avg:.3f} ({self.ci[0]:.3f}, {self.ci[1]:.3f})"
 
-def bootstrap_cind_auc(args, test_samples, ci_res, auc_res, n_resample=100):
+def bootstrap_cind_auc(args: Namespace, test_samples: list[Tensor], 
+                       ci_res: Optional[Bootstrap] = None, auc_res: Optional[Bootstrap] = None, 
+                       n_resample: int = 100) -> tuple[Bootstrap, Bootstrap]:
+    """
+    Keeps track of Bootstrap object instances for C-Index and AUC evaluation
+
+    params:
+    - args: argparse.Namespace
+    - test_samples: compiled test data with structure [deaths, times, preds]
+    - ci_res: Bootstrap object instance for C-Index
+    - auc_res: Bootstrap object instance for AUC
+    - n_resmple: number of bootstrap resamples 
+    """
     def strat(data):
         yrs = data[1] > args.survival_years * DAYS_IN_YR
         return data[0] * 2 + yrs #binary encode

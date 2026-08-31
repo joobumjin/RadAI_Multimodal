@@ -1,7 +1,8 @@
-from typing import Optional, Tuple, Union
+from typing import Optional
 from collections.abc import Callable
 
 import torch
+from torch import Tensor
 from torch import nn
 import torch.nn.functional as F
 from model.modules import *
@@ -17,8 +18,8 @@ class EmbMIL(nn.Module):
                  gate: int = True,
                  proj_hidden: int = 128,
                  proj_dim: int = 1,
-                 loss_fn: Optional[Callable] = F.mse_loss,
-    ):
+                 loss_fn: Optional[Callable] = F.mse_loss,):
+
         super().__init__()
         #all samples in a bag are projected into hidden_sz space
         #and then those projected embs are weighted summed into
@@ -61,7 +62,7 @@ class EmbMIL(nn.Module):
             nn.init.constant_(m.bias, 0)
             nn.init.constant_(m.weight, 1.0)
 
-    def forward_attention(self, h: torch.Tensor, attn_mask=None, attn_only=True) -> torch.Tensor:
+    def forward_attention(self, h: Tensor, attn_mask=None, attn_only=True) -> Tensor:
         """
         Compute the attention scores (and optionally the embedded features) for the input instances.
 
@@ -87,7 +88,7 @@ class EmbMIL(nn.Module):
             A = A.masked_fill((1 - attn_mask).unsqueeze(1).bool(), float('-inf'))
         return A if attn_only else (h, A)
 
-    def forward_features(self, h: torch.Tensor, attn_mask=None, return_attention: bool = True) -> torch.Tensor:
+    def forward_features(self, h: Tensor, attn_mask=None, return_attention: bool = True) -> Tensor:
         """
         Compute bag-level features using attention pooling.
 
@@ -104,7 +105,7 @@ class EmbMIL(nn.Module):
         log_dict = {'attention': A_base.squeeze(1) if return_attention else None}
         return bag, log_dict
     
-    def forward(self, h: torch.Tensor, labels: torch.Tensor, attn_mask=None, return_attention: bool = False) -> torch.Tensor:
+    def forward(self, h: Tensor, labels: Tensor, attn_mask=None, return_attention: bool = False) -> Tensor:
         if h.get_device() != labels.get_device():
             labels = labels.to(h.get_device())
         
@@ -118,8 +119,8 @@ class EmbMIL(nn.Module):
         loss = self.loss_fn(pred, labels)
         return loss, pred, *attn_dict
     
-    def predict(self, h: torch.Tensor, attn_mask=None, return_attention: bool = False) -> torch.Tensor:
-        attn_out, attn_dict = self.forward_features(h, attn_mask=attn_mask,return_attention=return_attention)
+    def predict(self, h: Tensor, attn_mask=None, return_attention: bool = False) -> Tensor:
+        attn_out, attn_dict = self.forward_features(h, attn_mask=attn_mask, return_attention=return_attention)
         attn_dict = [attn_dict] if return_attention else []
 
         pred = self.projector(attn_out)
@@ -140,8 +141,8 @@ class SSLEmbMIL(nn.Module):
                  pred_dim: int = 1,
                  pred_hidden: int = 128,
                  ssl_loss_fn: Callable = losses.InfoNCELoss(),
-                 class_loss_fn: Callable = F.mse_loss,
-    ):
+                 class_loss_fn: Callable = F.mse_loss,):
+        
         super().__init__()
         self.ssl_loss_fn = ssl_loss_fn
         self.class_loss_fn = class_loss_fn
@@ -180,9 +181,10 @@ class SSLEmbMIL(nn.Module):
             nn.init.constant_(m.weight, 1.0)
     
     def project_batch(self, 
-                      view1: torch.Tensor, view2: torch.Tensor, 
-                      mask1: torch.Tensor, mask2: torch.Tensor
-                      ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+                      view1: Tensor, view2: Tensor, 
+                      mask1: Tensor, mask2: Tensor
+        ) -> tuple[Tensor, Tensor, Tensor]:
+
         view1_proj = self.projector.predict(view1, attn_mask=mask1, return_attention=False)[0]
         view2_proj = self.projector.predict(view2, attn_mask=mask2, return_attention=False)[0]
 
@@ -190,7 +192,7 @@ class SSLEmbMIL(nn.Module):
 
         return loss, view1_proj, view2_proj
     
-    def classify(self, h: torch.Tensor, labels: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+    def classify(self, h: Tensor, labels: Tensor) -> tuple[Tensor, Tensor]:
         if h.get_device() != labels.get_device():
             labels = labels.to(h.get_device())
         

@@ -1,6 +1,7 @@
+from torch import Tensor
 from torchsurv.loss.cox import *
 
-def cox_nll_loss(preds, x):
+def cox_nll_loss(preds, x: dict[str, Tensor]):
     """
     Cox Negative Log Likelihood Loss
     Params:

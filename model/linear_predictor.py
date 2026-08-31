@@ -1,20 +1,22 @@
-from typing import Optional, Tuple, Union, Dict
+from typing import Optional, Dict
 from collections.abc import Callable
 
 import torch
+from torch import Tensor
 from torch import nn
 import torch.nn.functional as F
 from model.modules import *
 
 class LinearModel(nn.Module):
-    def __init__(self, 
-                 input_dim: int = 23,
-                 hidden_dims: list[int] = [128, 128, 32],
-                 out_dim: int = 1,
-                 act: nn.Module = nn.LeakyReLU(),
-                 loss_fn: Optional[Callable] = F.mse_loss,
-                 batch_norm: bool = False,
-                 layer_norm: bool = False
+    def __init__(
+            self, 
+            input_dim: int = 23,
+            hidden_dims: list[int] = [128, 128, 32],
+            out_dim: int = 1,
+            act: nn.Module = nn.LeakyReLU(),
+            loss_fn: Optional[Callable] = F.mse_loss, 
+            batch_norm: bool = False,
+            layer_norm: bool = False
     ):
         super().__init__()
         self.loss_fn = loss_fn
@@ -40,10 +42,10 @@ class LinearModel(nn.Module):
             nn.init.constant_(m.bias, 0)
             nn.init.constant_(m.weight, 1.0)
 
-    def predict(self, h: torch.Tensor) -> torch.Tensor:
+    def predict(self, h: Tensor) -> Tensor:
         return self.predictor(h)
     
-    def forward(self, h: torch.Tensor, labels: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+    def forward(self, h: Tensor, labels: Tensor) -> tuple[Tensor, Tensor]:
         if h.get_device() != labels.get_device():
             labels = labels.to(h.get_device())
 
@@ -54,18 +56,19 @@ class LinearModel(nn.Module):
     
 
 class Unimodal(nn.Module):
-    def __init__(self, 
-                 input_dim: int = 23,
-                 hidden_dims: list[int] = [128, 128, 32],
-                 out_dim: int = 1,
-                 act: nn.Module = nn.LeakyReLU(),
-                 loss_fn: Optional[Callable] = F.mse_loss,
-                 batch_norm: bool = False,
-                 layer_norm: bool = False,
-                 rms_norm: bool = False,
-                 autocast: bool = False,
-                 device: str = 'cpu',
-                 mod: str = 'path_lang'
+    def __init__(
+            self, 
+            input_dim: int = 23,
+            hidden_dims: list[int] = [128, 128, 32],
+            out_dim: int = 1,
+            act: nn.Module = nn.LeakyReLU(),
+            loss_fn: Optional[Callable] = F.mse_loss,
+            batch_norm: bool = False,
+            layer_norm: bool = False,
+            rms_norm: bool = False,
+            autocast: bool = False,
+            device: torch.device = 'cpu',
+            mod: str = 'path_lang'
     ):
         super().__init__()
         self.loss_fn = loss_fn
@@ -95,16 +98,13 @@ class Unimodal(nn.Module):
             nn.init.constant_(m.bias, 0)
             nn.init.constant_(m.weight, 1.0)
 
-    def predict(self, x: Dict[str, torch.Tensor]) -> torch.Tensor:
+    def predict(self, x: Dict[str, Tensor]) -> Tensor:
         with torch.autocast(device_type=self.device, dtype=torch.float16, enabled=self.autocast):
             pred = self.predictor(x[self.mod])
         return pred
     
-    def forward(self, x: Dict[str, torch.Tensor]) -> tuple[torch.Tensor, torch.Tensor]:
+    def forward(self, x: Dict[str, Tensor]) -> tuple[Tensor, Tensor]:
         pred = self.predict(x)
 
         loss = [self.loss_fn(pred, x)] if self.loss_fn is not None else []
         return pred, *loss
-
-
-

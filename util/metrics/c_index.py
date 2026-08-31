@@ -1,9 +1,13 @@
 import torch
+from torch.utils.data import DataLoader
 from torchsurv.metrics.cindex import ConcordanceIndex
 from torchsurv.metrics.auc import Auc
 from util.consts import *
 
 def compile_split(model, loader, device):
+    """
+    """
+
     model.eval()
 
     split_preds, split_deaths, split_times = [], [], []
@@ -20,14 +24,32 @@ def compile_split(model, loader, device):
     
     return [torch.cat(l) for l in [split_deaths, split_times, split_preds]]
 
-def cind(death, times, preds):
+def cind(death: torch.Tensor, times: torch.Tensor, preds: torch.Tensor) -> torch.Tensor:
+    """
+    Calculates C-Index of preds
+
+    params:
+        - deaths: bool tensor indicator for survival event
+        - times: float tensor for duration from diagnosis to last follow up
+        - preds: float tensor with model risk scores
+    """
     death = death.bool()
 
     cindex = ConcordanceIndex()
     c = cindex(preds, death, times)
     return c
 
-def auc(death, times, preds, yrs):
+def auc(death: torch.Tensor, times: torch.Tensor, preds: torch.Tensor, yrs: int):
+    """
+    Calculates Censored AUC of preds
+
+    params:
+        - deaths: bool tensor indicator for survival event
+        - times: float tensor for duration from diagnosis to last follow up
+        - preds: float tensor with model risk scores
+        - yrs: int time at which to evaluate AUC
+    """
+
     death = death.bool()
 
     auc = Auc()
@@ -35,8 +57,21 @@ def auc(death, times, preds, yrs):
     return a
 
 
-def calculate_c_indices_auc(model: torch.nn.Module, train_loader, val_loader, test_loader, device, surv_yr=2.0, compile_fn = compile_split):
+def calculate_c_indices_auc(model: torch.nn.Module, device: torch.device, 
+                            train_loader: DataLoader, val_loader: DataLoader, test_loader: DataLoader, 
+                            surv_yr: int = 2.0, compile_fn: callable = compile_split):
     """
+    Calculates the C-Index and AUC for each of 3 splits
+
+    params:
+    - model: model to evaluate
+    - device: model's device
+    - train_loader: data loader for train split
+    - val_loader: data loader for validation split
+    - test_loader: data loader for test split
+    - surv_yr: time at which AUC will be evaluated
+    - compile_fn: function used to pull data from the dataloader with the model
+
     Required Loader Batch Keys:
     - "survival_right_censor": Right censor on event date
     - "survival_days"

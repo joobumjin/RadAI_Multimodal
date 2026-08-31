@@ -1,15 +1,15 @@
-from typing import List, Dict, Optional, Union, Literal, Callable
+from typing import List, Dict, Optional, Callable
 
 import torch
+from torch import Tensor
 import torch.nn as nn
-from torch.nn import functional as F
 from model.linear_predictor import *
 
 class DenseFusion(nn.Module):
     """
     Logit-level fusion using an nn.Module 
     """
-    def __init__(self, encoders: Dict[str, nn.Module], emb_dim: int, hidden_dims: List[int], autocast: Dict[str, bool], loss_fn: Optional[Callable], device: str):
+    def __init__(self, encoders: Dict[str, nn.Module], emb_dim: int, hidden_dims: List[int], autocast: Dict[str, bool], loss_fn: Optional[Callable], device: torch.device):
         super().__init__()
 
         self.autocast = autocast
@@ -33,7 +33,7 @@ class DenseFusion(nn.Module):
             nn.init.constant_(m.bias, 0)
             nn.init.constant_(m.weight, 1.0)
 
-    def predict(self, x: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:            
+    def predict(self, x: Dict[str, Tensor]) -> Dict[str, Tensor]:            
         logits = {}
         for modality, enc in self.encoders.items():
             with torch.autocast(device_type=self.device, dtype=torch.float16, enabled=self.autocast[modality]):
@@ -44,7 +44,7 @@ class DenseFusion(nn.Module):
         catted = torch.cat([logits[mod] for mod in self.modality_order], dim=1)
         return self.pred.predict(catted)
     
-    def forward(self, x: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
+    def forward(self, x: Dict[str, Tensor]) -> Dict[str, Tensor]:
         preds = self.predict(x)
         loss = [self.loss_fn(preds, x)] if self.loss_fn is not None else []
         return preds, *loss
@@ -78,7 +78,7 @@ class DenseFusionMulti(nn.Module):
 
         self.pred = {target: decoders[target].to(device) for target in decoders}
 
-    def predict(self, x: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:            
+    def predict(self, x: Dict[str, Tensor]) -> Dict[str, Tensor]:            
         logits = {}
         for modality, enc in self.encoders.items():
             with torch.autocast(device_type=self.device, dtype=torch.float16, enabled=self.autocast[modality]):
@@ -98,7 +98,7 @@ class DenseFusionMulti(nn.Module):
             
         return preds
     
-    def forward(self, x: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
+    def forward(self, x: Dict[str, Tensor]) -> Dict[str, Tensor]:
         preds = self.predict(x)
 
         loss = [self.loss_fn(preds, x)] if self.loss_fn is not None else []
@@ -106,13 +106,13 @@ class DenseFusionMulti(nn.Module):
 
 
 class SingleModAE(nn.Module):
-    def __init__(self, mod_name: str, enc: nn.Module, dec: nn.Module, device, autocast: Dict[str, bool], loss_fn = None):
+    def __init__(self, mod_name: str, enc: nn.Module, dec: nn.Module, device: torch.device, autocast: Dict[str, bool], loss_fn = None):
         super().__init__()
         self.mod = mod_name
         self.autocast = autocast
         self.loss_fn = loss_fn
         self.ae = nn.Sequential(enc, dec)
-        self.device=device
+        self.device = device
         
     def predict(self, x):
         with torch.autocast(device_type=self.device, dtype=torch.float16, enabled=self.autocast[self.mod]):
@@ -122,7 +122,7 @@ class SingleModAE(nn.Module):
             
         return preds        
 
-    def forward(self, x: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
+    def forward(self, x: Dict[str, Tensor]) -> Dict[str, Tensor]:
         preds = self.predict(x)
 
         lv = self.loss_fn(preds, x[self.mod]) if self.loss_fn is not None else None

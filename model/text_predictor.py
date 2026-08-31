@@ -8,12 +8,13 @@ from model.modules import *
 from util import losses
 
 class EmbPred(nn.Module):
-    def __init__(self, 
-                 embed_dim: int = 512,
-                 predictor_layers: int = 3,
-                 hidden_dim: int = 128,
-                 out_dim: int = 1,
-                 loss_fn: Optional[Callable] = F.mse_loss,
+    def __init__(
+            self, 
+            embed_dim: int = 512,
+            predictor_layers: int = 3,
+            hidden_dim: int = 128,
+            out_dim: int = 1,
+            loss_fn: Optional[Callable] = F.mse_loss,
     ):
         super().__init__()
         self.loss_fn = loss_fn
@@ -27,7 +28,7 @@ class EmbPred(nn.Module):
 
         self.apply(self._init_weights)
 
-    def _init_weights(self, m):
+    def _init_weights(self, m: nn.Module):
         if isinstance(m, nn.Linear):
             # we use xavier_uniform following official JAX ViT:
             torch.nn.init.xavier_uniform_(m.weight)
@@ -51,14 +52,15 @@ class EmbPred(nn.Module):
 
 
 class EmbProjector(nn.Module):
-    def __init__(self, 
-                 embed_dim: int = 512,
-                 projector_layers: int = 3,
-                 projector_hidden: int = 384,
-                 projected_dim: int = 256,
-                 predictor_hidden: list[int] = [128],
-                 ssl_loss_fn: Callable = losses.InfoNCELoss(),
-                 class_loss_fn: Callable = F.mse_loss,
+    def __init__(
+            self, 
+            embed_dim: int = 512,
+            projector_layers: int = 3,
+            projector_hidden: int = 384,
+            projected_dim: int = 256,
+            predictor_hidden: list[int] = [128],
+            ssl_loss_fn: Callable = losses.InfoNCELoss(),
+            class_loss_fn: Callable = F.mse_loss,
     ):
         super().__init__()
         self.ssl_loss_fn = ssl_loss_fn
@@ -80,7 +82,7 @@ class EmbProjector(nn.Module):
 
         self.apply(self._init_weights)
 
-    def _init_weights(self, m):
+    def _init_weights(self, m: nn.Module):
         if isinstance(m, nn.Linear):
             # we use xavier_uniform following official JAX ViT:
             torch.nn.init.xavier_uniform_(m.weight)

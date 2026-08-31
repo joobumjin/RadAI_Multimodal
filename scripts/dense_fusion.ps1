@@ -1,105 +1,34 @@
-# $fusions = "weighted_sum"
-$target = "survival_days"
-
 conda activate multi
-
-# python .\dense_fusion_train.py --model $models --path_lang --clinical --rad_lang --label_col $target --loss_fn $loss --debug
-# python .\dense_fusion_train.py --model $models --path_img --path_lang --clinical --rad_lang --label_col $target --loss_fn $loss --debug
-# python .\dense_fusion_train.py --model $models --path_lang --clinical --rad_lang --label_col $target --loss_fn $loss --debug
-# python .\dense_fusion_train.py --model $models --sparse --path_lang --clinical --rad_lang --label_col $target --loss_fn $loss --debug
-# python .\emb_fusion_train.py --model $models --sparse --path_lang --clinical --rad_lang --label_col $target --loss_fn $loss --debug
 
 ""
 "Standard Dense"
-# python .\dense_fusion_train.py --debug --loss_fn "cox_nll" --model "gemma" --data_path "../gemma_multimodal_bins" --test_path "../gemma_multimodal_bins_rw" --enc_dim 768 --clinical --path_lang --rad_lang --label_col $target --loss_fn $loss
+# python .\dense_fusion_train.py --debug --clinical --path_lang --rad_lang
 
-$models = "gemma", "qwen"
-$enc_dims = 768, 1024
-for ($i = 0; $i -lt $models.Count; $i++){
-    $model, $enc_dim = $models[$i], $enc_dims[$i] 
-    python .\dense_fusion_train.py --run_name "Full Multi" --loss_fn "cox_nll" --mix_data --batch_size 128 --lr 1e-3 --warmup_epochs 25 --model $model --data_path "../${model}_multimodal_bins" --test_path "../${model}_multimodal_bins_rw" --enc_dim $enc_dim --clinical --path_lang --rad_lang --label_col $target
-    python .\dense_fusion_train.py --run_name "Biomodal" --loss_fn "cox_nll" --mix_data --batch_size 128 --lr 1e-3 --warmup_epochs 25 --model $model --data_path "../${model}_multimodal_bins" --test_path "../${model}_multimodal_bins_rw" --enc_dim $enc_dim --clinical --path_lang --label_col $target
-    # python .\dense_fusion_train.py --loss_fn "cox_nll" --batch_size 128 --lr 1e-3 --warmup_epochs 25 --model $model --data_path "../${model}_multimodal_bins" --test_path "../${model}_multimodal_bins_rw" --enc_dim $enc_dim --clinical --path_lang --rad_lang --label_col $target
-    # $fusions = "naive_sum", "naive_avg", "weighted_sum"
-    # foreach ($fusion in $fusions) {   
-    #     python .\emb_fusion_train.py --model $model --data_path "../${model}_multimodal_bins" --test_path "../${model}_multimodal_bins_rw" --enc_dim $enc_dim --fusion $fusion --clinical --path_lang --rad_lang --label_col $target --loss_fn $loss
-    # }
-}
 
-# ""
-# "Dense Sparse"
-# #sparse
-# for ($i = 0; $i -lt $models.Count; $i++){
-#     $model, $enc_dim = $models[$i], $enc_dims[$i] 
-#     python .\dense_fusion_train.py --model $model --data_path "../${model}_multimodal_bins" --test_path "../${model}_multimodal_bins_rw" --enc_dim $enc_dim --sparse --clinical --path_lang --rad_lang --label_col $target --loss_fn $loss
-#     $fusions = "naive_sum", "naive_avg", "weighted_sum"
-#     foreach ($fusion in $fusions) {   
-#         python .\emb_fusion_train.py --model $model --data_path "../${model}_multimodal_bins" --test_path "../${model}_multimodal_bins_rw" --enc_dim $enc_dim --fusion $fusion --sparse --clinical --path_lang --rad_lang --label_col $target --loss_fn $loss
-#     }
+python .\dense_fusion_train.py --run_name "Full Multi" --mix_data --clinical --path_lang --rad_lang 
+python .\dense_fusion_train.py --run_name "Bimodal" --mix_data --clinical --path_lang
+# python .\dense_fusion_train.py --clinical --path_lang --rad_lang
+# $fusions = "naive_sum", "naive_avg", "weighted_sum"
+# foreach ($fusion in $fusions) {   
+#     python .\emb_fusion_train.py --fusion $fusion --clinical --path_lang --rad_lang
 # }
 
 # ""
 # "Curriculum"
-# for ($i = 0; $i -lt $models.Count; $i++){
-#     $model, $enc_dim = $models[$i], $enc_dims[$i] 
-#     python .\curriculum.py  --model $model --data_path "../${model}_multimodal_bins" --test_path "../${model}_multimodal_bins_rw" --enc_dim $enc_dim --clinical --path_lang --rad_lang --label_col $target --loss_fn $loss --epochs 500
-# }
-
-
-# #train on RW
-# $models = "gemma", "qwen"
-# $enc_dims = 768, 1024
-# for ($i = 1; $i -lt $models.Count; $i++){
-#     $model, $enc_dim = $models[$i], $enc_dims[$i] 
-#     python .\dense_fusion_train.py --model $model --emb_dim 128 --test_path "../${model}_multimodal_bins" --train_split 1.0 --run_name "RWTrain-dense-${model}"--data_path "../${model}_multimodal_bins_rw" --enc_dim $enc_dim --path_lang --rad_lang --label_col $target --loss_fn $loss
-#     $fusions = "naive_sum", "naive_avg", "weighted_sum"
-#     foreach ($fusion in $fusions) {   
-#         python .\emb_fusion_train.py --model $model --emb_dim 128 --test_path "../${model}_multimodal_bins" --train_split 1.0 --run_name "RWTrain-emb_naive-${model}-${fusion}" --data_path "../${model}_multimodal_bins_rw" --enc_dim $enc_dim --fusion $fusion --path_lang --rad_lang --label_col $target --loss_fn $loss
-#     }
-# }
-
+#     python .\curriculum.py --clinical --path_lang --rad_lang --epochs 500
 
 # #sparse 
 # # clinical only
-# foreach ($model in $models) {
-#     python .\dense_fusion_train.py --model $model --sparse --clinical  --label_col $target --loss_fn $loss
-# }
+#     python .\dense_fusion_train.py --sparse --clinical
 
 # # langauge only
-# foreach ($model in $models) {
-#     python .\dense_fusion_train.py --model $model --sparse --path_lang --rad_lang --label_col $target --loss_fn $loss
-# }
+#     python .\dense_fusion_train.py --sparse --path_lang --rad_lang
 
 # # clin + path lang
-# foreach ($model in $models) {
-#     python .\dense_fusion_train.py --model $model --sparse --clinical --path_lang --label_col $target --loss_fn $loss
-# }
+#     python .\dense_fusion_train.py --sparse --clinical --path_lang
 
 # # clin + rad lang
-# foreach ($model in $models) {
-#     python .\dense_fusion_train.py --model $model --sparse --clinical --rad_lang --label_col $target --loss_fn $loss
-# }
+#     python .\dense_fusion_train.py --sparse --clinical --rad_lang
 
 # #all 3
-# foreach ($model in $models) {
-#     python .\dense_fusion_train.py --model $model --sparse --clinical --path_lang --rad_lang --label_col $target --loss_fn $loss
-# }
-
-
-# # imputed clinical
-# foreach ($model in $models) {
-#     python .\dense_fusion_train.py --model $model --clinical_imputed  --label_col $target --loss_fn $loss
-# }
-
-# foreach ($model in $models) {
-#     python .\dense_fusion_train.py --model $model --clinical_imputed --path_lang --label_col $target --loss_fn $loss
-# }
-
-# foreach ($model in $models) {
-#     python .\dense_fusion_train.py --model $model --clinical_imputed --rad_lang --label_col $target --loss_fn $loss
-# }
-
-# foreach ($model in $models) {
-#     python .\dense_fusion_train.py --model $model --clinical_imputed --path_lang --rad_lang --label_col $target --loss_fn $loss
-# }
-
+#     python .\dense_fusion_train.py --sparse --clinical --path_lang --rad_lang

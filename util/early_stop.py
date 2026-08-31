@@ -1,4 +1,10 @@
 class EarlyStopper:
+    """
+    Early stopping monitor
+
+    Sends a done signal if performance has not improved in patience epochs
+    """
+    
     def __init__(self, patience: int = 5, minimize: bool = True, verb: bool = False):
         self.verb = verb
         self.best_score = None
@@ -7,10 +13,12 @@ class EarlyStopper:
         self.patience = patience
         self.comp = lambda old, new: new < old if minimize else lambda old, new: new > old
 
-    def update(self, score) -> bool:
+    def update(self, score) -> tuple[bool]:
         """
         Update best score tracking with new score if new best
-        Returns a bool indicating whether to early stop or not
+        Returns 
+        - a bool indicating whether to early stop or not 
+        - a bool indicating if this score is the best so far
         """
         self.epoch += 1
 
