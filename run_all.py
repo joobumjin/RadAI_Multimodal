@@ -92,6 +92,7 @@ def run_all():
 
         summB = pd.DataFrame(index=["AUC", "C-Index"], columns=cols)
         summB.index.name = "Metric (95% CI)"
+        summB.columns = pd.MultiIndex.from_tuples(summB.columns)
 
         for n, args in runs.items():
             if n != "km": 
