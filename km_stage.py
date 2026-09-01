@@ -117,7 +117,7 @@ def main(args):
             torch.from_numpy(test['Survival Time'].to_numpy()),
             torch.from_numpy(df_km_2yr.to_numpy()), 
             args.survival_years
-        )[0]
+        )
 
         cinds.append(cval)
         aucs.append(a)

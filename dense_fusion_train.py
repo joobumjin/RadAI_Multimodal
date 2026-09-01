@@ -80,7 +80,9 @@ def main(args):
         for s in all_loader:
             time = s['survival_days'] > args.survival_years * DAYS_IN_YR
             event = not s['survival_right_censor']
-            strat.append(event * 2 + time)
+            strat.append((event * 2 + time)[0,0])
+
+        print(strat)
 
         tv, test_inds = train_test_split(
             np.arange(len(dataset)),

@@ -22,6 +22,18 @@ def all_args():
     #km stage
     arg["mix"]["km"] = '--mix_data'.split()
 
+    arg["strat"]["tri"] = '--disable_wandb --mix_data --clinical --path_lang --rad_lang'.split()
+    
+    #bimodal
+    arg["strat"]["pr"] = '--disable_wandb --mix_data --rad_lang --path_lang'.split()
+    arg["strat"]["pc"] = '--disable_wandb --mix_data --path_lang --clinical'.split()
+    arg["strat"]["rc"] = '--disable_wandb --mix_data --rad_lang --clinical'.split()
+
+    #unimodal
+    arg["strat"]["p"] = '--disable_wandb --mix_data --modality uni_path'.split()
+    arg["strat"]["r"] = '--disable_wandb --mix_data --modality uni_rad'.split()
+    arg["strat"]["c"] = '--disable_wandb --mix_data --modality uni_clin'.split()
+
     # trimodal
     arg["mix3"]["tri"] = '--disable_wandb --mix_data --survival_years 3 --clinical --path_lang --rad_lang'.split()
 
