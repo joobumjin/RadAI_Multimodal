@@ -5,7 +5,7 @@ import pandas as pd
 import torch
 from torch.utils.data import DataLoader
 from torch.utils.data import ConcatDataset
-from sklearn.model_selection import train_test_split, KFold
+from sklearn.model_selection import train_test_split, KFold, StratifiedKFold
 from lifelines import KaplanMeierFitter
 import scipy.stats as stats
 
@@ -25,6 +25,7 @@ def get_args_parser():
 
     parser.add_argument('--mix_data',           action="store_true", 
                         help="Combine and then shuffle the train and test data")
+    parser.add_argument('--stratify',           action="store_true", help="stratify the mix split")
     
     parser.add_argument('--test_split',         type=float, default=.15)
     parser.add_argument('--sparse',             action="store_true")
@@ -39,10 +40,13 @@ def build_data(args):
         all_ds = ConcatDataset([train_set, test_set])
         all_loader = DataLoader(all_ds)
         stages, time, event = [], [], []
+        strat = [] if args.stratify else None
         for s in all_loader:
             stages.append(s['stage'].item())
             time.append(s['survival_days'].item())
             event.append(not s['survival_right_censor'].item())
+            if args.stratify: strat.append((not s['survival_right_censor'] * 2 + s['survival_days'] > args.survival_years * DAYS_IN_YR)[0,0])
+        if args.stratify: strat = np.array(strat)
 
         df = pd.DataFrame({"Stage": stages, "Survival Time": time, "Survival Event": event})
 
@@ -50,6 +54,7 @@ def build_data(args):
             np.arange(len(df)),
             test_size=args.test_split,
             random_state=args.seed,
+            stratify=strat
         )
         return df, df, tv_inds, test_inds
 
@@ -71,24 +76,26 @@ def build_data(args):
     test_df = pd.DataFrame({"Stage": test_stages, "Survival Time": test_time, "Survival Event": test_event})
     test_inds = np.arange(len(test_df))
 
-    return tv_df, test_df, tv_inds, test_inds
+    return tv_df, test_df, tv_inds, test_inds, strat
 
 
 def main(args):
-    tv_df, test_df, tv, test_inds = build_data(args)
+    tv_df, test_df, tv_inds, test_inds, strat = build_data(args)
 
     test = test_df.iloc[test_inds]
 
-    kf = KFold(n_splits=5, shuffle=True, random_state=args.seed)
-    splits = kf.split(X=tv)
-
-    cinds = []
-    aucs = []
+    if not args.stratify:
+        kf = KFold(n_splits=5, shuffle=True, random_state=args.seed) 
+        splits = kf.split(X=tv_inds) 
+    else: 
+        kf = StratifiedKFold(n_splits=args.folds, shuffle=True, random_state=args.seed)
+        splits = kf.split(X=tv_inds, y=strat[tv_inds])
 
     ci_res, auc_res = None, None
 
     for split, (train_inds, val_inds) in enumerate(splits):
         print(f"Split {split}")
+        train_inds, val_inds = tv_inds[train_inds], tv_inds[val_inds]
         train, val = tv_df.iloc[train_inds], tv_df.iloc[val_inds]
         kmf = KaplanMeierFitter()
         s_prop = {}
@@ -106,41 +113,10 @@ def main(args):
 
         df_km_2yr = test['Stage'].map(dict(km_risk[args.survival_years * DAYS_IN_YR]))
 
-        cval = cind(
-            torch.from_numpy(test['Survival Event'].to_numpy(dtype=bool)), 
-            torch.from_numpy(test['Survival Time'].to_numpy()),
-            torch.from_numpy(df_km_2yr.to_numpy()), 
-        )
-
-        a = auc(
-            torch.from_numpy(test['Survival Event'].to_numpy(dtype=bool)), 
-            torch.from_numpy(test['Survival Time'].to_numpy()),
-            torch.from_numpy(df_km_2yr.to_numpy()), 
-            args.survival_years
-        )
-
-        cinds.append(cval)
-        aucs.append(a)
-
         test_samples = [torch.from_numpy(test['Survival Event'].to_numpy(dtype=bool)), 
                         torch.from_numpy(test['Survival Time'].to_numpy()),
                         torch.from_numpy(df_km_2yr.to_numpy())]
         ci_res, auc_res = bootstrap_cind_auc(args, test_samples, ci_res, auc_res, n_resample=9999)
-
-    auc_avg = np.mean(aucs)
-    auc_err = stats.sem(aucs)
-
-    ci_avg = np.mean(cinds)
-    ci_err = stats.sem(cinds)
-
-    auc_ci = stats.t.interval(confidence=.95, df=4, loc=auc_avg, scale=auc_err)
-    c_ci = stats.t.interval(confidence=.95, df=4, loc=ci_avg, scale=ci_err)
-    auc5fold = f"{auc_avg:.3f} ({auc_ci[0]:.3f}, {auc_ci[1]:.3f})"
-    ci5fold = f"{ci_avg:.3f} ({c_ci[0]:.3f}, {c_ci[1]:.3f})"
-
-    print(f"5-Fold Avg + 95% CI")
-    print(f"AUC: {auc5fold}")
-    print(f"C Ind: {ci5fold}")
 
     print(f"{"--" * 5}")
     print(f"Bootstrapped Avg + 95% CI")
@@ -148,7 +124,7 @@ def main(args):
     print(str(ci_res))
     print(f"From {len(ci_res.entries)} bootstrap samples")
 
-    return "KM Stage", [auc5fold, ci5fold], [str(auc_res).split(":")[1], str(ci_res).split(":")[1]]
+    return "KM Stage", [None, None], [str(auc_res).split(":")[1], str(ci_res).split(":")[1]]
 
 
 if __name__ == '__main__':

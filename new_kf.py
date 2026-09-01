@@ -2,7 +2,7 @@ import argparse
 
 import numpy as np
 from torch.utils.data import ConcatDataset
-from sklearn.model_selection import train_test_split, KFold
+from sklearn.model_selection import train_test_split, KFold, StratifiedKFold
 import scipy.stats as stats
 
 from data import *
@@ -29,8 +29,7 @@ def get_args_parser():
 
     parser.add_argument('--mix_data',           action="store_true", 
                         help="Combine and then shuffle the train and test data")
-    parser.add_argument('--stratify',           action="store_true", 
-                            help="stratify the mix split")
+    parser.add_argument('--stratify',           action="store_true", help="stratify the mix split")
     parser.add_argument('--modality',           type=str, default="multi", choices=["multi", "uni_path", "uni_rad", "uni_clin"])
 
     parser.add_argument('--sparse',             action="store_true")
@@ -48,6 +47,7 @@ def get_args_parser():
     parser.add_argument('--train_split',        type=float, default=.85)
 
     parser.add_argument('--survival_years',     type=int,   default=2)
+    parser.add_argument('--plot',           action="store_true")
 
     # Optimizer parameters
     parser.add_argument('--lr',                 type=float, default=1e-3,   metavar='LR',
@@ -110,6 +110,8 @@ def main(args):
                 time = s['survival_days'] > args.survival_years * DAYS_IN_YR
                 event = not s['survival_right_censor']
                 strat.append((event * 2 + time)[0,0])
+            strat = np.array(strat)
+            kf = StratifiedKFold(n_splits=args.folds, shuffle=True, random_state=args.seed)
         else: strat = None
 
         tv, test_inds = train_test_split(
@@ -123,7 +125,7 @@ def main(args):
         tv_set, test_set = get_datasets(args)
         tv = np.arange(len(tv_set))
 
-    splits = kf.split(X=tv)
+    splits = kf.split(X=tv) if not args.stratify else kf.split(X=tv, y=strat[tv])
 
     model_fns = {
         "multi": get_dense_fusion_model,
@@ -132,13 +134,14 @@ def main(args):
         "uni_clin": get_unimodal_clin
     }
 
-    metrics = defaultdict(lambda: [])
+    # metrics = defaultdict(lambda: [])
 
     ci_res, auc_res = None, None
 
     for split, (train_inds, val_inds) in enumerate(splits):
         print(f"\n{"--" * 5}")
         print(f"Split {split}")
+        train_inds, val_inds = tv[train_inds], tv[val_inds]
         if args.mix_data:
             train_loader, valid_loader, test_loader = get_combined_loaders(args, dataset, train_inds, val_inds, test_inds)
         else:
@@ -152,38 +155,38 @@ def main(args):
                         #best: 191
         model, device = run.pop("model")
 
-        for key in run: 
-            metrics[key].append(run[key])
+        # for key in run: 
+        #     metrics[key].append(run[key])
             # print(f"{key}: {run[key][-5:]}")
 
         train = compile_split(model, train_loader, device)
         val = compile_split(model, valid_loader, device)
         test = compile_split(model, test_loader, device)
 
-        all = [torch.cat(l) for l in zip(train, test)]
+        all = [torch.cat(l) for l in zip(train, val, test)]
 
         ci_res, auc_res = bootstrap_cind_auc(args, test, ci_res, auc_res, n_resample=9999)
-        if split == 4 and mod_name == "Trimodal" and args.mix_data:
+        if split == 4 and args.plot:
             km_preds(*all)
 
-    for key in metrics: metrics = {key: np.vstack(arr) for key, arr in metrics.items()}
+    # for key in metrics: metrics = {key: np.vstack(arr) for key, arr in metrics.items()}
 
-    avgs = {key: np.mean(arr, axis=0) for key, arr in metrics.items()}
-    errs = {key: stats.sem(arr, axis=0) for key, arr in metrics.items()}
+    # avgs = {key: np.mean(arr, axis=0) for key, arr in metrics.items()}
+    # errs = {key: stats.sem(arr, axis=0) for key, arr in metrics.items()}
 
     print(f"\n{mod_name}{', mix data' if args.mix_data else ', inst. sep.'} - {args.survival_years}yr")
-    print(f"{"--" * 5}")
-    print(f"5-Fold Avg + 95% CI")
-    selected = -1
-    auc_ci = stats.t.interval(confidence=.95, df=4, loc=avgs['Test AUC'][selected], scale=errs['Test AUC'][selected])
-    auc_ci = [float(n) for n in auc_ci]
-    c_ci = stats.t.interval(confidence=.95, df=4, loc=avgs['Test C-Index'][selected], scale=errs['Test C-Index'][selected])
-    c_ci = [float(n) for n in c_ci]
+    # print(f"{"--" * 5}")
+    # print(f"5-Fold Avg + 95% CI")
+    # selected = -1
+    # auc_ci = stats.t.interval(confidence=.95, df=4, loc=avgs['Test AUC'][selected], scale=errs['Test AUC'][selected])
+    # auc_ci = [float(n) for n in auc_ci]
+    # c_ci = stats.t.interval(confidence=.95, df=4, loc=avgs['Test C-Index'][selected], scale=errs['Test C-Index'][selected])
+    # c_ci = [float(n) for n in c_ci]
 
-    auc5fold = f"{avgs['Test AUC'][selected]:.2f} ({auc_ci[0]:.3f}, {auc_ci[1]:.3f})"
-    ci5fold = f"{avgs['Test C-Index'][selected]:.2f} ({c_ci[0]:.3f}, {c_ci[1]:.3f})"
-    print(f"AUC: {auc5fold}")
-    print(f"C Ind: {ci5fold}")
+    # auc5fold = f"{avgs['Test AUC'][selected]:.2f} ({auc_ci[0]:.3f}, {auc_ci[1]:.3f})"
+    # ci5fold = f"{avgs['Test C-Index'][selected]:.2f} ({c_ci[0]:.3f}, {c_ci[1]:.3f})"
+    # print(f"AUC: {auc5fold}")
+    # print(f"C Ind: {ci5fold}")
 
 
     print(f"{"--" * 5}")
@@ -192,7 +195,7 @@ def main(args):
     print(str(ci_res))
     print(f"From {len(ci_res.entries)} bootstrap samples")
 
-    return mod_name, [auc5fold, ci5fold], [str(auc_res).split(":")[1], str(ci_res).split(":")[1]]
+    return mod_name, [None, None], [auc_res, ci_res]
        
 
 if __name__ == '__main__':

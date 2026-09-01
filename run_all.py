@@ -1,80 +1,97 @@
 from collections import defaultdict
 
+import numpy as np
 import pandas as pd
+import matplotlib.pyplot as plt
 
 import new_kf
 import km_stage
 
+def get_sub(yrs: int):
+    sub = {}
+    sub[f"mix{yrs}"] = {
+        #trimodal
+        "tri": f'--disable_wandb--survival_years {yrs} --mix_data --clinical --path_lang --rad_lang --plot'.split(),
+        #bimodal
+        "pr": f'--disable_wandb--survival_years {yrs} --mix_data --rad_lang --path_lang'.split(),
+        "pc": f'--disable_wandb--survival_years {yrs} --mix_data --path_lang --clinical'.split(),
+        "rc": f'--disable_wandb--survival_years {yrs} --mix_data --rad_lang --clinical'.split(),
+        #unimodal
+        "p": f'--disable_wandb--survival_years {yrs} --mix_data --modality uni_path'.split(),
+        "r": f'--disable_wandb--survival_years {yrs} --mix_data --modality uni_rad'.split(),
+        "c": f'--disable_wandb--survival_years {yrs} --mix_data --modality uni_clin'.split(),
+        #km stage
+        "km": f'--survival_years {yrs} --mix_data'.split(),
+    }
+
+    sub[f"iso{yrs}"] = {
+        #trimodal
+        "tri": f'--disable_wandb--survival_years {yrs} --clinical --path_lang --rad_lang'.split(),
+        #bimodal
+        "pr": f'--disable_wandb--survival_years {yrs} --rad_lang --path_lang'.split(),
+        "pc": f'--disable_wandb--survival_years {yrs} --path_lang --clinical'.split(),
+        "rc": f'--disable_wandb--survival_years {yrs} --rad_lang --clinical'.split(),
+        #unimodal
+        "p": f'--disable_wandb --survival_years {yrs} --modality uni_path '.split(),
+        "r": f'--disable_wandb --survival_years {yrs} --modality uni_rad'.split(),
+        "c": f'--disable_wandb --survival_years {yrs} --modality uni_clin '.split(),
+        #km stage
+        "km": f'--survival_years {yrs}'.split(),
+    }
+    return sub
+
+def get_strat(yrs: int):
+    sub = {}
+
+    sub[f"strat{yrs}"] = {
+        #trimodal
+        "tri": f'--disable_wandb --survival_years {yrs} --mix_data --clinical --path_lang --rad_lang --stratify'.split(),
+        #bimodal
+        "pr": f'--disable_wandb --survival_years {yrs} --mix_data --rad_lang --path_lang --stratify'.split(),
+        "pc": f'--disable_wandb --survival_years {yrs} --mix_data --path_lang --clinical --stratify'.split(),
+        "rc": f'--disable_wandb --survival_years {yrs} --mix_data --rad_lang --clinical --stratify'.split(),
+        #unimodal
+        "p": f'--disable_wandb --survival_years {yrs} --mix_data --modality uni_path --stratify'.split(),
+        "r": f'--disable_wandb --survival_years {yrs} --mix_data --modality uni_rad --stratify'.split(),
+        "c": f'--disable_wandb --survival_years {yrs} --mix_data --modality uni_clin --stratify'.split(),
+        #km stage
+        "km": f'--stratify --survival_years {yrs}'.split(),
+    }
+
+    return sub
+
 def all_args():
-    arg = defaultdict(lambda: {})
-    arg["mix"]["tri"] = '--disable_wandb --mix_data --clinical --path_lang --rad_lang'.split()
-
-    #bimodal
-    arg["mix"]["pr"] = '--disable_wandb --mix_data --rad_lang --path_lang'.split()
-    arg["mix"]["pc"] = '--disable_wandb --mix_data --path_lang --clinical'.split()
-    arg["mix"]["rc"] = '--disable_wandb --mix_data --rad_lang --clinical'.split()
-
-    #unimodal
-    arg["mix"]["p"] = '--disable_wandb --mix_data --modality uni_path'.split()
-    arg["mix"]["r"] = '--disable_wandb --mix_data --modality uni_rad'.split()
-    arg["mix"]["c"] = '--disable_wandb --mix_data --modality uni_clin'.split()
-
-    #km stage
-    arg["mix"]["km"] = '--mix_data'.split()
-
-    arg["strat"]["tri"] = '--disable_wandb --mix_data --clinical --path_lang --rad_lang'.split()
-    
-    #bimodal
-    arg["strat"]["pr"] = '--disable_wandb --mix_data --rad_lang --path_lang'.split()
-    arg["strat"]["pc"] = '--disable_wandb --mix_data --path_lang --clinical'.split()
-    arg["strat"]["rc"] = '--disable_wandb --mix_data --rad_lang --clinical'.split()
-
-    #unimodal
-    arg["strat"]["p"] = '--disable_wandb --mix_data --modality uni_path'.split()
-    arg["strat"]["r"] = '--disable_wandb --mix_data --modality uni_rad'.split()
-    arg["strat"]["c"] = '--disable_wandb --mix_data --modality uni_clin'.split()
-
-    # trimodal
-    arg["mix3"]["tri"] = '--disable_wandb --mix_data --survival_years 3 --clinical --path_lang --rad_lang'.split()
-
-    # bimodal
-    arg["mix3"]["pr"] = '--disable_wandb --mix_data --survival_years 3 --rad_lang --path_lang'.split()
-    arg["mix3"]["pc"] = '--disable_wandb --mix_data --survival_years 3 --path_lang --clinical'.split()
-    arg["mix3"]["rc"] = '--disable_wandb --mix_data --survival_years 3 --rad_lang --clinical'.split()
-
-    # unimodal
-    arg["mix3"]["p"] = '--disable_wandb --mix_data --survival_years 3 --modality uni_path'.split()
-    arg["mix3"]["r"] = '--disable_wandb --mix_data --survival_years 3 --modality uni_rad'.split()
-    arg["mix3"]["c"] = '--disable_wandb --mix_data --survival_years 3 --modality uni_clin'.split()
-
-    #km stage
-    arg["mix3"]["km"] = '--mix_data --survival_years 3'.split()
-
-    #trimodal
-    arg["iso"]["tri"] = '--disable_wandb --clinical --path_lang --rad_lang'.split()
-
-    #bimodal
-    arg["iso"]["pr"] = '--disable_wandb --rad_lang --path_lang'.split()
-    arg["iso"]["pc"] = '--disable_wandb --path_lang --clinical'.split()
-    arg["iso"]["rc"] = '--disable_wandb --rad_lang --clinical'.split()
-
-    #unimodal
-    arg["iso"]["p"] = '--disable_wandb --modality uni_path '.split()
-    arg["iso"]["r"] = '--disable_wandb --modality uni_rad'.split()
-    arg["iso"]["c"] = '--disable_wandb --modality uni_clin '.split()
-
-    #km stage
-    arg["iso"]["km"] = ''.split()
+    arg = {
+        **get_sub(2),
+        **get_strat(2),
+        **get_sub(3),
+        **get_sub(5),
+    }
 
     return arg
 
+def plot(setup, df, met):
+    idx = pd.IndexSlice
+    means = df[met, idx[:, "Mean"]].to_numpy()
+    lows = means - df[met, idx[:, "CI Low"]].to_numpy()
+    highs = df[met, idx[:, "CI High"]].to_numpy() - means
+    
+    plt.errorbar(means, df.columns.get_level_values(0).unique(), xerr=[lows, highs], fmt='o', elinewidth=2, capsize=6, 
+                 label='95% CI')
+    plt.savefig(f"./{setup}_intervals.jpeg")
+
 def run_all():
     arg_set = all_args()
-    tables = {}
+    tables = {} #{setup: [summary_tables]}
 
-    for setup, runs in arg_set.items():
-        summ5 = pd.DataFrame(index=["AUC", "C-Index"])
-        summB = pd.DataFrame(index=["AUC", "C-Index"])
+    for setup, runs in arg_set.items(): #{setup: runs ({model_type: args})}
+        models = ["Trimodal", "Bimodal Path+Rad", "Bimodal Path+Clin", "Bimodal Rad+Clin", "Unimodal Path", "Unimodal Rad", "Unimodal Clin", "KM Stage"]
+        cols = []
+        for m in models:
+            cols += [(m, "Mean"), (m, "CI Low"), (m, "CI High")]
+
+        summB = pd.DataFrame(index=["AUC", "C-Index"], columns=cols)
+        summB.index.name = "Metric (95% CI)"
 
         for n, args in runs.items():
             if n != "km": 
@@ -86,29 +103,26 @@ def run_all():
                 main_fn = km_stage.main
 
             args = parser.parse_args(args)
-            mod, res5, resB = main_fn(args)
-            summ5[mod] = res5
-            summB[mod] = resB
+            mod, _, resB = main_fn(args)
+            summB[(mod, "Mean")] = [r.avg for r in resB]
+            summB[(mod, "CI Low")] = [r.ci[0] for r in resB]
+            summB[(mod, "CI High")] = [r.ci[1] for r in resB]
 
-        tables[setup] = [summ5, summB]
+        tables[setup] = [summB]
 
     with open('./out.md', 'w', encoding="utf-8") as f:
         for setup, t in tables.items():
             print("\n--------")
             print(setup)
             print()
-            print("5Fold CV")
-            print(t[0].to_markdown())
             print("Bootstrap")
-            print(t[1].to_markdown())
+            print(t[0])
 
             f.write("\n")
             f.write(f"# {setup}")
             f.write("\n")
-            f.write(f"## 5Fold CV")
-            f.write(t[0].to_markdown())
             f.write("## Bootstrap")
-            f.write(t[1].to_markdown())
+            f.write(t[0].to_markdown())
 
 if __name__ == '__main__':
     run_all()

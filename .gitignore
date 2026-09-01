@@ -8,11 +8,7 @@ ignore/
 __dep/
 
 #nonpublic data 
-Notebooks/data.ipynb
-Notebooks/slide_vis.ipynb
-Notebooks/index.ipynb
-Notebooks/lang_index.ipynb
-Notebooks/pathlang.ipynb
+Notebooks/*
 
 # Byte-compiled / optimized / DLL files
 **/__pycache__/
