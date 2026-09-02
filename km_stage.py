@@ -116,7 +116,6 @@ def main(args):
             )
             s_prop[name] = dict(kmf.survival_function_at_times([args.survival_years * DAYS_IN_YR]))
 
-
         km_risk = 1 - pd.DataFrame.from_dict(s_prop, orient='index')
 
         df_km_2yr = test['Stage'].map(dict(km_risk[args.survival_years * DAYS_IN_YR]))
