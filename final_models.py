@@ -57,3 +57,25 @@ def get_unimodal_clin(args):
 
     model = model.to(device)
     return model, device
+
+# --------------------------------------------------------
+
+def get_mod_name(args):
+    if args.modality == "uni_path": 
+        args.path_lang = True
+        mod_name = "Unimodal Path"
+    elif args.modality == "uni_rad": 
+        args.rad_lang = True
+        mod_name = "Unimodal Rad"
+    elif args.modality == "uni_clin": 
+        args.clinical = True
+        mod_name = "Unimodal Clin"
+    else:
+        mod_name = []
+        for mod, n in zip([args.path_lang, args.rad_lang, args.clinical], ["Path", "Rad", "Clin"]):
+            if mod: mod_name.append(n)
+        
+        if len(mod_name) == 3: mod_name = "Trimodal"
+        else: mod_name = "Bimodal " + "+".join(mod_name)
+
+    return args, mod_name

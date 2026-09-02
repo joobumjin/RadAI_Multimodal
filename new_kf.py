@@ -84,23 +84,7 @@ def main(args):
     torch.manual_seed(seed)
     np.random.seed(seed)
     
-    if args.modality == "uni_path": 
-        args.path_lang = True
-        mod_name = "Unimodal Path"
-    elif args.modality == "uni_rad": 
-        args.rad_lang = True
-        mod_name = "Unimodal Rad"
-    elif args.modality == "uni_clin": 
-        args.clinical = True
-        mod_name = "Unimodal Clin"
-    else:
-        mod_name = []
-        for mod, n in zip([args.path_lang, args.rad_lang, args.clinical], ["Path", "Rad", "Clin"]):
-            if mod: mod_name.append(n)
-        
-        if len(mod_name) == 3: mod_name = "Trimodal"
-        else: mod_name = "Bimodal " + "+".join(mod_name)
-
+    args, mod_name = get_mod_name(args)
     args.wb_proj = f"{mod_name} {args.model} {args.wb_proj} {args.folds}"
 
     kf = KFold(n_splits=args.folds, shuffle=True, random_state=args.seed)
@@ -140,7 +124,7 @@ def main(args):
         "uni_clin": get_unimodal_clin
     }
 
-    # metrics = defaultdict(lambda: [])
+    metrics = defaultdict(lambda: [])
 
     ci_res, auc_res = None, None
 
@@ -159,47 +143,46 @@ def main(args):
                         run_name = run_name, return_keys=['Test AUC', 'Test C-Index'], ret_model=True, early_stop = None)
                         # early_stop = (191 if mod_name=="Trimodal" else None))
                         #best: 191
-        model, device = run.pop("model")
+        # model, device = run.pop("model")
 
-        # for key in run: 
-        #     metrics[key].append(run[key])
-            # print(f"{key}: {run[key][-5:]}")
+        for key in run: 
+            metrics[key].append(run[key])
+            print(f"{key}: {run[key][-15:]}")
 
-        train = compile_split(model, train_loader, device)
-        val = compile_split(model, valid_loader, device)
-        test = compile_split(model, test_loader, device)
+        # train = compile_split(model, train_loader, device)
+        # val = compile_split(model, valid_loader, device)
+        # test = compile_split(model, test_loader, device)
 
-        all = [torch.cat(l) for l in zip(train, val, test)]
+        # all = [torch.cat(l) for l in zip(train, val, test)]
 
-        ci_res, auc_res = bootstrap_cind_auc(args, test, ci_res, auc_res)
-        if split == 4 and args.plot:
-            km_preds(*all)
+        # ci_res, auc_res = bootstrap_cind_auc(args, test, ci_res, auc_res)
+        # if split == 4 and args.plot:
+        #     km_preds(*all)
 
-    # for key in metrics: metrics = {key: np.vstack(arr) for key, arr in metrics.items()}
+    for key in metrics: metrics = {key: np.vstack(arr) for key, arr in metrics.items()}
 
-    # avgs = {key: np.mean(arr, axis=0) for key, arr in metrics.items()}
-    # errs = {key: stats.sem(arr, axis=0) for key, arr in metrics.items()}
+    avgs = {key: np.mean(arr, axis=0) for key, arr in metrics.items()}
+    errs = {key: stats.sem(arr, axis=0) for key, arr in metrics.items()}
 
     print(f"\n{mod_name}{', mix data' if args.mix_data else ', inst. sep.'} - {args.survival_years}yr")
-    # print(f"{"--" * 5}")
-    # print(f"5-Fold Avg + 95% CI")
-    # selected = -1
-    # auc_ci = stats.t.interval(confidence=.95, df=4, loc=avgs['Test AUC'][selected], scale=errs['Test AUC'][selected])
-    # auc_ci = [float(n) for n in auc_ci]
-    # c_ci = stats.t.interval(confidence=.95, df=4, loc=avgs['Test C-Index'][selected], scale=errs['Test C-Index'][selected])
-    # c_ci = [float(n) for n in c_ci]
-
-    # auc5fold = f"{avgs['Test AUC'][selected]:.2f} ({auc_ci[0]:.3f}, {auc_ci[1]:.3f})"
-    # ci5fold = f"{avgs['Test C-Index'][selected]:.2f} ({c_ci[0]:.3f}, {c_ci[1]:.3f})"
-    # print(f"AUC: {auc5fold}")
-    # print(f"C Ind: {ci5fold}")
-
-
     print(f"{"--" * 5}")
-    print(f"Bootstrapped Avg + 95% CI")
-    print(str(auc_res))
-    print(str(ci_res))
-    print(f"From {len(ci_res.entries)} bootstrap samples")
+    print(f"5-Fold Avg + 95% CI")
+    selected = -1
+    auc_ci = stats.t.interval(confidence=.95, df=4, loc=avgs['Test AUC'][selected], scale=errs['Test AUC'][selected])
+    auc_ci = [float(n) for n in auc_ci]
+    c_ci = stats.t.interval(confidence=.95, df=4, loc=avgs['Test C-Index'][selected], scale=errs['Test C-Index'][selected])
+    c_ci = [float(n) for n in c_ci]
+
+    auc5fold = f"{avgs['Test AUC'][selected]:.3f} ({auc_ci[0]:.3f}, {auc_ci[1]:.3f})"
+    ci5fold = f"{avgs['Test C-Index'][selected]:.3f} ({c_ci[0]:.3f}, {c_ci[1]:.3f})"
+    print(f"AUC: {auc5fold}")
+    print(f"C Ind: {ci5fold}")
+
+    # print(f"{"--" * 5}")
+    # print(f"Bootstrapped Avg + 95% CI")
+    # print(str(auc_res))
+    # print(str(ci_res))
+    # print(f"From {len(ci_res.entries)} bootstrap samples")
 
     return mod_name, [None, None], [auc_res, ci_res]
        

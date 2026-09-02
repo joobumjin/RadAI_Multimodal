@@ -6,7 +6,7 @@ from sklearn.model_selection import train_test_split
 
 from data import *
 from util import *
-from run import *
+from run import run_setup, get_combined_loaders, get_subset_loaders, get_datasets
 from final_models import *
 
 def get_args_parser():
@@ -76,6 +76,9 @@ def main(args):
     torch.manual_seed(seed)
     np.random.seed(seed)
 
+    args, mod_name = get_mod_name(args)
+    args.wb_proj = f"{mod_name} {args.model} {args.wb_proj} {args.folds}"
+
     if args.mix_data:
         datasets = get_datasets(args)
         dataset = ConcatDataset(datasets) #this is prob a little mem inefficient
@@ -122,9 +125,14 @@ def main(args):
     #384
     model, device = run.pop("model")
 
-    # train = compile_split(model, train_loader, device)
-    # val = compile_split(model, valid_loader, device)
-    # test = compile_split(model, test_loader, device)
+    train = compile_split(model, train_loader, device)
+    val = compile_split(model, valid_loader, device)
+    test = compile_split(model, test_loader, device)
+    all = [torch.cat(l) for l in zip(train, val, test)]
+    if args.plot:
+        km_preds(*all)
+
+    finals = {key: arr[-1].item() for key, arr in run.items()}
 
     # ci_res, auc_res = bootstrap_cind_auc(args, test, None, None)
 
@@ -133,7 +141,7 @@ def main(args):
     # print(str(auc_res))
     # print(str(ci_res))
     # print(f"From {len(ci_res.entries)} bootstrap samples")
-    print(run)
+    print(finals)
 
 
 if __name__ == '__main__':
