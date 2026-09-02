@@ -32,7 +32,7 @@ def get_dense_fusion_model(args):
         if arg_dict.get(mod, False): 
             encs[mod], casts[mod] = fn(args)
 
-    model = DenseFusion(encs, emb_dim=args.emb_dim, hidden_dims=[32], autocast=casts, loss_fn=LOSS_FNS[args.loss_fn], device=device)
+    model = DenseFusion(encs, emb_dim=args.emb_dim, hidden_dims=[128, 32], autocast=casts, loss_fn=LOSS_FNS[args.loss_fn], device=device)
     return model, device
 
 # --------------------------------------------------------
@@ -52,7 +52,7 @@ def get_unimodal_rad(args):
     return model, device
 
 def get_unimodal_clin(args):
-    model = Unimodal(24, [64], 1, act = nn.GELU(), loss_fn=LOSS_FNS[args.loss_fn], rms_norm = True, mod="clinical") 
+    model = Unimodal(24, [64, 32], 1, act = nn.GELU(), loss_fn=LOSS_FNS[args.loss_fn], rms_norm = True, mod="clinical") 
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
     model = model.to(device)
