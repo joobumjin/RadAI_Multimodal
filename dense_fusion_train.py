@@ -27,6 +27,7 @@ def get_args_parser():
 
     parser.add_argument('--mix_data',           action="store_true", 
                         help="Combine and then shuffle the train and test data")
+    parser.add_argument('--stratify',           action="store_true", help="stratify the mix split")
     parser.add_argument('--modality',           type=str, default="multi", choices=["multi", "uni_path", "uni_rad", "uni_clin"])
 
     parser.add_argument('--sparse',             action="store_true")
@@ -76,13 +77,14 @@ def main(args):
         dataset = ConcatDataset(datasets) #this is prob a little mem inefficient
 
         all_loader = DataLoader(dataset)
-        strat = []
-        for s in all_loader:
-            time = s['survival_days'] > args.survival_years * DAYS_IN_YR
-            event = not s['survival_right_censor']
-            strat.append((event * 2 + time)[0,0])
-
-        print(strat)
+        if args.stratify:
+            strat = []
+            for s in all_loader:
+                time = s['survival_days'] > args.survival_years * DAYS_IN_YR
+                event = not s['survival_right_censor']
+                strat.append((event * 2 + time)[0,0])
+        else:
+            strat = None
 
         tv, test_inds = train_test_split(
             np.arange(len(dataset)),
@@ -98,12 +100,6 @@ def main(args):
     else:
         tv_set, test_set = get_datasets(args)
         tv = np.arange(len(tv_set))
-
-        # train_inds, val_inds = train_test_split(
-        #     tv,
-        #     test_size=1-args.train_split,
-        #     random_state=args.seed,
-        # )
 
         train_inds, val_inds = tv, []
 
