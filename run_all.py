@@ -51,12 +51,13 @@ def all_args():
 
 def plot(setup, df, met):
     idx = pd.IndexSlice
-    means = df[met, idx[:, "Mean"]].to_numpy()
-    lows = means - df[met, idx[:, "CI Low"]].to_numpy()
-    highs = df[met, idx[:, "CI High"]].to_numpy() - means
+    means = df.loc[met, idx[:, "Mean"]].to_numpy()
+    lows = means - df.loc[met, idx[:, "CI Low"]].to_numpy()
+    highs = df.loc[met, idx[:, "CI High"]].to_numpy() - means
     
     plt.errorbar(means, df.columns.get_level_values(0).unique(), xerr=[lows, highs], fmt='o', elinewidth=2, capsize=6, 
                  label='95% CI')
+    plt.title(f"Summary of {met} Performance on {setup}")
     plt.savefig(f"./{setup}_{met}_intervals.jpeg")
     plt.close()
 
@@ -106,6 +107,7 @@ def run_all():
             f.write(f"# {setup}")
             f.write("\n")
             f.write("## 5 Fold CV")
+            f.write("\n")
             f.write(t[0].to_markdown())
 
 if __name__ == '__main__':

@@ -4,7 +4,7 @@ from lifelines import KaplanMeierFitter
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-def km_preds(all_deaths: torch.Tensor, all_times: torch.Tensor, all_preds: torch.Tensor):
+def km_preds(all_deaths: torch.Tensor, all_times: torch.Tensor, all_preds: torch.Tensor, model_name: str):
     """
     Builds and plots a KM curve based on predictions
     Specifically splits the prediciton range into 3 equal bins and KM fits to those 3 risk groups
@@ -35,7 +35,7 @@ def km_preds(all_deaths: torch.Tensor, all_times: torch.Tensor, all_preds: torch
         )
         kmf.plot_survival_function(ax=ax, ci_show=False)
         
-    plt.title("Trimodal Model Survival Curve")
+    plt.title(f"{model_name} Survival Curve")
     plt.xlabel("Days Since Diagnosis")
     plt.ylabel("Survival Probability")
     plt.savefig("./km_curve.png")

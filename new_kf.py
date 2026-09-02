@@ -160,7 +160,7 @@ def main(args):
 
         # ci_res, auc_res = bootstrap_cind_auc(args, test, ci_res, auc_res)
         if split == 4 and args.plot:
-            km_preds(*all)
+            km_preds(*all, model_name = f"Trimodal {args.survival_years}yr Model")
 
     for key in metrics: metrics = {key: np.vstack(arr) for key, arr in metrics.items()}
 
