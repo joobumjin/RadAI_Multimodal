@@ -1,4 +1,5 @@
 import argparse
+from types import SimpleNamespace
 
 import numpy as np
 from torch.utils.data import ConcatDataset
@@ -51,7 +52,7 @@ def get_args_parser():
     parser.add_argument('--plot',               action="store_true")
 
     # Optimizer parameters
-    parser.add_argument('--lr',                 type=float, default=1e-3,   metavar='LR',
+    parser.add_argument('--lr',                 type=float, default=1e-4,   metavar='LR',
                         help='learning rate (absolute lr)')
     parser.add_argument('--min_lr',             type=float, default=1e-7,   metavar='LR',
                         help='lower lr bound for cyclic schedulers that hit 0')
@@ -131,6 +132,8 @@ def main(args):
     for split, (train_inds, val_inds) in enumerate(splits):
         print(f"\n{"--" * 5}")
         print(f"Split {split}")
+
+        # print("overlap", np.intersect1d(train_inds, test_inds), np.intersect1d(val_inds, test_inds))  
         train_inds, val_inds = tv[train_inds], tv[val_inds]
         if args.mix_data:
             train_loader, valid_loader, test_loader = get_combined_loaders(args, dataset, train_inds, val_inds, test_inds)
@@ -140,24 +143,24 @@ def main(args):
         run_name = f"Split {split}"
 
         run = run_setup(args, model_fns[args.modality], train_loader, valid_loader, test_loader, 
-                        run_name = run_name, return_keys=['Test AUC', 'Test C-Index'], ret_model=True, early_stop = None)
+                        run_name = run_name, return_keys=['Test AUC', 'Test C-Index'], ret_model=True, early_stop = (398 if mod_name=="Trimodal" else None))
                         # early_stop = (191 if mod_name=="Trimodal" else None))
                         #best: 191
-        # model, device = run.pop("model")
+        model, device = run.pop("model")
 
         for key in run: 
             metrics[key].append(run[key])
-            print(f"{key}: {run[key][-15:]}")
+            # print(f"{key}: {run[key][-15:]}")
 
-        # train = compile_split(model, train_loader, device)
-        # val = compile_split(model, valid_loader, device)
-        # test = compile_split(model, test_loader, device)
+        train = compile_split(model, train_loader, device)
+        val = compile_split(model, valid_loader, device)
+        test = compile_split(model, test_loader, device)
 
-        # all = [torch.cat(l) for l in zip(train, val, test)]
+        all = [torch.cat(l) for l in zip(train, val, test)]
 
         # ci_res, auc_res = bootstrap_cind_auc(args, test, ci_res, auc_res)
-        # if split == 4 and args.plot:
-        #     km_preds(*all)
+        if split == 4 and args.plot:
+            km_preds(*all)
 
     for key in metrics: metrics = {key: np.vstack(arr) for key, arr in metrics.items()}
 
@@ -167,16 +170,17 @@ def main(args):
     print(f"\n{mod_name}{', mix data' if args.mix_data else ', inst. sep.'} - {args.survival_years}yr")
     print(f"{"--" * 5}")
     print(f"5-Fold Avg + 95% CI")
+    # for selected in [654, 816, 398]:
     selected = -1
     auc_ci = stats.t.interval(confidence=.95, df=4, loc=avgs['Test AUC'][selected], scale=errs['Test AUC'][selected])
     auc_ci = [float(n) for n in auc_ci]
     c_ci = stats.t.interval(confidence=.95, df=4, loc=avgs['Test C-Index'][selected], scale=errs['Test C-Index'][selected])
     c_ci = [float(n) for n in c_ci]
 
-    auc5fold = f"{avgs['Test AUC'][selected]:.3f} ({auc_ci[0]:.3f}, {auc_ci[1]:.3f})"
-    ci5fold = f"{avgs['Test C-Index'][selected]:.3f} ({c_ci[0]:.3f}, {c_ci[1]:.3f})"
-    print(f"AUC: {auc5fold}")
-    print(f"C Ind: {ci5fold}")
+    auc5fold = SimpleNamespace(avg = avgs['Test AUC'][selected], ci=auc_ci)
+    ci5fold = SimpleNamespace(avg = avgs['Test C-Index'][selected], ci=c_ci)
+    print(f"AUC: {auc5fold.avg} ({auc_ci[0]:.3f}, {auc_ci[1]:.3f})")
+    print(f"C Ind: {ci5fold.avg} ({c_ci[0]:.3f}, {c_ci[1]:.3f})")
 
     # print(f"{"--" * 5}")
     # print(f"Bootstrapped Avg + 95% CI")
@@ -184,7 +188,7 @@ def main(args):
     # print(str(ci_res))
     # print(f"From {len(ci_res.entries)} bootstrap samples")
 
-    return mod_name, [None, None], [auc_res, ci_res]
+    return mod_name, [auc5fold, ci5fold], [auc_res, ci_res]
        
 
 if __name__ == '__main__':

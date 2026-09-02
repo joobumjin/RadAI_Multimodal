@@ -11,15 +11,15 @@ def get_sub(yrs: int):
     sub = {}
     sub[f"mix{yrs}"] = {
         #trimodal
-        "tri": f'--disable_wandb --survival_years {yrs} --mix_data --clinical --path_lang --rad_lang --plot'.split(),
+        "tri": f'--disable_wandb --survival_years {yrs} --mix_data --clinical --path_lang --rad_lang --plot --stratify --emb_dim 128 --epochs 1000 --sparse --warmup_epochs 100'.split(),
         #bimodal
-        "pr": f'--disable_wandb --survival_years {yrs} --mix_data --rad_lang --path_lang'.split(),
-        "pc": f'--disable_wandb --survival_years {yrs} --mix_data --path_lang --clinical'.split(),
-        "rc": f'--disable_wandb --survival_years {yrs} --mix_data --rad_lang --clinical'.split(),
+        "pr": f'--disable_wandb --survival_years {yrs} --mix_data --rad_lang --path_lang --stratify --emb_dim 128 --sparse'.split(),
+        "pc": f'--disable_wandb --survival_years {yrs} --mix_data --path_lang --clinical --stratify --emb_dim 128 --sparse'.split(),
+        "rc": f'--disable_wandb --survival_years {yrs} --mix_data --rad_lang --clinical --stratify --emb_dim 128 --sparse'.split(),
         #unimodal
-        "p": f'--disable_wandb --survival_years {yrs} --mix_data --modality uni_path'.split(),
-        "r": f'--disable_wandb --survival_years {yrs} --mix_data --modality uni_rad'.split(),
-        "c": f'--disable_wandb --survival_years {yrs} --mix_data --modality uni_clin'.split(),
+        "p": f'--disable_wandb --survival_years {yrs} --mix_data --modality uni_path --stratify'.split(),
+        "r": f'--disable_wandb --survival_years {yrs} --mix_data --modality uni_rad --stratify'.split(),
+        "c": f'--disable_wandb --survival_years {yrs} --mix_data --modality uni_clin --stratify'.split(),
         #km stage
         "km": f'--survival_years {yrs} --mix_data'.split(),
     }
@@ -40,32 +40,11 @@ def get_sub(yrs: int):
     }
     return sub
 
-def get_strat(yrs: int):
-    sub = {}
-
-    sub[f"strat{yrs}"] = {
-        #trimodal
-        "tri": f'--disable_wandb --survival_years {yrs} --mix_data --clinical --path_lang --rad_lang --stratify'.split(),
-        #bimodal
-        "pr": f'--disable_wandb --survival_years {yrs} --mix_data --rad_lang --path_lang --stratify'.split(),
-        "pc": f'--disable_wandb --survival_years {yrs} --mix_data --path_lang --clinical --stratify'.split(),
-        "rc": f'--disable_wandb --survival_years {yrs} --mix_data --rad_lang --clinical --stratify'.split(),
-        #unimodal
-        "p": f'--disable_wandb --survival_years {yrs} --mix_data --modality uni_path --stratify'.split(),
-        "r": f'--disable_wandb --survival_years {yrs} --mix_data --modality uni_rad --stratify'.split(),
-        "c": f'--disable_wandb --survival_years {yrs} --mix_data --modality uni_clin --stratify'.split(),
-        #km stage
-        "km": f'--stratify --survival_years {yrs}'.split(),
-    }
-
-    return sub
-
 def all_args():
     arg = {
         **get_sub(2),
-        # **get_strat(2),
-        # **get_sub(3),
-        # **get_sub(5),
+        **get_sub(3),
+        **get_sub(5),
     }
 
     return arg
@@ -78,7 +57,8 @@ def plot(setup, df, met):
     
     plt.errorbar(means, df.columns.get_level_values(0).unique(), xerr=[lows, highs], fmt='o', elinewidth=2, capsize=6, 
                  label='95% CI')
-    plt.savefig(f"./{setup}_intervals.jpeg")
+    plt.savefig(f"./{setup}_{met}_intervals.jpeg")
+    plt.close()
 
 def run_all():
     arg_set = all_args()
@@ -90,9 +70,9 @@ def run_all():
         for m in models:
             cols += [(m, "Mean"), (m, "CI Low"), (m, "CI High")]
 
-        summB = pd.DataFrame(index=["AUC", "C-Index"], columns=cols)
-        summB.index.name = "Metric (95% CI)"
-        summB.columns = pd.MultiIndex.from_tuples(summB.columns)
+        summ5 = pd.DataFrame(index=["AUC", "C-Index"], columns=cols)
+        summ5.index.name = "Metric (95% CI)"
+        summ5.columns = pd.MultiIndex.from_tuples(summ5.columns)
 
         for n, args in runs.items():
             if n != "km": 
@@ -104,25 +84,28 @@ def run_all():
                 main_fn = km_stage.main
 
             args = parser.parse_args(args)
-            mod, _, resB = main_fn(args)
-            summB[(mod, "Mean")] = [r.avg for r in resB]
-            summB[(mod, "CI Low")] = [r.ci[0] for r in resB]
-            summB[(mod, "CI High")] = [r.ci[1] for r in resB]
+            mod, res5, _ = main_fn(args)
+            summ5[(mod, "Mean")] = [r.avg for r in res5]
+            summ5[(mod, "CI Low")] = [r.ci[0] for r in res5]
+            summ5[(mod, "CI High")] = [r.ci[1] for r in res5]
 
-        tables[setup] = [summB]
+        tables[setup] = [summ5]
 
     with open('./out.md', 'w', encoding="utf-8") as f:
         for setup, t in tables.items():
+            plot(setup, t[0], "AUC")
+            plot(setup, t[0], "C-Index")
+
             print("\n--------")
             print(setup)
             print()
-            print("Bootstrap")
+            print("5 Fold CV")
             print(t[0])
 
             f.write("\n")
             f.write(f"# {setup}")
             f.write("\n")
-            f.write("## Bootstrap")
+            f.write("## 5 Fold CV")
             f.write(t[0].to_markdown())
 
 if __name__ == '__main__':

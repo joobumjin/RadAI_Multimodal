@@ -1,4 +1,5 @@
 import argparse
+from types import SimpleNamespace
 
 import numpy as np
 import pandas as pd
@@ -100,6 +101,7 @@ def main(args):
         splits = kf.split(X=tv_inds, y=strat[tv_inds])
 
     ci_res, auc_res = None, None
+    cinds, aucs = [], []
 
     for split, (train_inds, val_inds) in enumerate(splits):
         print(f"Split {split}")
@@ -120,18 +122,50 @@ def main(args):
 
         df_km_2yr = test['Stage'].map(dict(km_risk[args.survival_years * DAYS_IN_YR]))
 
-        test_samples = [torch.from_numpy(test['Survival Event'].to_numpy(dtype=bool).copy()), 
-                        torch.from_numpy(test['Survival Time'].to_numpy().copy()),
-                        torch.from_numpy(df_km_2yr.to_numpy().copy())]
-        ci_res, auc_res = bootstrap_cind_auc(args, test_samples, ci_res, auc_res)
+        # test_samples = [torch.from_numpy(test['Survival Event'].to_numpy(dtype=bool).copy()), 
+        #                 torch.from_numpy(test['Survival Time'].to_numpy().copy()),
+        #                 torch.from_numpy(df_km_2yr.to_numpy().copy())]
+        # ci_res, auc_res = bootstrap_cind_auc(args, test_samples, ci_res, auc_res)
 
-    print(f"{"--" * 5}")
-    print(f"Bootstrapped Avg + 95% CI")
-    print(str(auc_res))
-    print(str(ci_res))
-    print(f"From {len(ci_res.entries)} bootstrap samples")
+        cval = cind(
+            torch.from_numpy(test['Survival Event'].to_numpy(dtype=bool)), 
+            torch.from_numpy(test['Survival Time'].to_numpy()),
+            torch.from_numpy(df_km_2yr.to_numpy()), 
+        )
 
-    return "KM Stage", [None, None], [auc_res, ci_res]
+        a = auc(
+            torch.from_numpy(test['Survival Event'].to_numpy(dtype=bool)), 
+            torch.from_numpy(test['Survival Time'].to_numpy()),
+            torch.from_numpy(df_km_2yr.to_numpy()), 
+            args.survival_years
+        )
+
+        cinds.append(cval)
+        aucs.append(a)
+
+    auc_avg = np.mean(aucs)
+    auc_err = stats.sem(aucs)
+
+    ci_avg = np.mean(cinds)
+    ci_err = stats.sem(cinds)
+
+    auc_ci = stats.t.interval(confidence=.95, df=4, loc=auc_avg, scale=auc_err)
+    c_ci = stats.t.interval(confidence=.95, df=4, loc=ci_avg, scale=ci_err)
+
+    auc5fold = SimpleNamespace(avg = auc_avg, ci=auc_ci)
+    ci5fold = SimpleNamespace(avg = ci_avg, ci=c_ci)
+
+    print(f"5-Fold Avg + 95% CI")
+    print(f"AUC: {auc5fold.avg} ({auc_ci[0]:.3f}, {auc_ci[1]:.3f})")
+    print(f"C Ind: {ci5fold.avg} ({c_ci[0]:.3f}, {c_ci[1]:.3f})")
+
+    # print(f"{"--" * 5}")
+    # print(f"Bootstrapped Avg + 95% CI")
+    # print(str(auc_res))
+    # print(str(ci_res))
+    # print(f"From {len(ci_res.entries)} bootstrap samples")
+
+    return "KM Stage", [auc5fold, ci5fold], [auc_res, ci_res]
 
 
 if __name__ == '__main__':
