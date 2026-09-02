@@ -24,6 +24,7 @@ def get_args_parser():
     parser.add_argument('--float16',            type=bool,  default=True)
     parser.add_argument('--early_stop',         type=bool,  default=True)
     parser.add_argument('--patience',           type=int,   default=5)
+    parser.add_argument('--resample',           type=int,   default=9999)
 
     parser.add_argument('--mix_data',           action="store_true", 
                         help="Combine and then shuffle the train and test data")
@@ -121,7 +122,7 @@ def main(args):
     # val = compile_split(model, valid_loader, device)
     test = compile_split(model, test_loader, device)
 
-    ci_res, auc_res = bootstrap_cind_auc(args, test, None, None, 9999)
+    ci_res, auc_res = bootstrap_cind_auc(args, test, None, None)
 
     print(f"{"--" * 5}")
     print(f"Bootstrapped Avg + 95% CI")
