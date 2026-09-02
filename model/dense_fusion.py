@@ -9,7 +9,15 @@ class DenseFusion(nn.Module):
     """
     Logit-level fusion using an nn.Module 
     """
-    def __init__(self, encoders: Dict[str, nn.Module], emb_dim: int, hidden_dims: List[int], autocast: Dict[str, bool], loss_fn: Optional[Callable], device: torch.device):
+    def __init__(self, 
+                 encoders: Dict[str, nn.Module], 
+                 device: torch.device,
+                 emb_dim: int, hidden_dims: List[int], 
+                 autocast: Dict[str, bool], 
+                 loss_fn: Optional[Callable], 
+                 batch_norm: bool = False,
+                 layer_norm: bool = False,
+                 rms_norm: bool = False,):
         super().__init__()
 
         self.autocast = autocast
@@ -20,7 +28,7 @@ class DenseFusion(nn.Module):
 
         self.encoders = {mod: encoders[mod].to(device) for mod in encoders}
 
-        self.pred = LinearModel(emb_dim * len(encoders), hidden_dims=hidden_dims, layer_norm=True, loss_fn=None)
+        self.pred = LinearModel(emb_dim * len(encoders), hidden_dims=hidden_dims, batch_norm = batch_norm, layer_norm = layer_norm, rms_norm = rms_norm, loss_fn=None)
         self.pred = self.pred.to(device)
         self.apply(self._init_weights)
 

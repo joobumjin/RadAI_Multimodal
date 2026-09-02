@@ -5,15 +5,33 @@ from util import *
 from model import create_mlp, DenseFusion, Unimodal
 
 def get_clinical_encoder(args):
-    clin_enc = create_mlp(24, [], args.emb_dim, act = nn.GELU(), dropout = 0.2, end_with_fc=False, end_with_dropout=True, batch_norm = True, rms_norm = False, end_with_norm=True)
+    act = {
+        "batch_norm": args.batch_norm,
+        "rms_norm": args.rms_norm,
+        "layer_norm": args.layer_norm,
+    }
+
+    clin_enc = create_mlp(24, [], args.emb_dim, act = nn.GELU(), dropout = 0.2, end_with_fc=False, end_with_dropout=True, end_with_norm=True, **act)
     return clin_enc, False
 
 def get_path_lang_encoder(args):
-    path_lang_enc = create_mlp(args.enc_dim, [], args.emb_dim, act = nn.GELU(), dropout = 0.2, end_with_fc=False, end_with_dropout=True, batch_norm = True, rms_norm = False, end_with_norm=True)
+    act = {
+        "batch_norm": args.batch_norm,
+        "rms_norm": args.rms_norm,
+        "layer_norm": args.layer_norm,
+    }
+
+    path_lang_enc = create_mlp(args.enc_dim, [], args.emb_dim, act = nn.GELU(), dropout = 0.2, end_with_fc=False, end_with_dropout=True, end_with_norm=True, **act)
     return path_lang_enc, True
 
 def get_rad_lang_encoder(args):
-    rad_lang_enc = create_mlp(args.enc_dim, [], args.emb_dim, act = nn.GELU(), dropout = 0.2, end_with_fc=False, end_with_dropout=True, batch_norm = True, rms_norm = False, end_with_norm=True)
+    act = {
+        "batch_norm": args.batch_norm,
+        "rms_norm": args.rms_norm,
+        "layer_norm": args.layer_norm,
+    }
+
+    rad_lang_enc = create_mlp(args.enc_dim, [], args.emb_dim, act = nn.GELU(), dropout = 0.2, end_with_fc=False, end_with_dropout=True, end_with_norm=True, **act)
     return rad_lang_enc, True
 
 def get_dense_fusion_model(args):
@@ -26,13 +44,21 @@ def get_dense_fusion_model(args):
         "rad_lang": get_rad_lang_encoder, 
     }
 
+    act = {
+        "batch_norm": args.batch_norm,
+        "rms_norm": args.rms_norm,
+        "layer_norm": args.layer_norm,
+    }
+
     encs, casts = {}, {}
     arg_dict = vars(args)
     for mod, fn in get_enc_fns.items():
         if arg_dict.get(mod, False): 
             encs[mod], casts[mod] = fn(args)
 
-    model = DenseFusion(encs, emb_dim=args.emb_dim, hidden_dims=[128, 32], autocast=casts, loss_fn=LOSS_FNS[args.loss_fn], device=device)
+    hid = [args.fusion_dim, 32] if args.fusion_dim > 0 else [32]
+
+    model = DenseFusion(encs, emb_dim=args.emb_dim, hidden_dims=hid, autocast=casts, loss_fn=LOSS_FNS[args.loss_fn], device=device, **act)
     return model, device
 
 # --------------------------------------------------------

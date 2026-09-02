@@ -42,6 +42,10 @@ def get_args_parser():
     parser.add_argument('--path_img',           action="store_true")
     parser.add_argument('--enc_dim',            type=int,   default=768)
     parser.add_argument('--emb_dim',            type=int,   default=256)
+    parser.add_argument('--fusion_dim',         type=int,   default=0)
+    parser.add_argument('--rms_norm',           action="store_true")
+    parser.add_argument('--layer_norm',         action="store_true")
+    parser.add_argument('--batch_norm',         action="store_true")
     
     parser.add_argument('--prefetch_factor',    type=int,   default=2)
     parser.add_argument('--num_workers',        type=int,   default=1)
@@ -60,6 +64,7 @@ def get_args_parser():
                         help='epochs to warmup LR')
     parser.add_argument('--warmup_start',       type=float, default=1e-2,   metavar='N',
                         help='epochs to warmup LR')
+    parser.add_argument('--early_stop',      type=int,   default=0)
     
     parser.add_argument('--save_path',                      default="../weights",
                         help="directory to which the pretrained model weights should be saved")
@@ -142,10 +147,10 @@ def main(args):
 
         run_name = f"Split {split}"
 
-        run = run_setup(args, model_fns[args.modality], train_loader, valid_loader, test_loader, 
-                        run_name = run_name, return_keys=['Test AUC', 'Test C-Index'], ret_model=True, early_stop = (398 if mod_name=="Trimodal" else None))
-                        # early_stop = (191 if mod_name=="Trimodal" else None))
-                        #best: 191
+        run = run_setup(args, model_fns[args.modality], 
+                        train_loader, valid_loader, test_loader, 
+                        run_name = run_name, return_keys=['Test AUC', 'Test C-Index'], 
+                        ret_model=True, early_stop = args.early_stop)
         model, device = run.pop("model")
 
         for key in run: 

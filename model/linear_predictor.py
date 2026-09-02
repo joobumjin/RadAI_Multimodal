@@ -16,7 +16,8 @@ class LinearModel(nn.Module):
             act: nn.Module = nn.LeakyReLU(),
             loss_fn: Optional[Callable] = F.mse_loss, 
             batch_norm: bool = False,
-            layer_norm: bool = False
+            layer_norm: bool = False,
+            rms_norm: bool = False,
     ):
         super().__init__()
         self.loss_fn = loss_fn
@@ -29,6 +30,7 @@ class LinearModel(nn.Module):
             dropout     = 0.3,
             batch_norm  = batch_norm,
             layer_norm  = layer_norm,
+            rms_norm    = rms_norm
         )
 
         self.apply(self._init_weights)

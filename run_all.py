@@ -63,7 +63,7 @@ def plot(setup, df, met):
 
 def run_all():
     arg_set = all_args()
-    tables = {} #{setup: [summary_tables]}
+    tables, text = {}, {} #{setup: [summary_tables]}
 
     for setup, runs in arg_set.items(): #{setup: runs ({model_type: args})}
         models = ["Trimodal", "Bimodal Path+Rad", "Bimodal Path+Clin", "Bimodal Rad+Clin", "Unimodal Path", "Unimodal Rad", "Unimodal Clin", "KM Stage"]
@@ -74,6 +74,8 @@ def run_all():
         summ5 = pd.DataFrame(index=["AUC", "C-Index"], columns=cols)
         summ5.index.name = "Metric (95% CI)"
         summ5.columns = pd.MultiIndex.from_tuples(summ5.columns)
+
+        text5 = pd.DataFrame(index=["AUC", "C-Index"], columns=models)
 
         for n, args in runs.items():
             if n != "km": 
@@ -90,7 +92,10 @@ def run_all():
             summ5[(mod, "CI Low")] = [r.ci[0] for r in res5]
             summ5[(mod, "CI High")] = [r.ci[1] for r in res5]
 
+            text5[mod] = [f"{r.avg:.3f} ({r.ci[0]:.3f}, {r.ci[1]:.3f})" for r in res5]
+
         tables[setup] = [summ5]
+        text[setup] = text5
 
     with open('./out.md', 'w', encoding="utf-8") as f:
         for setup, t in tables.items():
@@ -101,7 +106,7 @@ def run_all():
             print(setup)
             print()
             print("5 Fold CV")
-            print(t[0])
+            print(text[setup])
 
             f.write("\n")
             f.write(f"# {setup}")

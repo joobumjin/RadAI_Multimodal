@@ -179,7 +179,7 @@ def run_setup(args: Namespace, model_constructor: callable,
                 print("Early stopping triggered!")
                 return ret_metrics
 
-        if early_stop is not None and e == early_stop: break
+        if early_stop is not None and e == args.epochs - early_stop: break
 
     if run is not None:
         run.finish()
