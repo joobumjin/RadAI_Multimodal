@@ -11,26 +11,26 @@ def get_sub(yrs: int):
     sub = {}
     sub[f"mix{yrs}"] = {
         #trimodal
-        "tri": f'--disable_wandb--survival_years {yrs} --mix_data --clinical --path_lang --rad_lang --plot'.split(),
+        "tri": f'--disable_wandb --survival_years {yrs} --mix_data --clinical --path_lang --rad_lang --plot'.split(),
         #bimodal
-        "pr": f'--disable_wandb--survival_years {yrs} --mix_data --rad_lang --path_lang'.split(),
-        "pc": f'--disable_wandb--survival_years {yrs} --mix_data --path_lang --clinical'.split(),
-        "rc": f'--disable_wandb--survival_years {yrs} --mix_data --rad_lang --clinical'.split(),
+        "pr": f'--disable_wandb --survival_years {yrs} --mix_data --rad_lang --path_lang'.split(),
+        "pc": f'--disable_wandb --survival_years {yrs} --mix_data --path_lang --clinical'.split(),
+        "rc": f'--disable_wandb --survival_years {yrs} --mix_data --rad_lang --clinical'.split(),
         #unimodal
-        "p": f'--disable_wandb--survival_years {yrs} --mix_data --modality uni_path'.split(),
-        "r": f'--disable_wandb--survival_years {yrs} --mix_data --modality uni_rad'.split(),
-        "c": f'--disable_wandb--survival_years {yrs} --mix_data --modality uni_clin'.split(),
+        "p": f'--disable_wandb --survival_years {yrs} --mix_data --modality uni_path'.split(),
+        "r": f'--disable_wandb --survival_years {yrs} --mix_data --modality uni_rad'.split(),
+        "c": f'--disable_wandb --survival_years {yrs} --mix_data --modality uni_clin'.split(),
         #km stage
         "km": f'--survival_years {yrs} --mix_data'.split(),
     }
 
     sub[f"iso{yrs}"] = {
         #trimodal
-        "tri": f'--disable_wandb--survival_years {yrs} --clinical --path_lang --rad_lang'.split(),
+        "tri": f'--disable_wandb --survival_years {yrs} --clinical --path_lang --rad_lang'.split(),
         #bimodal
-        "pr": f'--disable_wandb--survival_years {yrs} --rad_lang --path_lang'.split(),
-        "pc": f'--disable_wandb--survival_years {yrs} --path_lang --clinical'.split(),
-        "rc": f'--disable_wandb--survival_years {yrs} --rad_lang --clinical'.split(),
+        "pr": f'--disable_wandb --survival_years {yrs} --rad_lang --path_lang'.split(),
+        "pc": f'--disable_wandb --survival_years {yrs} --path_lang --clinical'.split(),
+        "rc": f'--disable_wandb --survival_years {yrs} --rad_lang --clinical'.split(),
         #unimodal
         "p": f'--disable_wandb --survival_years {yrs} --modality uni_path '.split(),
         "r": f'--disable_wandb --survival_years {yrs} --modality uni_rad'.split(),
@@ -63,9 +63,9 @@ def get_strat(yrs: int):
 def all_args():
     arg = {
         **get_sub(2),
-        **get_strat(2),
-        **get_sub(3),
-        **get_sub(5),
+        # **get_strat(2),
+        # **get_sub(3),
+        # **get_sub(5),
     }
 
     return arg

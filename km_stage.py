@@ -22,6 +22,7 @@ def get_args_parser():
     parser.add_argument('--data_path',          type=str,   default="../gemma_multimodal_bins")
     parser.add_argument('--test_path',          type=str,   default="../gemma_multimodal_bins_rw")
     parser.add_argument('--folds',              type=int,   default=5)
+    parser.add_argument('--resample',           type=int,   default=9999)
 
     parser.add_argument('--mix_data',           action="store_true", 
                         help="Combine and then shuffle the train and test data")
@@ -31,6 +32,7 @@ def get_args_parser():
     parser.add_argument('--sparse',             action="store_true")
 
     parser.add_argument('--survival_years',     type=int,   default=2)
+    parser.add_argument('--debug',              action="store_true")
     return parser
 
 def build_data(args):
@@ -56,7 +58,7 @@ def build_data(args):
             random_state=args.seed,
             stratify=strat
         )
-        return df, df, tv_inds, test_inds
+        return df, df, tv_inds, test_inds, strat
 
     train_loader, test_loader = DataLoader(train_set), DataLoader(test_set)
 
@@ -76,10 +78,16 @@ def build_data(args):
     test_df = pd.DataFrame({"Stage": test_stages, "Survival Time": test_time, "Survival Event": test_event})
     test_inds = np.arange(len(test_df))
 
-    return tv_df, test_df, tv_inds, test_inds, strat
+    return tv_df, test_df, tv_inds, test_inds, None
 
 
 def main(args):
+    if args.debug:
+        args.resample = 5
+
+    torch.manual_seed(args.seed)
+    np.random.seed(args.seed)
+    
     tv_df, test_df, tv_inds, test_inds, strat = build_data(args)
 
     test = test_df.iloc[test_inds]
@@ -113,10 +121,10 @@ def main(args):
 
         df_km_2yr = test['Stage'].map(dict(km_risk[args.survival_years * DAYS_IN_YR]))
 
-        test_samples = [torch.from_numpy(test['Survival Event'].to_numpy(dtype=bool)), 
-                        torch.from_numpy(test['Survival Time'].to_numpy()),
-                        torch.from_numpy(df_km_2yr.to_numpy())]
-        ci_res, auc_res = bootstrap_cind_auc(args, test_samples, ci_res, auc_res, n_resample=9999)
+        test_samples = [torch.from_numpy(test['Survival Event'].to_numpy(dtype=bool).copy()), 
+                        torch.from_numpy(test['Survival Time'].to_numpy().copy()),
+                        torch.from_numpy(df_km_2yr.to_numpy().copy())]
+        ci_res, auc_res = bootstrap_cind_auc(args, test_samples, ci_res, auc_res)
 
     print(f"{"--" * 5}")
     print(f"Bootstrapped Avg + 95% CI")
@@ -124,14 +132,11 @@ def main(args):
     print(str(ci_res))
     print(f"From {len(ci_res.entries)} bootstrap samples")
 
-    return "KM Stage", [None, None], [str(auc_res).split(":")[1], str(ci_res).split(":")[1]]
+    return "KM Stage", [None, None], [auc_res, ci_res]
 
 
 if __name__ == '__main__':
     parser  = get_args_parser()
     args    = parser.parse_args()
-
-    torch.manual_seed(args.seed)
-    np.random.seed(args.seed)
 
     main(args)

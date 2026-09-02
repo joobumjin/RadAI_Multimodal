@@ -26,6 +26,7 @@ def get_args_parser():
     parser.add_argument('--early_stop',         type=bool,  default=True)
     parser.add_argument('--patience',           type=int,   default=5)
     parser.add_argument('--folds',              type=int,   default=5)
+    parser.add_argument('--resample',           type=int,   default=9999)
 
     parser.add_argument('--mix_data',           action="store_true", 
                         help="Combine and then shuffle the train and test data")
@@ -47,7 +48,7 @@ def get_args_parser():
     parser.add_argument('--train_split',        type=float, default=.85)
 
     parser.add_argument('--survival_years',     type=int,   default=2)
-    parser.add_argument('--plot',           action="store_true")
+    parser.add_argument('--plot',               action="store_true")
 
     # Optimizer parameters
     parser.add_argument('--lr',                 type=float, default=1e-3,   metavar='LR',
@@ -73,6 +74,11 @@ def get_args_parser():
 def main(args):
     import warnings
     warnings.filterwarnings("ignore", message="Ties in `time` detected")
+
+    if args.debug:
+        args.epochs = 5
+        args.disable_wandb = True
+        args.resample = 5
 
     seed = args.seed
     torch.manual_seed(seed)
@@ -165,7 +171,7 @@ def main(args):
 
         all = [torch.cat(l) for l in zip(train, val, test)]
 
-        ci_res, auc_res = bootstrap_cind_auc(args, test, ci_res, auc_res, n_resample=9999)
+        ci_res, auc_res = bootstrap_cind_auc(args, test, ci_res, auc_res)
         if split == 4 and args.plot:
             km_preds(*all)
 
@@ -201,9 +207,5 @@ def main(args):
 if __name__ == '__main__':
     parser  = get_args_parser()
     args    = parser.parse_args()
-
-    if args.debug:
-        args.epochs = 5
-        args.disable_wandb = True
 
     main(args)

@@ -58,8 +58,7 @@ class Bootstrap:
         return f"{self.name}: {self.avg:.3f} ({self.ci[0]:.3f}, {self.ci[1]:.3f})"
 
 def bootstrap_cind_auc(args: Namespace, test_samples: list[Tensor], 
-                       ci_res: Optional[Bootstrap] = None, auc_res: Optional[Bootstrap] = None, 
-                       n_resample: int = 100) -> tuple[Bootstrap, Bootstrap]:
+                       ci_res: Optional[Bootstrap] = None, auc_res: Optional[Bootstrap] = None) -> tuple[Bootstrap, Bootstrap]:
     """
     Keeps track of Bootstrap object instances for C-Index and AUC evaluation
 
@@ -68,15 +67,14 @@ def bootstrap_cind_auc(args: Namespace, test_samples: list[Tensor],
     - test_samples: compiled test data with structure [deaths, times, preds]
     - ci_res: Bootstrap object instance for C-Index
     - auc_res: Bootstrap object instance for AUC
-    - n_resmple: number of bootstrap resamples 
     """
     def strat(data):
         yrs = data[1] > args.survival_years * DAYS_IN_YR
         return data[0] * 2 + yrs #binary encode
     
     if ci_res is None:
-        ci_res = Bootstrap("C-Index", cind, stratify=strat, n_resample=n_resample, random_state=args.seed)
-        auc_res = Bootstrap("AUC", lambda *data: auc(*data, args.survival_years), stratify=strat, n_resample=n_resample, random_state=args.seed)
+        ci_res = Bootstrap("C-Index", cind, stratify=strat, n_resample=args.resample, random_state=args.seed)
+        auc_res = Bootstrap("AUC", lambda *data: auc(*data, args.survival_years), stratify=strat, n_resample=args.resample, random_state=args.seed)
 
     ci_res.add(*test_samples)
     auc_res.add(*test_samples)
