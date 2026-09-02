@@ -15,7 +15,7 @@ class Bootstrap:
     Statefully keeps track of average, error, and 95% confidence interval
     """
 
-    def __init__(self, name: str, fn: callable, stratify: Optional[callable], n_resample: int = 999, random_state: Optional[int] = None):
+    def __init__(self, name: str, fn: callable, stratify: Optional[Tensor], n_test: int = 16, n_resample: int = 999, random_state: Optional[int] = None):
         """
         params:
         - name: name of the statistic 
@@ -29,21 +29,19 @@ class Bootstrap:
         self.err = None
         self.ci = None
         self.fn = fn
-        self.stratify = stratify
         self.n_resample = n_resample
         self.rand_state = random_state
+
+        seeds = np.random.SeedSequence(random_state).generate_state(self.n_resample)
+        self.samples = [resample(np.arange(n_test, dtype=int), replace=True, n_samples=n_test, stratify=stratify, random_state=seed).astype(int) for seed in seeds]
 
     def add(self, *data):
         """
         Takes data, calculates bootstrap values, adds those bootstrap values to entries, and updates average, error, and 95% CI
         """
-        batch = len(data[0])
-        strat = self.stratify(data) if self.stratify is not None else None
-        seeds = np.random.SeedSequence(self.rand_state).generate_state(self.n_resample)
 
         #calculate statistic for each resample
-        for seed in seeds:
-            sample = resample(np.arange(batch, dtype=int), replace=True, n_samples=batch, stratify=strat, random_state=seed).astype(int)
+        for sample in self.samples:
             sample_data = [d[sample] for d in data]
             res = self.fn(*sample_data)
             self.entries.append(res)
@@ -73,7 +71,8 @@ def bootstrap_cind_auc(args: Namespace, test_samples: list[Tensor],
         return data[0] * 2 + yrs #binary encode
     
     if ci_res is None:
-        ci_res = Bootstrap("C-Index", cind, stratify=strat, n_resample=args.resample, random_state=args.seed)
+        stratify = strat(test_samples)
+        ci_res = Bootstrap("C-Index", cind, stratify=stratify, n_resample=args.resample, random_state=args.seed)
         auc_res = Bootstrap("AUC", lambda *data: auc(*data, args.survival_years), stratify=strat, n_resample=args.resample, random_state=args.seed)
 
     ci_res.add(*test_samples)
