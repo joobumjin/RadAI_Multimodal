@@ -2,7 +2,7 @@ import torch
 from torch import nn
 
 from util import *
-from model import create_mlp, EmbMIL, DenseFusion, Unimodal
+from model import create_mlp, DenseFusion, Unimodal
 
 def get_clinical_encoder(args):
     # clin_enc = create_mlp(24, [128], args.emb_dim, act = nn.GELU(), dropout = 0.3, layer_norm = True)
@@ -19,10 +19,6 @@ def get_rad_lang_encoder(args):
     rad_lang_enc = create_mlp(args.enc_dim, [], args.emb_dim, act = nn.GELU(), dropout = 0.3, end_with_fc=False, end_with_dropout=True, rms_norm = True, end_with_norm=True)
     return rad_lang_enc, True
 
-def get_path_img_encoder(args):
-    mil = EmbMIL(embed_dim=384, dropout=0.3, attn_dim = 256, proj_dim=args.emb_dim, loss_fn=None)
-    return mil, True
-
 def get_dense_fusion_model(args):
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -31,7 +27,6 @@ def get_dense_fusion_model(args):
         "clinical_imputed": get_clinical_encoder, 
         "path_lang": get_path_lang_encoder, 
         "rad_lang": get_rad_lang_encoder, 
-        "path_img": get_path_img_encoder, 
     }
 
     encs, casts = {}, {}
