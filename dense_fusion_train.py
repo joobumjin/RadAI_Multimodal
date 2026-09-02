@@ -69,6 +69,9 @@ def get_args_parser():
 # --------------------------------------------------------
 
 def main(args):
+    import warnings
+    warnings.filterwarnings("ignore", message="Ties in `time` detected")
+    
     seed = args.seed
     torch.manual_seed(seed)
     np.random.seed(seed)
@@ -115,20 +118,22 @@ def main(args):
         "uni_clin": get_unimodal_clin
     }
 
-    run = run_setup(args, model_fns[args.modality], train_loader, valid_loader, test_loader, run_name = run_name, return_keys=['Test AUC', 'Test C-Index'], ret_model=True)
+    run = run_setup(args, model_fns[args.modality], train_loader, valid_loader, test_loader, run_name = run_name, return_keys=['Test AUC', 'Test C-Index'], ret_model=True, early_stop=990)
+    #384
     model, device = run.pop("model")
 
     # train = compile_split(model, train_loader, device)
     # val = compile_split(model, valid_loader, device)
-    test = compile_split(model, test_loader, device)
+    # test = compile_split(model, test_loader, device)
 
-    ci_res, auc_res = bootstrap_cind_auc(args, test, None, None)
+    # ci_res, auc_res = bootstrap_cind_auc(args, test, None, None)
 
-    print(f"{"--" * 5}")
-    print(f"Bootstrapped Avg + 95% CI")
-    print(str(auc_res))
-    print(str(ci_res))
-    print(f"From {len(ci_res.entries)} bootstrap samples")
+    # print(f"{"--" * 5}")
+    # print(f"Bootstrapped Avg + 95% CI")
+    # print(str(auc_res))
+    # print(str(ci_res))
+    # print(f"From {len(ci_res.entries)} bootstrap samples")
+    print(run)
 
 
 if __name__ == '__main__':

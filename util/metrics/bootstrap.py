@@ -72,8 +72,14 @@ def bootstrap_cind_auc(args: Namespace, test_samples: list[Tensor],
     
     if ci_res is None:
         stratify = strat(test_samples)
-        ci_res = Bootstrap("C-Index", cind, stratify=stratify, n_resample=args.resample, random_state=args.seed)
-        auc_res = Bootstrap("AUC", lambda *data: auc(*data, args.survival_years), stratify=strat, n_resample=args.resample, random_state=args.seed)
+        kwargs = {
+            "stratify": stratify, 
+            "n_resample": args.resample, 
+            "n_test": len(test_samples[0]), 
+            "random_state": args.seed
+        }
+        ci_res = Bootstrap("C-Index", cind, **kwargs)
+        auc_res = Bootstrap("AUC", lambda *data: auc(*data, args.survival_years), **kwargs)
 
     ci_res.add(*test_samples)
     auc_res.add(*test_samples)

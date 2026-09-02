@@ -5,18 +5,15 @@ from util import *
 from model import create_mlp, DenseFusion, Unimodal
 
 def get_clinical_encoder(args):
-    # clin_enc = create_mlp(24, [128], args.emb_dim, act = nn.GELU(), dropout = 0.3, layer_norm = True)
-    clin_enc = create_mlp(24, [], args.emb_dim, act = nn.GELU(), dropout = 0.3, end_with_fc=False, end_with_dropout=True, rms_norm = True, end_with_norm=True)
+    clin_enc = create_mlp(24, [], args.emb_dim, act = nn.GELU(), dropout = 0.2, end_with_fc=False, end_with_dropout=True, batch_norm = True, rms_norm = False, end_with_norm=True)
     return clin_enc, False
 
 def get_path_lang_encoder(args):
-    # path_lang_enc = create_mlp(args.enc_dim, [128], args.emb_dim, act = nn.GELU(), dropout = 0.4, layer_norm = True)
-    path_lang_enc = create_mlp(args.enc_dim, [], args.emb_dim, act = nn.GELU(), dropout = 0.3, end_with_fc=False, end_with_dropout=True, rms_norm = True, end_with_norm=True)
+    path_lang_enc = create_mlp(args.enc_dim, [], args.emb_dim, act = nn.GELU(), dropout = 0.2, end_with_fc=False, end_with_dropout=True, batch_norm = True, rms_norm = False, end_with_norm=True)
     return path_lang_enc, True
 
 def get_rad_lang_encoder(args):
-    # rad_lang_enc = create_mlp(args.enc_dim, [128], args.emb_dim, act = nn.GELU(), dropout = 0.4, layer_norm = True)
-    rad_lang_enc = create_mlp(args.enc_dim, [], args.emb_dim, act = nn.GELU(), dropout = 0.3, end_with_fc=False, end_with_dropout=True, rms_norm = True, end_with_norm=True)
+    rad_lang_enc = create_mlp(args.enc_dim, [], args.emb_dim, act = nn.GELU(), dropout = 0.2, end_with_fc=False, end_with_dropout=True, batch_norm = True, rms_norm = False, end_with_norm=True)
     return rad_lang_enc, True
 
 def get_dense_fusion_model(args):
