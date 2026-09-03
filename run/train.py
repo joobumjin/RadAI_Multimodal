@@ -44,7 +44,7 @@ def train_one_epoch(model: torch.nn.Module, device: torch.device, train_loader: 
 
         with torch.inference_mode():
             metrics["Train Loss"].update(loss.detach().item())
-            metrics["lr"].update(optimizer.param_groups[0]["lr"])
+            # metrics["lr"].update(optimizer.param_groups[0]["lr"])
             for name, fn in fns.items():
                 metric_val = fn(preds, batch["label"])
                 metrics[name].update(metric_val.detach().item())
@@ -178,7 +178,7 @@ def run_setup(args: Namespace, model_constructor: callable,
                 print("Early stopping triggered!")
                 return ret_metrics
 
-        if early_stop is not None and e == args.epochs - early_stop: break
+        if early_stop is not None and e == args.epochs + early_stop: break
 
     if run is not None:
         run.finish()

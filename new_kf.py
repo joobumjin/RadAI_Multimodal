@@ -54,6 +54,7 @@ def get_args_parser():
 
     parser.add_argument('--survival_years',     type=int,   default=2)
     parser.add_argument('--plot',               action="store_true")
+    parser.add_argument('--track_best',         action="store_true")
 
     # Optimizer parameters
     parser.add_argument('--lr',                 type=float, default=1e-4,   metavar='LR',
@@ -170,15 +171,24 @@ def main(args):
     avgs = {key: np.mean(arr, axis=0) for key, arr in metrics.items()}
     errs = {key: stats.sem(arr, axis=0) for key, arr in metrics.items()}
 
+    if args.track_best:
+        sum = avgs["Test AUC"] + avgs["Test C-Index"]
+        best = [np.max(sum[-100:])]
+        selected = np.argmax(sum[-100:]) + len(sum) - 100
+    else: 
+        best = []
+        selected = -1
+
     print(f"\n{mod_name}{', mix data' if args.mix_data else ', inst. sep.'} - {args.survival_years}yr")
     print(f"{"--" * 5}")
     print(f"5-Fold Avg + 95% CI")
     # for selected in [654, 816, 398]:
-    selected = -1
+    # selected = -1
     auc_ci = stats.t.interval(confidence=.95, df=4, loc=avgs['Test AUC'][selected], scale=errs['Test AUC'][selected])
     auc_ci = [float(n) for n in auc_ci]
     c_ci = stats.t.interval(confidence=.95, df=4, loc=avgs['Test C-Index'][selected], scale=errs['Test C-Index'][selected])
     c_ci = [float(n) for n in c_ci]
+    print(f"At epoch {selected}")
 
     auc5fold = SimpleNamespace(avg = avgs['Test AUC'][selected], ci=auc_ci)
     ci5fold = SimpleNamespace(avg = avgs['Test C-Index'][selected], ci=c_ci)
@@ -191,7 +201,7 @@ def main(args):
     # print(str(ci_res))
     # print(f"From {len(ci_res.entries)} bootstrap samples")
 
-    return mod_name, [auc5fold, ci5fold], [auc_res, ci_res]
+    return mod_name, [auc5fold, ci5fold], [auc_res, ci_res], *best
        
 
 if __name__ == '__main__':
