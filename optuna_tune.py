@@ -14,8 +14,9 @@ def run_trial(trial: optuna.Trial):
 
     act = trial.suggest_categorical("act", ["--rms_norm", "--layer_norm", "--batch_norm"])
 
-    #build args, run main
     yrs = trial.suggest_categorical("years", [2, 5])
+
+    #build args, run main
     args = f'--survival_years {yrs} {act} --emb_dim {emb_dim} --epochs {epochs} --warmup_epochs {warmup} --early {early_stop} --batch_size {batch_size} --fusion_dim {fused_dim}'.split() + \
             '--disable_wandb --mix_data --clinical --path_lang --rad_lang --sparse --stratify'.split()
 
@@ -29,8 +30,8 @@ def run_trial(trial: optuna.Trial):
 
 
 def optimize():
-    study = optuna.create_study(directions=["maximize", "maximize"])
-    study.optimize(run_trial, n_trials=100)
+    study = optuna.create_study(directions=["maximize", "maximize"], storage="sqlite:///db.sqlite3")
+    study.optimize(run_trial, n_trials=100, show_progress_bar=True)
 
     optuna.visualization.plot_pareto_front(study, target_names=["AUC", "C-Index"])
 

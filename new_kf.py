@@ -154,7 +154,6 @@ def main(args):
 
         for key in run: 
             metrics[key].append(run[key])
-            # print(f"{key}: {run[key][-15:]}")
 
         train = compile_split(model, train_loader, device)
         val = compile_split(model, valid_loader, device)

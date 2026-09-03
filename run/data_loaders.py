@@ -7,10 +7,10 @@ from torch.utils.data import Dataset, Subset, DataLoader
 from data import *
 from util.consts import *
 
-def get_datasets(args: Namespace,
-                 keys: list[str] = ["slide_ids", "survival_days", "survival_right_censor"],
-                )-> tuple[Dataset, Dataset]:
-                #  label_key: str = "label") -> tuple[Dataset, Dataset]:
+def get_datasets(
+        args: Namespace,
+        keys: list[str] = ["slide_ids", "survival_days", "survival_right_censor"],
+    )-> tuple[Dataset, Dataset]:
     """
     Returns the train and test Datasets as dictated by args
     """
@@ -29,13 +29,9 @@ def get_datasets(args: Namespace,
         "data_dir": args.data_path,
         "return_key": True,
         "keys": keys,
-        # "label_column": args.label_col,
-        # "label_dtype": np.float32,
         "bin_modality_keys": bin_mods,
         "extra_modality_keys": extra_mods,
         "allow_sparse_samples": args.sparse,
-        # "label_fn": lambda dates: (dates < (DAYS_IN_YR * args.survival_years)).astype(np.float32), #predict survival hazard
-        # "label_key": label_key
     }
     train_set = MemmapDatasetMultimodal(**dataset_args)
 
@@ -47,12 +43,14 @@ def get_datasets(args: Namespace,
 
 # --------------------------------------------------------
 
-def get_combined_loaders(args: Namespace, 
-                         dataset: Dataset,
-                         train_inds: np.ndarray, 
-                         validation_inds: np.ndarray, 
-                         test_inds: np.ndarray,
-                         verbose: bool = False) -> tuple[DataLoader, DataLoader, DataLoader]:
+def get_combined_loaders(
+        args: Namespace, 
+        dataset: Dataset,
+        train_inds: np.ndarray, 
+        validation_inds: np.ndarray, 
+        test_inds: np.ndarray,
+        verbose: bool = False
+    ) -> tuple[DataLoader, DataLoader, DataLoader]:
     """
     Given a combined dataset, splits and returns train, val, and test laoders
     """
@@ -103,12 +101,14 @@ def get_combined_loaders(args: Namespace,
 
     return train_loader, val_loader, test_loader
 
-def get_subset_loaders(args: Namespace, 
-                       tv_dataset: Dataset,
-                       train_inds: np.ndarray, 
-                       validation_inds: np.ndarray,
-                       test_set: Dataset,
-                       verbose: bool = False) -> tuple[DataLoader, DataLoader, DataLoader]:
+def get_subset_loaders(
+        args: Namespace, 
+        tv_dataset: Dataset,
+        train_inds: np.ndarray, 
+        validation_inds: np.ndarray,
+        test_set: Dataset,
+        verbose: bool = False
+    ) -> tuple[DataLoader, DataLoader, DataLoader]:
     """
     Given separate train+val and test datasets, splits and returns train, val, and test laoders
     """
