@@ -152,7 +152,6 @@ def run_setup(args: Namespace, model_constructor: callable,
 
     ret_metrics = {key: [] for key in return_keys}
 
-    print(f"Start training for {args.epochs} epochs")
     pbar = trange(0, args.epochs, desc="Training Epochs", postfix={})
     for e in pbar:
         train_stats = train_one_epoch(model, device, train_loader, optimizer, scheduler)

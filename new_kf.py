@@ -64,7 +64,7 @@ def get_args_parser():
                         help='epochs to warmup LR')
     parser.add_argument('--warmup_start',       type=float, default=1e-2,   metavar='N',
                         help='epochs to warmup LR')
-    parser.add_argument('--early_stop',      type=int,   default=0)
+    parser.add_argument('--early',      type=int,   default=0)
     
     parser.add_argument('--save_path',                      default="../weights",
                         help="directory to which the pretrained model weights should be saved")
@@ -138,7 +138,6 @@ def main(args):
         print(f"\n{"--" * 5}")
         print(f"Split {split}")
 
-        # print("overlap", np.intersect1d(train_inds, test_inds), np.intersect1d(val_inds, test_inds))  
         train_inds, val_inds = tv[train_inds], tv[val_inds]
         if args.mix_data:
             train_loader, valid_loader, test_loader = get_combined_loaders(args, dataset, train_inds, val_inds, test_inds)
@@ -150,7 +149,7 @@ def main(args):
         run = run_setup(args, model_fns[args.modality], 
                         train_loader, valid_loader, test_loader, 
                         run_name = run_name, return_keys=['Test AUC', 'Test C-Index'], 
-                        ret_model=True, early_stop = args.early_stop)
+                        ret_model=True, early_stop = args.early)
         model, device = run.pop("model")
 
         for key in run: 
