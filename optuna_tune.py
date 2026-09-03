@@ -31,6 +31,7 @@ def run_trial(trial: optuna.Trial):
 
 def optimize():
     study = optuna.create_study(directions=["maximize", "maximize"], storage="sqlite:///db.sqlite3")
+    study.set_metric_names(["Test AUC", "Test C-Index"])
     study.optimize(run_trial, n_trials=100, show_progress_bar=True)
 
     optuna.visualization.plot_pareto_front(study, target_names=["AUC", "C-Index"])
