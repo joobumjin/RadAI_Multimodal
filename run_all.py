@@ -11,7 +11,7 @@ def get_sub(yrs: int):
     sub = {}
     sub[f"mix{yrs}"] = {
         #trimodal
-        "tri": f'--disable_wandb --survival_years {yrs} --mix_data --clinical --path_lang --rad_lang --plot --stratify --emb_dim 128 --epochs 1000 --sparse --warmup_epochs 100'.split(),
+        "tri": f'--disable_wandb --survival_years {yrs} --mix_data --clinical --path_lang --rad_lang --plot --stratify --emb_dim 64 --fusion_dim 128 --epochs 200 --sparse --layer_norm --warmup_epochs 100 --early 106'.split(),
         #bimodal
         "pr": f'--disable_wandb --survival_years {yrs} --mix_data --rad_lang --path_lang --stratify --emb_dim 128 --sparse'.split(),
         "pc": f'--disable_wandb --survival_years {yrs} --mix_data --path_lang --clinical --stratify --emb_dim 128 --sparse'.split(),

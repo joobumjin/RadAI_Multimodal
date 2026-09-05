@@ -20,14 +20,18 @@ def get_opt_and_sched(model: nn.Module, args: Namespace, iter_per_epoch: Optiona
 
     optimizer = optim.AdamW(model.parameters(), lr=args.lr, betas=(0.9, 0.95), weight_decay=0.01)
 
-    #linear warmup
-    wu_iters = args.warmup_epochs * iter_per_epoch if iter_per_epoch is not None else args.warmup_epochs
-    warmup_scheduler = LinearLR(optimizer, start_factor=args.warmup_start, end_factor=1.0, total_iters=wu_iters)
+    if args.const_lr:
+        scheduler = optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lambda epoch: 1.0)
 
-    #cosine anneal 
-    t_max = (args.epochs - args.warmup_epochs) * iter_per_epoch if iter_per_epoch is not None else (args.epochs - args.warmup_epochs)
-    main_scheduler = CosineAnnealingLR(optimizer, T_max=t_max, eta_min=args.min_lr)
+    else:
+        #linear warmup
+        wu_iters = args.warmup_epochs * iter_per_epoch if iter_per_epoch is not None else args.warmup_epochs
+        warmup_scheduler = LinearLR(optimizer, start_factor=args.warmup_start, end_factor=1.0, total_iters=wu_iters)
 
-    scheduler = SequentialLR(optimizer, schedulers=[warmup_scheduler, main_scheduler], milestones=[wu_iters])
+        #cosine anneal 
+        t_max = (args.epochs - args.warmup_epochs) * iter_per_epoch if iter_per_epoch is not None else (args.epochs - args.warmup_epochs)
+        main_scheduler = CosineAnnealingLR(optimizer, T_max=t_max, eta_min=args.min_lr)
+
+        scheduler = SequentialLR(optimizer, schedulers=[warmup_scheduler, main_scheduler], milestones=[wu_iters])
 
     return optimizer, scheduler
