@@ -2,7 +2,7 @@ import argparse
 from types import SimpleNamespace
 
 import numpy as np
-from torch.utils.data import ConcatDataset
+from torch.utils.data import Dataset, ConcatDataset
 from sklearn.model_selection import train_test_split, KFold, StratifiedKFold
 import scipy.stats as stats
 
@@ -79,6 +79,15 @@ def get_args_parser():
 
 # --------------------------------------------------------
 
+def get_stratify(args: Namespace, dataset: Dataset):
+    strat = []
+    for s in DataLoader(dataset):
+        time = s['survival_days'] > args.survival_years * DAYS_IN_YR
+        event = not s['survival_right_censor']
+        strat.append((event * 2 + time)[0,0])
+    strat = np.array(strat)
+    return strat
+
 def main(args):
     import warnings
     warnings.filterwarnings("ignore", message="Ties in `time` detected")
@@ -95,42 +104,22 @@ def main(args):
     args, mod_name = get_mod_name(args)
     args.wb_proj = f"{mod_name} {args.model} {args.wb_proj} {args.folds}"
 
-    kf = KFold(n_splits=args.folds, shuffle=True, random_state=args.seed)
+    dataset, test_set = get_datasets(args)
+    if args.mix_data: dataset = ConcatDataset([dataset, test_set]) #this is prob a little mem inefficient
+
+    strat = get_stratify(args, dataset) if args.stratify else None
 
     if args.mix_data:
-        datasets = get_datasets(args)
-        dataset = ConcatDataset(datasets) #this is prob a little mem inefficient
-
-        if args.stratify:
-            all_loader = DataLoader(dataset)
-            strat = []
-            for s in all_loader:
-                time = s['survival_days'] > args.survival_years * DAYS_IN_YR
-                event = not s['survival_right_censor']
-                strat.append((event * 2 + time)[0,0])
-            strat = np.array(strat)
-            kf = StratifiedKFold(n_splits=args.folds, shuffle=True, random_state=args.seed)
-        else: strat = None
-
-        tv, test_inds = train_test_split(
-            np.arange(len(dataset)),
-            test_size=0.15,
-            random_state=args.seed,
-            stratify=strat
-        )
-
+        tv_inds, test_inds = train_test_split(np.arange(len(dataset)), test_size=0.15, 
+                                              random_state=args.seed, stratify=strat)
     else:
-        tv_set, test_set = get_datasets(args)
-        tv = np.arange(len(tv_set))
+        tv_inds, test_inds = np.arange(len(dataset)), np.arange(len(test_set))
 
-    splits = kf.split(X=tv) if not args.stratify else kf.split(X=tv, y=strat[tv])
-
-    model_fns = {
-        "multi": get_dense_fusion_model,
-        "uni_path": get_unimodal_path,
-        "uni_rad": get_unimodal_rad,
-        "uni_clin": get_unimodal_clin
-    }
+    if args.stratify:
+        kf = StratifiedKFold(n_splits=args.folds, shuffle=True, random_state=args.seed)  
+    else:
+        kf = KFold(n_splits=args.folds, shuffle=True, random_state=args.seed)
+    splits = kf.split(X=tv_inds) if not args.stratify else kf.split(X=tv_inds, y=strat[tv_inds])
 
     metrics = defaultdict(lambda: [])
 
@@ -140,15 +129,15 @@ def main(args):
         print(f"\n{"--" * 5}")
         print(f"Split {split}")
 
-        train_inds, val_inds = tv[train_inds], tv[val_inds]
+        train_inds, val_inds = tv_inds[train_inds], tv_inds[val_inds]
         if args.mix_data:
             train_loader, valid_loader, test_loader = get_combined_loaders(args, dataset, train_inds, val_inds, test_inds)
         else:
-            train_loader, valid_loader, test_loader = get_subset_loaders(args, tv_set, train_inds, val_inds, test_set)
+            train_loader, valid_loader, test_loader = get_subset_loaders(args, dataset, train_inds, val_inds, test_set)
 
         run_name = f"Split {split}"
 
-        run = run_setup(args, model_fns[args.modality], 
+        run = run_setup(args, MODEL_FNS[args.modality], 
                         train_loader, valid_loader, test_loader, 
                         run_name = run_name, return_keys=['Test AUC', 'Test C-Index'], 
                         ret_model=True, early_stop = args.early)
@@ -173,9 +162,10 @@ def main(args):
     errs = {key: stats.sem(arr, axis=0) for key, arr in metrics.items()}
 
     if args.track_best:
-        sum = avgs["Test AUC"] + avgs["Test C-Index"]
-        best = [np.max(sum[-100:])]
-        selected = np.argmax(sum[-100:]) + len(sum) - 100
+        sum = avgs["Test AUC"] / .8 + avgs["Test C-Index"] / .7
+        last = - args.epochs // 3
+        best = [np.max(sum[last:])]
+        selected = np.argmax(sum[last:]) + len(sum) + last
     else: 
         best = []
         selected = -1
@@ -183,8 +173,7 @@ def main(args):
     print(f"\n{mod_name}{', mix data' if args.mix_data else ', inst. sep.'} - {args.survival_years}yr")
     print(f"{"--" * 5}")
     print(f"5-Fold Avg + 95% CI")
-    # for selected in [654, 816, 398]:
-    # selected = -1
+
     auc_ci = stats.t.interval(confidence=.95, df=4, loc=avgs['Test AUC'][selected], scale=errs['Test AUC'][selected])
     auc_ci = [float(n) for n in auc_ci]
     c_ci = stats.t.interval(confidence=.95, df=4, loc=avgs['Test C-Index'][selected], scale=errs['Test C-Index'][selected])

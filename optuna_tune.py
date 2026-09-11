@@ -5,21 +5,22 @@ import new_kf
 
 def run_trial(trial: optuna.Trial):
     #optimize on lr, batch size, emb dim, fused dim, early stop, num epochs, survival years, activation
-    batch_size = trial.suggest_categorical("batch_size", [32, 64, 128])
+    # batch_size = trial.suggest_categorical("batch_size", [32, 64, 128])
     emb_dim = trial.suggest_categorical("emb_dim", [64, 128, 256])
     fused_dim = trial.suggest_categorical("fused_dim", [0, 64, 128])
 
     # early_stop = trial.suggest_int("early_stop", low=-100, high=0)
-    epochs = trial.suggest_categorical("epochs", [200, 500])
+    epochs = trial.suggest_categorical("epochs", [200, 300, 500, 800])
     warmup = trial.suggest_categorical("warmup", [25, 50, 100])
-
-    act = trial.suggest_categorical("act", ["--rms_norm", "--layer_norm", "--batch_norm"])
+    lr = trial.suggest_categorical("lr", [1e-5, 1e-4, 2e-4, 1e-3])
 
     yrs = trial.suggest_categorical("years", [2, 5])
 
+    strat = trial.suggest_categorical("stratify", ["", "--stratify"])
+
     #build args, run main
-    args = f'--survival_years {yrs} {act} --emb_dim {emb_dim} --epochs {epochs} --warmup_epochs {warmup} --batch_size {batch_size} --fusion_dim {fused_dim}'.split() + \
-            '--disable_wandb --mix_data --clinical --path_lang --rad_lang --sparse --stratify --track_best'.split()
+    args = f'--survival_years {yrs} {strat} --emb_dim {emb_dim} --epochs {epochs} --warmup_epochs {warmup} --lr {lr} --fusion_dim {fused_dim}'.split() + \
+            '--disable_wandb --mix_data --layer_norm --batch_size 32 --clinical --path_lang --rad_lang --sparse --track_best'.split()
 
     parser = new_kf.get_args_parser()
     main_fn = new_kf.main

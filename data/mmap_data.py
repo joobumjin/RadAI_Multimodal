@@ -123,7 +123,8 @@ class MemmapDatasetMultimodal(Dataset):
 
         #filter labels
         if self._labels is not None: all_valid *= (~np.isnan(self._labels))
-        all_valid *= (index["survival_days"] > 0)[:, None]
+        all_valid *= (~np.isnan(index["survival_days"])[:,None] * (index["survival_days"] > 0)[:, None])
+        all_valid *= ~np.isnan(index["survival_right_censor"])[:,None]
         all_valid *= ~index['excluded'][:,None]
 
         self._all_valid = np.flatnonzero(all_valid)

@@ -48,12 +48,13 @@ class DenseFusion(nn.Module):
                 logits[modality] = enc(x[modality]).float()
             if f"{modality}_mask" in x: 
                 logits[modality] *= x[f"{modality}_mask"].view((-1, 1))
-        
-        catted = torch.cat([logits[mod] for mod in self.modality_order], dim=1)
+        catted = [logits[mod] for mod in self.modality_order]    
+        catted = torch.cat(catted, dim=1)
         return self.pred.predict(catted)
     
     def forward(self, x: Dict[str, Tensor]) -> Dict[str, Tensor]:
         preds = self.predict(x)
+
         loss = [self.loss_fn(preds, x)] if self.loss_fn is not None else []
         return preds, *loss
 

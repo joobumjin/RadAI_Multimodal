@@ -86,6 +86,15 @@ def get_unimodal_clin(args):
 
 # --------------------------------------------------------
 
+MODEL_FNS = {
+    "multi": get_dense_fusion_model,
+    "uni_path": get_unimodal_path,
+    "uni_rad": get_unimodal_rad,
+    "uni_clin": get_unimodal_clin
+}
+
+# --------------------------------------------------------
+
 def get_mod_name(args):
     if args.modality == "uni_path": 
         args.path_lang = True

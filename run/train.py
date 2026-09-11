@@ -44,7 +44,6 @@ def train_one_epoch(model: torch.nn.Module, device: torch.device, train_loader: 
 
         with torch.inference_mode():
             metrics["Train Loss"].update(loss.detach().item())
-            # metrics["lr"].update(optimizer.param_groups[0]["lr"])
             for name, fn in fns.items():
                 metric_val = fn(preds, batch["label"])
                 metrics[name].update(metric_val.detach().item())
@@ -71,7 +70,6 @@ def train_one_epoch_list(model: torch.nn.Module, device: torch.device, train_loa
 
         with torch.inference_mode():
             metrics["Train Loss"].update(loss.detach().item())
-            metrics["lr"].update(optimizer.param_groups[0]["lr"])
             for name, fn in fns.items():
                 metric_val = fn(preds, batch["label"])
                 metrics[name].update(metric_val.detach().item())
