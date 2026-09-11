@@ -12,7 +12,7 @@ def get_clinical_encoder(args):
     }
 
     clin_enc = create_mlp(24, [], args.emb_dim, act = nn.GELU(), dropout = 0.2, end_with_fc=False, end_with_dropout=True, end_with_norm=True, **act)
-    return clin_enc, False
+    return clin_enc
 
 def get_path_lang_encoder(args):
     act = {
@@ -22,7 +22,7 @@ def get_path_lang_encoder(args):
     }
 
     path_lang_enc = create_mlp(args.enc_dim, [], args.emb_dim, act = nn.GELU(), dropout = 0.2, end_with_fc=False, end_with_dropout=True, end_with_norm=True, **act)
-    return path_lang_enc, True
+    return path_lang_enc
 
 def get_rad_lang_encoder(args):
     act = {
@@ -32,9 +32,9 @@ def get_rad_lang_encoder(args):
     }
 
     rad_lang_enc = create_mlp(args.enc_dim, [], args.emb_dim, act = nn.GELU(), dropout = 0.2, end_with_fc=False, end_with_dropout=True, end_with_norm=True, **act)
-    return rad_lang_enc, True
+    return rad_lang_enc
 
-def get_dense_fusion_model(args):
+def get_dense_fusion_model(args, dtypes):
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
     get_enc_fns = {
@@ -54,7 +54,8 @@ def get_dense_fusion_model(args):
     arg_dict = vars(args)
     for mod, fn in get_enc_fns.items():
         if arg_dict.get(mod, False): 
-            encs[mod], casts[mod] = fn(args)
+            encs[mod] = fn(args)
+            casts[mod] = (dtypes[f"{mod}_dtype"] != "float32")
 
     hid = [args.fusion_dim, 32] if args.fusion_dim > 0 else [32]
 
@@ -63,21 +64,21 @@ def get_dense_fusion_model(args):
 
 # --------------------------------------------------------
 
-def get_unimodal_path(args):
+def get_unimodal_path(args, dtypes):
     model = Unimodal(args.enc_dim, [128, 32], 1, act = nn.GELU(), loss_fn=LOSS_FNS[args.loss_fn], rms_norm = True)
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
     model = model.to(device)
     return model, device
 
-def get_unimodal_rad(args):
+def get_unimodal_rad(args, dtypes):
     model = Unimodal(args.enc_dim, [128, 32], 1, act = nn.GELU(), loss_fn=LOSS_FNS[args.loss_fn], rms_norm = True, mod="rad_lang")
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
     model = model.to(device)
     return model, device
 
-def get_unimodal_clin(args):
+def get_unimodal_clin(args, dtypes):
     model = Unimodal(24, [64, 32], 1, act = nn.GELU(), loss_fn=LOSS_FNS[args.loss_fn], rms_norm = True, mod="clinical") 
     device = "cuda" if torch.cuda.is_available() else "cpu"
 

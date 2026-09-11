@@ -108,7 +108,7 @@ def run_setup(args: Namespace, model_constructor: callable,
     torch.manual_seed(seed)
     np.random.seed(seed)
 
-    model, device = model_constructor(args)
+    model, device = model_constructor(args, train_loader.dataset._dtypes)
 
     optimizer, scheduler = get_opt_and_sched(model, args, iter_per_epoch=len(train_loader))
 
