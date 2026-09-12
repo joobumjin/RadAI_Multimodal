@@ -1,7 +1,9 @@
 from typing import Optional
 from argparse import Namespace
 
+import torch
 from torch import Tensor
+from torch.func import vmap
 import numpy as np
 from sklearn.utils import resample
 import scipy.stats as stats
@@ -33,18 +35,18 @@ class Bootstrap:
         self.rand_state = random_state
 
         seeds = np.random.SeedSequence(random_state).generate_state(self.n_resample)
-        self.samples = [resample(np.arange(n_test, dtype=int), replace=True, n_samples=n_test, stratify=stratify, random_state=seed).astype(int) for seed in seeds]
+        self.sample_inds = torch.from_numpy(np.stack([resample(np.arange(n_test, dtype=int), replace=True, n_samples=n_test, stratify=stratify, random_state=seed).astype(int) for seed in seeds])) #[n_resample, n_test] of just inds
 
     def add(self, *data):
         """
         Takes data, calculates bootstrap values, adds those bootstrap values to entries, and updates average, error, and 95% CI
         """
-
         #calculate statistic for each resample
-        for sample in self.samples:
-            sample_data = [d[sample] for d in data]
-            res = self.fn(*sample_data)
-            self.entries.append(res)
+        res = [None] * len(self.sample_inds)
+        for i, sample in enumerate(self.sample_inds):
+            sample_data = [d[sample] for d in data] 
+            res[i] = self.fn(*sample_data) #cant be vectorized :) 
+        self.entries += res
 
         #aggregate
         self.avg = np.mean(self.entries)
