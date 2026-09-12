@@ -105,7 +105,10 @@ def main(args):
     args.wb_proj = f"{mod_name} {args.model} {args.wb_proj} {args.folds}"
 
     dataset, test_set = get_datasets(args)
-    if args.mix_data: dataset = ConcatDataset([dataset, test_set]) #this is prob a little mem inefficient
+    if args.mix_data:
+        dtypes = dataset._dtypes 
+        dataset = ConcatDataset([dataset, test_set]) #this is prob a little mem inefficient
+        dataset._dtypes = dtypes
 
     strat = get_stratify(args, dataset) if args.stratify else None
 
@@ -162,7 +165,7 @@ def main(args):
     errs = {key: stats.sem(arr, axis=0) for key, arr in metrics.items()}
 
     if args.track_best:
-        sum = avgs["Test AUC"] / .8 + avgs["Test C-Index"] / .7
+        sum = avgs["Test AUC"] / .9 + avgs["Test C-Index"] / .7
         last = - args.epochs // 3
         best = [np.max(sum[last:])]
         selected = np.argmax(sum[last:]) + len(sum) + last

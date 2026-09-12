@@ -10,7 +10,7 @@ from util.consts import *
 def get_datasets(
         args: Namespace,
         keys: list[str] = ["slide_ids", "survival_days", "survival_right_censor"],
-    )-> tuple[Dataset, Dataset]:
+    )-> tuple[MemmapDatasetMultimodal, MemmapDatasetMultimodal]:
     """
     Returns the train and test Datasets as dictated by args
     """
@@ -45,7 +45,7 @@ def get_datasets(
 
 def get_combined_loaders(
         args: Namespace, 
-        dataset: Dataset,
+        dataset: MemmapDatasetMultimodal,
         train_inds: np.ndarray, 
         validation_inds: np.ndarray, 
         test_inds: np.ndarray,
@@ -75,6 +75,7 @@ def get_combined_loaders(
     }
 
     train_set = Subset(dataset, train_inds)
+    train_set._dtypes = dataset._dtypes
     train_loader = DataLoader(train_set, shuffle=True, **loader_args)
 
     if len(validation_inds): 
@@ -103,10 +104,10 @@ def get_combined_loaders(
 
 def get_subset_loaders(
         args: Namespace, 
-        tv_dataset: Dataset,
+        tv_dataset: MemmapDatasetMultimodal,
         train_inds: np.ndarray, 
         validation_inds: np.ndarray,
-        test_set: Dataset,
+        test_set: MemmapDatasetMultimodal,
         verbose: bool = False
     ) -> tuple[DataLoader, DataLoader, DataLoader]:
     """
@@ -133,6 +134,7 @@ def get_subset_loaders(
     }
 
     train_set = Subset(tv_dataset, train_inds)
+    train_set._dtypes = tv_dataset._dtypes
     train_loader = DataLoader(train_set, shuffle=True, **loader_args)
 
     if len(validation_inds): 
