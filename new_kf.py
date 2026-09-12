@@ -159,7 +159,7 @@ def main(args):
         if split == 4 and args.plot:
             km_preds(*all, model_name = f"Trimodal {args.survival_years}yr Model")
 
-    for key in metrics: metrics = {key: np.vstack(arr) for key, arr in metrics.items()}
+    metrics = {key: np.vstack(arr) for key, arr in metrics.items()}
 
     avgs = {key: np.mean(arr, axis=0) for key, arr in metrics.items()}
     errs = {key: stats.sem(arr, axis=0) for key, arr in metrics.items()}
