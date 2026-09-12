@@ -47,8 +47,9 @@ class Bootstrap:
         self.entries += res
 
         #aggregate
-        self.avg = np.mean(self.entries)
-        self.err = stats.sem(self.entries)
+        entries = np.array(self.entries)
+        self.avg = np.mean(entries)
+        self.err = stats.sem(entries)
 
         self.ci = [float(n.item()) for n in stats.t.interval(confidence=.95, df=len(self.entries)-1, loc=self.avg, scale=self.err)]
 
