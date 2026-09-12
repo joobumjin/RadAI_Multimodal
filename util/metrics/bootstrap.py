@@ -1,9 +1,7 @@
 from typing import Optional
 from argparse import Namespace
 
-import torch
 from torch import Tensor
-from torch.func import vmap
 import numpy as np
 from sklearn.utils import resample
 import scipy.stats as stats
@@ -35,7 +33,7 @@ class Bootstrap:
         self.rand_state = random_state
 
         seeds = np.random.SeedSequence(random_state).generate_state(self.n_resample)
-        self.sample_inds = torch.from_numpy(np.stack([resample(np.arange(n_test, dtype=int), replace=True, n_samples=n_test, stratify=stratify, random_state=seed).astype(int) for seed in seeds])) #[n_resample, n_test] of just inds
+        self.sample_inds = [resample(np.arange(n_test, dtype=int), replace=True, n_samples=n_test, stratify=stratify, random_state=seed).astype(int) for seed in seeds] #[n_resample, n_test] of just inds
 
     def add(self, *data):
         """
