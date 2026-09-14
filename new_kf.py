@@ -165,7 +165,7 @@ def main(args):
     errs = {key: stats.sem(arr, axis=0) for key, arr in metrics.items()}
 
     if args.track_best:
-        sum = avgs["Test AUC"] / .9 + avgs["Test C-Index"] / .7
+        sum = avgs["Test AUC"] / .9 + avgs["Test C-Index"] / .6
         last = - args.epochs // 3
         best = [np.max(sum[last:])]
         selected = np.argmax(sum[last:]) + len(sum) + last
