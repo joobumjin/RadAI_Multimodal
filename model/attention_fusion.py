@@ -96,7 +96,8 @@ class HierarchalAttentionFusion(nn.Module):
         self.emb_dim = emb_dim
         self.loss_fn = loss_fn
         self.modality_order = list(encoders.keys())
-        self.pairs = combinations(self.modality_order, 2)
+        self.pairs = list(combinations(self.modality_order, 2))
+        print(f"Pairs: {self.pairs}")
 
         self.encoders = {mod: encoders[mod].to(device) for mod in encoders}
         self.pair_attn = {pair: nn.Linear(emb_dim, 1, bias=False, device=device) for pair in self.pairs}
@@ -129,7 +130,9 @@ class HierarchalAttentionFusion(nn.Module):
             b = self.pair_attn[pair](logits[pair[1]]).exp()
             pair_embs[pair] = (logits[pair[0]] * a + logits[pair[1]] * b) / (a+b)
 
+        print(f"Pair Embs: {pair_embs}")
         pair_vals = {pair: self.attn(pair).exp() for pair in pair_embs}
+        print(f"Pair Vals: {pair_vals}")
         val_sum = torch.stack(list(pair_vals.values())).sum(0)
 
         weighted = torch.stack([pair_embs[pair] * pair_vals[pair] / val_sum for pair in self.pairs]).sum(0)
