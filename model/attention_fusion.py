@@ -131,7 +131,7 @@ class HierarchalAttentionFusion(nn.Module):
             pair_embs[pair] = (logits[pair[0]] * a + logits[pair[1]] * b) / (a+b)
 
         print(f"Pair Embs: {pair_embs}")
-        pair_vals = {pair: self.attn(pair).exp() for pair in pair_embs}
+        pair_vals = {pair: self.attn(emb).exp() for pair, emb in pair_embs.items()}
         print(f"Pair Vals: {pair_vals}")
         val_sum = torch.stack(list(pair_vals.values())).sum(0)
 
