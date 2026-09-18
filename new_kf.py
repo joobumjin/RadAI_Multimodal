@@ -32,7 +32,7 @@ def get_args_parser():
     parser.add_argument('--mix_data',           action="store_true", 
                         help="Combine and then shuffle the train and test data")
     parser.add_argument('--stratify',           action="store_true", help="stratify the mix split")
-    parser.add_argument('--modality',           type=str, default="multi", choices=["multi", "uni_path", "uni_rad", "uni_clin"])
+    parser.add_argument('--modality',           type=str, default="multi", choices=list(MODEL_FNS.keys()))
 
     parser.add_argument('--sparse',             action="store_true")
     parser.add_argument('--clinical',           action="store_true")
