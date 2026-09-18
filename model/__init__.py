@@ -4,3 +4,4 @@ from .linear_predictor import *
 from .naive_fusion import *
 from .dense_fusion import *
 from .moe import *
+from .attention_fusion import *

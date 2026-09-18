@@ -2,7 +2,7 @@ import torch
 from torch import nn
 
 from util import *
-from model import create_mlp, DenseFusion, Unimodal
+from model import create_mlp, DenseFusion, Unimodal, AttentionFusion, HierarchalAttentionFusion
 
 def get_clinical_encoder(args):
     act = {
@@ -60,6 +60,63 @@ def get_dense_fusion_model(args, dtypes):
     hid = [args.fusion_dim, 32] if args.fusion_dim > 0 else [32]
 
     model = DenseFusion(encs, emb_dim=args.emb_dim, hidden_dims=hid, autocast=casts, loss_fn=LOSS_FNS[args.loss_fn], device=device, **act)
+    model = torch.compile(model, mode="reduce-overhead")
+    return model, device
+
+def get_attn_fusion_model(args, dtypes):
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+
+    get_enc_fns = {
+        "clinical": get_clinical_encoder, 
+        "clinical_imputed": get_clinical_encoder, 
+        "path_lang": get_path_lang_encoder, 
+        "rad_lang": get_rad_lang_encoder, 
+    }
+
+    act = {
+        "batch_norm": args.batch_norm,
+        "rms_norm": args.rms_norm,
+        "layer_norm": args.layer_norm,
+    }
+
+    encs, casts = {}, {}
+    arg_dict = vars(args)
+    for mod, fn in get_enc_fns.items():
+        if arg_dict.get(mod, False): 
+            encs[mod] = fn(args)
+            casts[mod] = (dtypes[mod] != "float32")
+
+    hid = [args.fusion_dim, 32] if args.fusion_dim > 0 else [32]
+
+    model = AttentionFusion(encs, emb_dim=args.emb_dim, hidden_dims=hid, autocast=casts, loss_fn=LOSS_FNS[args.loss_fn], device=device, **act)
+    return model, device
+
+def get_ha_fusion_model(args, dtypes):
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+
+    get_enc_fns = {
+        "clinical": get_clinical_encoder, 
+        "clinical_imputed": get_clinical_encoder, 
+        "path_lang": get_path_lang_encoder, 
+        "rad_lang": get_rad_lang_encoder, 
+    }
+
+    act = {
+        "batch_norm": args.batch_norm,
+        "rms_norm": args.rms_norm,
+        "layer_norm": args.layer_norm,
+    }
+
+    encs, casts = {}, {}
+    arg_dict = vars(args)
+    for mod, fn in get_enc_fns.items():
+        if arg_dict.get(mod, False): 
+            encs[mod] = fn(args)
+            casts[mod] = (dtypes[mod] != "float32")
+
+    hid = [args.fusion_dim, 32] if args.fusion_dim > 0 else [32]
+
+    model = HierarchalAttentionFusion(encs, emb_dim=args.emb_dim, hidden_dims=hid, autocast=casts, loss_fn=LOSS_FNS[args.loss_fn], device=device, **act)
     return model, device
 
 # --------------------------------------------------------
@@ -89,6 +146,8 @@ def get_unimodal_clin(args, dtypes):
 
 MODEL_FNS = {
     "multi": get_dense_fusion_model,
+    "attn": get_attn_fusion_model,
+    "hat": get_ha_fusion_model,
     "uni_path": get_unimodal_path,
     "uni_rad": get_unimodal_rad,
     "uni_clin": get_unimodal_clin
