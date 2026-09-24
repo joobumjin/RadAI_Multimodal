@@ -6,6 +6,9 @@ from torch.utils.data import Dataset, ConcatDataset
 from sklearn.model_selection import train_test_split, KFold, StratifiedKFold
 import scipy.stats as stats
 
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
+
 from data import *
 from util import *
 from run import *
@@ -16,40 +19,50 @@ def get_args_parser():
 
     parser.add_argument('--seed',               type=int,   default=0)
       
-    parser.add_argument('--batch_size',         type=int,   default=128)
-    parser.add_argument('--loss_fn',            type=str,   default="cox_nll", choices=list(LOSS_FNS.keys()))
-    parser.add_argument('--model',              type=str,   default="gemma", choices=['gemma', 'qwen'])
-    parser.add_argument('--data_path',          type=str,   default="../gemma_multimodal_bins")
-    parser.add_argument('--test_path',          type=str,   default="../gemma_multimodal_bins_rw")
-    parser.add_argument('--epochs',             type=int,   default=200)
-    parser.add_argument('--device',                         default='cuda')
-    parser.add_argument('--float16',            type=bool,  default=True)
+    parser.add_argument('--batch_size',         type=int,   default=32)
+
+
+    parser.add_argument('--data_path',          type=str,   default="../data/gemma_multimodal_bins")
+    parser.add_argument('--test_path',          type=str,   default="../data/gemma_multimodal_bins_rw")
+
+    #training duration
+    parser.add_argument('--epochs',             type=int,   default=500)
     parser.add_argument('--early_stop',         type=bool,  default=True)
     parser.add_argument('--patience',           type=int,   default=5)
     parser.add_argument('--folds',              type=int,   default=5)
     parser.add_argument('--resample',           type=int,   default=9999)
 
+    #device
+    parser.add_argument('--loss_fn',            type=str,   default="cox_nll", choices=list(LOSS_FNS.keys()))
+    parser.add_argument('--model',              type=str,   default="gemma", choices=['gemma', 'qwen'])
+    parser.add_argument('--device',                         default='cuda')
+    parser.add_argument('--float16',            type=bool,  default=True) #i think this is dep
+
+    #data sampling
     parser.add_argument('--mix_data',           action="store_true", 
                         help="Combine and then shuffle the train and test data")
     parser.add_argument('--stratify',           action="store_true", help="stratify the mix split")
     parser.add_argument('--modality',           type=str, default="multi", choices=list(MODEL_FNS.keys()))
 
+    #modalities
     parser.add_argument('--sparse',             action="store_true")
     parser.add_argument('--clinical',           action="store_true")
     parser.add_argument('--clinical_imputed',   action="store_true")
     parser.add_argument('--path_lang',          action="store_true")
     parser.add_argument('--rad_lang',           action="store_true")
     parser.add_argument('--path_img',           action="store_true")
+
     parser.add_argument('--enc_dim',            type=int,   default=768)
     parser.add_argument('--emb_dim',            type=int,   default=256)
-    parser.add_argument('--fusion_dim',         type=int,   default=0)
+    parser.add_argument('--fusion_dim',         type=int,   nargs='+',      default=[64, 16])
     parser.add_argument('--rms_norm',           action="store_true")
     parser.add_argument('--layer_norm',         action="store_true")
     parser.add_argument('--batch_norm',         action="store_true")
-    
+
+    #dataloader
     parser.add_argument('--prefetch_factor',    type=int,   default=2)
     parser.add_argument('--num_workers',        type=int,   default=1)
-    parser.add_argument('--pin_mem',            type=bool,  default=True)
+    parser.add_argument('--pin_mem',            type=bool,  default=False)
     parser.add_argument('--train_split',        type=float, default=.85)
 
     parser.add_argument('--survival_years',     type=int,   default=2)
@@ -71,8 +84,9 @@ def get_args_parser():
     parser.add_argument('--save_path',                      default="../weights",
                         help="directory to which the pretrained model weights should be saved")
 
+    parser.add_argument('--hist',               action="store_true")
     parser.add_argument('--disable_wandb',      action="store_true")
-    parser.add_argument('--wb_proj',            type=str,   default="New KFold Validation")
+    parser.add_argument('--wb_proj',            type=str,   default="5CV")
     parser.add_argument('--run_name')
     parser.add_argument('--debug',              action="store_true")
     return parser
@@ -91,6 +105,7 @@ def get_stratify(args: Namespace, dataset: Dataset):
 def main(args):
     import warnings
     warnings.filterwarnings("ignore", message="Ties in `time` detected")
+    torch.autograd.set_detect_anomaly(True)
 
     if args.debug:
         args.epochs = 5
@@ -142,7 +157,7 @@ def main(args):
 
         run = run_setup(args, MODEL_FNS[args.modality], 
                         train_loader, valid_loader, test_loader, 
-                        run_name = run_name, return_keys=['Test AUC', 'Test C-Index'], 
+                        run_name = run_name, return_keys=['Train Loss', 'Train AUC', 'Train C-Index', 'Test Loss', 'Test AUC', 'Test C-Index'], 
                         ret_model=True, early_stop = args.early)
         model, device = run.pop("model")
 
@@ -164,6 +179,27 @@ def main(args):
     avgs = {key: np.mean(arr, axis=0) for key, arr in metrics.items()}
     errs = {key: stats.sem(arr, axis=0) for key, arr in metrics.items()}
 
+    if args.hist:
+        tracked = {
+            key: {
+                f"Split {i}": hist for i, hist in enumerate(arrs)
+            } for key, arrs in metrics.items()
+        }
+
+        epochs = np.arange(len(list(metrics.values())[0][0]))
+
+        fig = make_subplots(rows=2, cols=3, shared_xaxes=True, vertical_spacing=0.05, subplot_titles=list(tracked.keys()))
+        for i, key in enumerate(tracked):
+            fig.add_trace(go.Scatter(x=epochs, y=avgs[key], mode='lines', name=key), row=i//3 + 1, col=(i%3) + 1)
+            fig.add_trace(
+                go.Scatter(x=np.hstack((epochs, epochs[::-1])), 
+                           y=np.hstack((np.max(metrics[key], axis=0), np.min(metrics[key], axis=0)[::-1])), 
+                           mode='lines', name=split, fill='toself', fillcolor='rgba(0,100,80,0.2)', line=dict(color='rgba(255,255,255,0)'), 
+                           hoverinfo="skip", showlegend=False,), 
+                row=i//3 + 1, col=(i%3) + 1)
+
+        fig.show()
+
     if args.track_best:
         sum = avgs["Test AUC"] / .9 + avgs["Test C-Index"] / .6
         last = - args.epochs // 3
@@ -175,13 +211,12 @@ def main(args):
 
     print(f"\n{mod_name}{', mix data' if args.mix_data else ', inst. sep.'} - {args.survival_years}yr")
     print(f"{"--" * 5}")
-    print(f"5-Fold Avg + 95% CI")
+    print(f"5-Fold Avg + 95% CI at epoch {selected}")
 
     auc_ci = stats.t.interval(confidence=.95, df=4, loc=avgs['Test AUC'][selected], scale=errs['Test AUC'][selected])
     auc_ci = [float(n) for n in auc_ci]
     c_ci = stats.t.interval(confidence=.95, df=4, loc=avgs['Test C-Index'][selected], scale=errs['Test C-Index'][selected])
     c_ci = [float(n) for n in c_ci]
-    print(f"At epoch {selected}")
 
     auc5fold = SimpleNamespace(avg = avgs['Test AUC'][selected], ci=auc_ci)
     ci5fold = SimpleNamespace(avg = avgs['Test C-Index'][selected], ci=c_ci)
@@ -189,7 +224,7 @@ def main(args):
     print(f"C Ind: {ci5fold.avg} ({c_ci[0]:.3f}, {c_ci[1]:.3f})")
 
     # print(f"{"--" * 5}")
-    # print(f"Bootstrapped Avg + 95% CI")
+    # print(f"Bootstrapped Avg + 95% CI (at end)")
     # print(str(auc_res))
     # print(str(ci_res))
     # print(f"From {len(ci_res.entries)} bootstrap samples")

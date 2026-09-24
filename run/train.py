@@ -117,19 +117,6 @@ def run_setup(args: Namespace, model_constructor: callable,
 
     if args.disable_wandb: run = None
     else:
-        config = {
-            "Loss": args.loss_fn,
-            "Seed": args.seed,
-            "Clinical": args.clinical,
-            "Path Lang": args.path_lang,
-            "Rad Lang": args.rad_lang,
-            "Path Img": args.path_img,
-            "Fusion": "Dense",
-            "Model": args.model,
-            "MLP Norm": "Layer Norm",
-            "Mix Data": args.mix_data
-        }
-
         mods = []
         if args.clinical: mods.append("Clinical")
         if args.path_lang: mods.append("Path Lang")
@@ -145,7 +132,7 @@ def run_setup(args: Namespace, model_constructor: callable,
             entity="bumjin_joo-brown-university", 
             project=args.wb_proj, 
             name=run_name,
-            config=config
+            config=vars(args)
         )
 
     ret_metrics = {key: [] for key in return_keys}

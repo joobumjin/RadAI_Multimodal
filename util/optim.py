@@ -18,7 +18,7 @@ def get_opt_and_sched(model: nn.Module, args: Namespace, iter_per_epoch: Optiona
     - iter_per_epoch: number of scheduler steps per epoch (if stepping for every train step instead of once an epoch)
     """
 
-    optimizer = optim.AdamW(model.parameters(), lr=args.lr, betas=(0.9, 0.95), weight_decay=0.01)
+    optimizer = optim.AdamW(model.parameters(), lr=args.lr, betas=(0.9, 0.98))#, weight_decay=0.01)
 
     if args.const_lr:
         scheduler = optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lambda epoch: 1.0)

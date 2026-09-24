@@ -2,17 +2,20 @@ from typing import List, Dict, Optional, Callable
 
 import torch
 from torch import Tensor
-import torch.nn as nn
+from torch import nn
 from model.linear_predictor import *
 
 class DenseFusion(nn.Module):
     """
-    Logit-level fusion using an nn.Module 
+    Intermediate fusion on unimodal encoders
+    Given encoders, concatenates the encoded outputs into catted
+    Then predicts on catted -> hidden_dims -> 1
     """
     def __init__(self, 
                  encoders: Dict[str, nn.Module], 
                  device: torch.device,
-                 emb_dim: int, hidden_dims: List[int], 
+                 emb_dim: int, 
+                 hidden_dims: List[int], 
                  autocast: Dict[str, bool], 
                  loss_fn: Optional[Callable], 
                  batch_norm: bool = False,
@@ -26,10 +29,10 @@ class DenseFusion(nn.Module):
         self.loss_fn = loss_fn
         self.modality_order = list(encoders.keys())
 
-        self.encoders = {mod: encoders[mod].to(device) for mod in encoders}
+        self.encoders = nn.ModuleDict(encoders)
 
-        self.pred = LinearModel(emb_dim * len(encoders), hidden_dims=hidden_dims, batch_norm = batch_norm, layer_norm = layer_norm, rms_norm = rms_norm, loss_fn=None)
-        self.pred = self.pred.to(device)
+        self.pred = LinearModel(emb_dim * len(encoders), hidden_dims=hidden_dims, act = nn.GELU(), 
+                                batch_norm = batch_norm, layer_norm = layer_norm, rms_norm = rms_norm, loss_fn=None)
         self.apply(self._init_weights)
 
     def _init_weights(self, m):
@@ -61,7 +64,8 @@ class DenseFusion(nn.Module):
 
 class DenseFusionMulti(nn.Module):
     """
-    Logit-level fusion using an nn.Module 
+    Intermediate fusion on unimodal encoders with multi target training regime (UNUSED)
+    Intended for multiple prediction targets
     """
     def __init__(self, 
                  encoders: Dict[str, nn.Module], 
@@ -115,6 +119,10 @@ class DenseFusionMulti(nn.Module):
 
 
 class SingleModAE(nn.Module):
+    """
+    Unimodal AE (UNUSED)
+    Intended to contribute reconstruction loss to a multi target training regime
+    """
     def __init__(self, mod_name: str, enc: nn.Module, dec: nn.Module, device: torch.device, autocast: Dict[str, bool], loss_fn = None):
         super().__init__()
         self.mod = mod_name

@@ -1,6 +1,3 @@
-from collections import defaultdict
-
-import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
@@ -11,11 +8,11 @@ def get_sub(yrs: int):
     sub = {}
     sub[f"mix{yrs}"] = {
         #trimodal
-        "tri": f'--disable_wandb --survival_years {yrs} --mix_data --clinical --path_lang --rad_lang --plot --stratify --emb_dim 64 --fusion_dim 128 --epochs 200 --sparse --layer_norm --warmup_epochs 100 --early 106'.split(),
+        "tri": f'--disable_wandb --survival_years {yrs} --mix_data --clinical --path_lang --rad_lang --stratify --emb_dim 8 --fusion_dim 64 16 --epochs 500 --layer_norm --const_lr --lr 1e-3 --disable_wandb --batch_size 128 --modality hat --early -142'.split(),
         #bimodal
-        "pr": f'--disable_wandb --survival_years {yrs} --mix_data --rad_lang --path_lang --stratify --emb_dim 128 --sparse'.split(),
-        "pc": f'--disable_wandb --survival_years {yrs} --mix_data --path_lang --clinical --stratify --emb_dim 128 --sparse'.split(),
-        "rc": f'--disable_wandb --survival_years {yrs} --mix_data --rad_lang --clinical --stratify --emb_dim 128 --sparse'.split(),
+        "pr": f'--disable_wandb --survival_years {yrs} --mix_data --rad_lang --path_lang --stratify --emb_dim 128 --modality attn'.split(),
+        "pc": f'--disable_wandb --survival_years {yrs} --mix_data --path_lang --clinical --stratify --emb_dim 128 --modality attn'.split(),
+        "rc": f'--disable_wandb --survival_years {yrs} --mix_data --rad_lang --clinical --stratify --emb_dim 128 --modality attn'.split(),
         #unimodal
         "p": f'--disable_wandb --survival_years {yrs} --mix_data --modality uni_path --stratify'.split(),
         "r": f'--disable_wandb --survival_years {yrs} --mix_data --modality uni_rad --stratify'.split(),

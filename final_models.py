@@ -1,144 +1,160 @@
+from argparse import Namespace
+
 import torch
 from torch import nn
 
 from util import *
-from model import create_mlp, DenseFusion, Unimodal, AttentionFusion, HierarchalAttentionFusion
+from model import create_mlp, DenseFusion, Unimodal, AttentionFusion, HierarchicalAttentionFusion
 
-def get_clinical_encoder(args):
-    act = {
+def norms(args: Namespace) -> dict:
+    return {
         "batch_norm": args.batch_norm,
         "rms_norm": args.rms_norm,
         "layer_norm": args.layer_norm,
     }
 
-    clin_enc = create_mlp(24, [], args.emb_dim, act = nn.GELU(), dropout = 0.2, end_with_fc=False, end_with_dropout=True, end_with_norm=True, **act)
+# --------------------------------------------------------
+
+def get_clinical_encoder(args: Namespace) -> nn.Module:
+    "Get the Clinical Modality Encoder from args"
+
+    setup = {
+        "end_with_fc": False, 
+        "end_with_dropout": True, 
+        "end_with_norm": True,
+        **norms(args)
+    }
+
+    clin_enc = create_mlp(in_dim = 24, hid_dims = [], out_dim = args.emb_dim, act = nn.GELU(), dropout = 0.2, **setup)
     return clin_enc
 
-def get_path_lang_encoder(args):
-    act = {
-        "batch_norm": args.batch_norm,
-        "rms_norm": args.rms_norm,
-        "layer_norm": args.layer_norm,
+def get_path_lang_encoder(args) -> nn.Module:
+    "Get the PathLang Modality Encoder from args"
+
+    setup = {
+        "end_with_fc": False, 
+        "end_with_dropout": True, 
+        "end_with_norm": True,
+        **norms(args)
     }
 
-    path_lang_enc = create_mlp(args.enc_dim, [], args.emb_dim, act = nn.GELU(), dropout = 0.2, end_with_fc=False, end_with_dropout=True, end_with_norm=True, **act)
+    path_lang_enc = create_mlp(in_dim = args.enc_dim, hid_dims = [], out_dim = args.emb_dim, act = nn.GELU(), dropout = 0.2, **setup)
     return path_lang_enc
 
-def get_rad_lang_encoder(args):
-    act = {
-        "batch_norm": args.batch_norm,
-        "rms_norm": args.rms_norm,
-        "layer_norm": args.layer_norm,
+def get_rad_lang_encoder(args) -> nn.Module:
+    "Get the RadLang Modality Encoder from args"
+
+    setup = {
+        "end_with_fc": False, 
+        "end_with_dropout": True, 
+        "end_with_norm": True,
+        **norms(args)
     }
 
-    rad_lang_enc = create_mlp(args.enc_dim, [], args.emb_dim, act = nn.GELU(), dropout = 0.2, end_with_fc=False, end_with_dropout=True, end_with_norm=True, **act)
+    rad_lang_enc = create_mlp(in_dim = args.enc_dim, hid_dims = [], out_dim = args.emb_dim, act = nn.GELU(), dropout = 0.2, **setup)
     return rad_lang_enc
 
-def get_dense_fusion_model(args, dtypes):
+enc_fns = {
+    "clinical": get_clinical_encoder, 
+    "clinical_imputed": get_clinical_encoder, 
+    "path_lang": get_path_lang_encoder, 
+    "rad_lang": get_rad_lang_encoder, 
+}
+
+# --------------------------------------------------------
+
+def get_dense_fusion_model(args: Namespace, dtypes:dict[str,str]) -> tuple[nn.Module, torch.device]:
+    "Get the Dense+Cat intermediate fusion model with the single modality encoders"
     device = "cuda" if torch.cuda.is_available() else "cpu"
-
-    get_enc_fns = {
-        "clinical": get_clinical_encoder, 
-        "clinical_imputed": get_clinical_encoder, 
-        "path_lang": get_path_lang_encoder, 
-        "rad_lang": get_rad_lang_encoder, 
-    }
-
-    act = {
-        "batch_norm": args.batch_norm,
-        "rms_norm": args.rms_norm,
-        "layer_norm": args.layer_norm,
-    }
 
     encs, casts = {}, {}
     arg_dict = vars(args)
-    for mod, fn in get_enc_fns.items():
+    for mod, fn in enc_fns.items():
         if arg_dict.get(mod, False): 
             encs[mod] = fn(args)
             casts[mod] = (dtypes[mod] != "float32")
 
-    hid = [args.fusion_dim, 32] if args.fusion_dim > 0 else [32]
-
-    model = DenseFusion(encs, emb_dim=args.emb_dim, hidden_dims=hid, autocast=casts, loss_fn=LOSS_FNS[args.loss_fn], device=device, **act)
-    model = torch.compile(model, mode="reduce-overhead")
+    model = DenseFusion(encs, emb_dim=args.emb_dim, hidden_dims=args.fusion_dim, 
+                        autocast=casts, loss_fn=LOSS_FNS[args.loss_fn], device=device, 
+                        **norms(args))
+    model = model.to(device)
     return model, device
 
-def get_attn_fusion_model(args, dtypes):
+def get_attn_fusion_model(args: Namespace, dtypes:dict[str,str]) -> tuple[nn.Module, torch.device]:
+    "Get the Keyless Attention fusion model with the single modality encoders"
+
     device = "cuda" if torch.cuda.is_available() else "cpu"
-
-    get_enc_fns = {
-        "clinical": get_clinical_encoder, 
-        "clinical_imputed": get_clinical_encoder, 
-        "path_lang": get_path_lang_encoder, 
-        "rad_lang": get_rad_lang_encoder, 
-    }
-
-    act = {
-        "batch_norm": args.batch_norm,
-        "rms_norm": args.rms_norm,
-        "layer_norm": args.layer_norm,
-    }
 
     encs, casts = {}, {}
     arg_dict = vars(args)
-    for mod, fn in get_enc_fns.items():
+    for mod, fn in enc_fns.items():
         if arg_dict.get(mod, False): 
             encs[mod] = fn(args)
             casts[mod] = (dtypes[mod] != "float32")
 
-    hid = [args.fusion_dim, 32] if args.fusion_dim > 0 else [32]
-
-    model = AttentionFusion(encs, emb_dim=args.emb_dim, hidden_dims=hid, autocast=casts, loss_fn=LOSS_FNS[args.loss_fn], device=device, **act)
+    model = AttentionFusion(encs, emb_dim=args.emb_dim, hidden_dims=args.fusion_dim, 
+                            autocast=casts, loss_fn=LOSS_FNS[args.loss_fn], device=device, 
+                            **norms(args))
+    model = model.to(device)
     return model, device
 
-def get_ha_fusion_model(args, dtypes):
+def get_ha_fusion_model(args: Namespace, dtypes:dict[str,str]) -> tuple[nn.Module, torch.device]:
+    "Get the HierarchicalKeyless Attention fusion model with the single modality encoders"
+
     device = "cuda" if torch.cuda.is_available() else "cpu"
-
-    get_enc_fns = {
-        "clinical": get_clinical_encoder, 
-        "clinical_imputed": get_clinical_encoder, 
-        "path_lang": get_path_lang_encoder, 
-        "rad_lang": get_rad_lang_encoder, 
-    }
-
-    act = {
-        "batch_norm": args.batch_norm,
-        "rms_norm": args.rms_norm,
-        "layer_norm": args.layer_norm,
-    }
 
     encs, casts = {}, {}
     arg_dict = vars(args)
-    for mod, fn in get_enc_fns.items():
+    for mod, fn in enc_fns.items():
         if arg_dict.get(mod, False): 
             encs[mod] = fn(args)
             casts[mod] = (dtypes[mod] != "float32")
 
-    hid = [args.fusion_dim, 32] if args.fusion_dim > 0 else [32]
-
-    model = HierarchalAttentionFusion(encs, emb_dim=args.emb_dim, hidden_dims=hid, autocast=casts, loss_fn=LOSS_FNS[args.loss_fn], device=device, **act)
+    model = HierarchicalAttentionFusion(
+        encs, emb_dim=args.emb_dim, hidden_dims=args.fusion_dim, 
+        autocast=casts, loss_fn=LOSS_FNS[args.loss_fn], device=device, 
+        **norms(args)
+    )
+    model = model.to(device)
     return model, device
 
 # --------------------------------------------------------
 
-def get_unimodal_path(args, dtypes):
-    model = Unimodal(args.enc_dim, [128, 32], 1, act = nn.GELU(), loss_fn=LOSS_FNS[args.loss_fn], rms_norm=True, autocast=dtypes["path_lang"])
+def get_unimodal_path(args: Namespace, dtypes:dict[str,str]) -> tuple[nn.Module, torch.device]:
+    "Get the Unimodal PathLang predictor model from args"
+
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
+    cast = dtypes["path_lang"]!="float32"
+    
+    model = Unimodal(args.enc_dim, args.fusion_dim, 1, act = nn.GELU(), 
+                     loss_fn=LOSS_FNS[args.loss_fn], autocast=cast, **norms(args))
     model = model.to(device)
     return model, device
 
-def get_unimodal_rad(args, dtypes):
-    model = Unimodal(args.enc_dim, [128, 32], 1, act = nn.GELU(), loss_fn=LOSS_FNS[args.loss_fn], rms_norm=True, mod="rad_lang", autocast=dtypes["rad_lang"])
+def get_unimodal_rad(args: Namespace, dtypes:dict[str,str]) -> tuple[nn.Module, torch.device]:
+    "Get the Unimodal RadLang predictor model from args"
+
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
+    cast = dtypes["rad_lang"]!="float32"
+
+    model = Unimodal(args.enc_dim, args.fusion_dim, 1, act = nn.GELU(), 
+                     loss_fn=LOSS_FNS[args.loss_fn], mod="rad_lang", autocast=cast, 
+                     **norms(args))
     model = model.to(device)
     return model, device
 
-def get_unimodal_clin(args, dtypes):
-    model = Unimodal(24, [64, 32], 1, act = nn.GELU(), loss_fn=LOSS_FNS[args.loss_fn], rms_norm = True, mod="clinical", autocast=dtypes["clinical"]) 
+def get_unimodal_clin(args: Namespace, dtypes:dict[str,str]) -> tuple[nn.Module, torch.device]:
+    "Get the Unimodal Clinical predictor model from args"
+
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
+    cast = dtypes["clinical"]!="float32"
+
+    model = Unimodal(24, args.fusion_dim, 1, act = nn.GELU(), 
+                     loss_fn=LOSS_FNS[args.loss_fn], mod="clinical", autocast=cast, 
+                     **norms(args))
     model = model.to(device)
     return model, device
 
@@ -155,7 +171,7 @@ MODEL_FNS = {
 
 # --------------------------------------------------------
 
-def get_mod_name(args):
+def get_mod_name(args: Namespace) -> tuple[Namespace, str]:
     if args.modality == "uni_path": 
         args.path_lang = True
         mod_name = "Unimodal Path"

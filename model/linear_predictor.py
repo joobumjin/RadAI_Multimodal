@@ -18,6 +18,7 @@ class LinearModel(nn.Module):
             batch_norm: bool = False,
             layer_norm: bool = False,
             rms_norm: bool = False,
+            dropout = 0.3,
     ):
         super().__init__()
         self.loss_fn = loss_fn
@@ -27,7 +28,7 @@ class LinearModel(nn.Module):
             hid_dims    = hidden_dims,
             out_dim     = out_dim,
             act         = act,
-            dropout     = 0.3,
+            dropout     = dropout,
             batch_norm  = batch_norm,
             layer_norm  = layer_norm,
             rms_norm    = rms_norm
