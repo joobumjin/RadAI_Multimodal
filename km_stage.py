@@ -20,8 +20,8 @@ def get_args_parser():
 
     parser.add_argument('--seed',               type=int,   default=0)
       
-    parser.add_argument('--data_path',          type=str,   default="../gemma_multimodal_bins")
-    parser.add_argument('--test_path',          type=str,   default="../gemma_multimodal_bins_rw")
+    parser.add_argument('--data_path',          type=str,   default="../data/gemma_multimodal_bins")
+    parser.add_argument('--test_path',          type=str,   default="../data/gemma_multimodal_bins_rw")
     parser.add_argument('--folds',              type=int,   default=5)
     parser.add_argument('--resample',           type=int,   default=9999)
 
@@ -104,6 +104,7 @@ def main(args):
     cinds, aucs = [], []
 
     for split, (train_inds, val_inds) in enumerate(splits):
+        print(f"\n{"--" * 5}")
         print(f"Split {split}")
         train_inds, val_inds = tv_inds[train_inds], tv_inds[val_inds]
         train, val = tv_df.iloc[train_inds], tv_df.iloc[val_inds]
@@ -155,6 +156,8 @@ def main(args):
     auc5fold = SimpleNamespace(avg = auc_avg, ci=auc_ci)
     ci5fold = SimpleNamespace(avg = ci_avg, ci=c_ci)
 
+    print(f"\nKM Stage{', mix data' if args.mix_data else ', inst. sep.'} - {args.survival_years}yr")
+    print(f"{"--" * 5}")
     print(f"5-Fold Avg + 95% CI")
     print(f"AUC: {auc5fold.avg} ({auc_ci[0]:.3f}, {auc_ci[1]:.3f})")
     print(f"C Ind: {ci5fold.avg} ({c_ci[0]:.3f}, {c_ci[1]:.3f})")

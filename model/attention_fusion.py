@@ -112,13 +112,13 @@ class HierarchicalAttentionFusion(nn.Module):
     def _init_weights(self, m):
         if isinstance(m, nn.Linear):
             torch.nn.init.xavier_uniform_(m.weight)
-            if isinstance(m, nn.Linear) and m.bias is not None:
+            if m.bias is not None:
                 nn.init.constant_(m.bias, 0)
         elif isinstance(m, nn.LayerNorm):
             nn.init.constant_(m.bias, 0)
             nn.init.constant_(m.weight, 1.0)
 
-    def predict(self, x: Dict[str, Tensor]) -> Dict[str, Tensor]:
+    def predict(self, x: Dict[str, Tensor], get_attn: bool = False) -> Dict[str, Tensor]:
         logits = {}
         for modality, enc in self.encoders.items():
             with torch.autocast(device_type=self.device, dtype=torch.float16, enabled=self.autocast[modality]):
@@ -127,22 +127,29 @@ class HierarchicalAttentionFusion(nn.Module):
                 logits[modality] *= x[f"{modality}_mask"].view((-1, 1))
 
         pair_embs = {} #tuple: tensor (modality pair: combined embedding)
+        inp_weights = {}
         for pair in self.pairs:
             a = self.pair_attn[pair](logits[pair[0]]).exp() 
             b = self.pair_attn[pair](logits[pair[1]]).exp()
+            s = a + b
+            a, b = a/s, b/s
 
             # if f"{pair[0]}_mask" in x: a *= x[f"{pair[0]}_mask"].view((-1, 1))
             # if f"{pair[1]}_mask" in x: b *= x[f"{pair[1]}_mask"].view((-1, 1))
-            pair_embs[pair] = (logits[pair[0]] * a + logits[pair[1]] * b) / (a+b)
+            pair_embs[pair] = logits[pair[0]] * a + logits[pair[1]] * b
+            inp_weights[pair] = (a,b)
 
         pair_vals = {pair: self.attn(emb).exp() for pair, emb in pair_embs.items()}
         val_sum = torch.stack(list(pair_vals.values())).sum(0)
+        pair_vals = {pair: val / val_sum for pair, val in pair_vals.items()}
 
         weighted = torch.stack([pair_embs[pair] * pair_vals[pair] / val_sum for pair in self.pairs]).sum(0)
-        return self.pred.predict(weighted)
+        preds = self.pred.predict(weighted)
+        if get_attn: return preds, (inp_weights, pair_vals)
+        return preds
     
     def forward(self, x: Dict[str, Tensor]) -> Dict[str, Tensor]:
         preds = self.predict(x)
 
         loss = [self.loss_fn(preds, x)] if self.loss_fn is not None else []
-        return preds, *loss
+        return preds, *loss, 

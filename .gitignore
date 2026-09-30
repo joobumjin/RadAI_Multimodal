@@ -6,6 +6,8 @@ data/*build*
 paper/
 ignore/
 __dep/
+vises/
+*.xlsx
 
 #nonpublic data 
 Notebooks/*

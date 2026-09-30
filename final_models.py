@@ -6,6 +6,11 @@ from torch import nn
 from util import *
 from model import create_mlp, DenseFusion, Unimodal, AttentionFusion, HierarchicalAttentionFusion
 
+def get_device() -> torch.device:
+    if torch.cuda.is_available(): return "cuda" 
+    # if torch.backends.mps.is_available(): return "mps" #i think the dataset is small enough not just use cpu
+    return "cpu"
+
 def norms(args: Namespace) -> dict:
     return {
         "batch_norm": args.batch_norm,
@@ -65,8 +70,8 @@ enc_fns = {
 
 def get_dense_fusion_model(args: Namespace, dtypes:dict[str,str]) -> tuple[nn.Module, torch.device]:
     "Get the Dense+Cat intermediate fusion model with the single modality encoders"
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-
+    device = get_device()
+    
     encs, casts = {}, {}
     arg_dict = vars(args)
     for mod, fn in enc_fns.items():
@@ -82,8 +87,7 @@ def get_dense_fusion_model(args: Namespace, dtypes:dict[str,str]) -> tuple[nn.Mo
 
 def get_attn_fusion_model(args: Namespace, dtypes:dict[str,str]) -> tuple[nn.Module, torch.device]:
     "Get the Keyless Attention fusion model with the single modality encoders"
-
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    device = get_device()
 
     encs, casts = {}, {}
     arg_dict = vars(args)
@@ -100,8 +104,7 @@ def get_attn_fusion_model(args: Namespace, dtypes:dict[str,str]) -> tuple[nn.Mod
 
 def get_ha_fusion_model(args: Namespace, dtypes:dict[str,str]) -> tuple[nn.Module, torch.device]:
     "Get the HierarchicalKeyless Attention fusion model with the single modality encoders"
-
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    device = get_device()
 
     encs, casts = {}, {}
     arg_dict = vars(args)
@@ -122,8 +125,7 @@ def get_ha_fusion_model(args: Namespace, dtypes:dict[str,str]) -> tuple[nn.Modul
 
 def get_unimodal_path(args: Namespace, dtypes:dict[str,str]) -> tuple[nn.Module, torch.device]:
     "Get the Unimodal PathLang predictor model from args"
-
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    device = get_device()
 
     cast = dtypes["path_lang"]!="float32"
     
@@ -134,8 +136,7 @@ def get_unimodal_path(args: Namespace, dtypes:dict[str,str]) -> tuple[nn.Module,
 
 def get_unimodal_rad(args: Namespace, dtypes:dict[str,str]) -> tuple[nn.Module, torch.device]:
     "Get the Unimodal RadLang predictor model from args"
-
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    device = get_device()
 
     cast = dtypes["rad_lang"]!="float32"
 
@@ -147,8 +148,7 @@ def get_unimodal_rad(args: Namespace, dtypes:dict[str,str]) -> tuple[nn.Module, 
 
 def get_unimodal_clin(args: Namespace, dtypes:dict[str,str]) -> tuple[nn.Module, torch.device]:
     "Get the Unimodal Clinical predictor model from args"
-
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    device = get_device()
 
     cast = dtypes["clinical"]!="float32"
 

@@ -38,5 +38,5 @@ def km_preds(all_deaths: torch.Tensor, all_times: torch.Tensor, all_preds: torch
     plt.title(f"{model_name} Survival Curve")
     plt.xlabel("Days Since Diagnosis")
     plt.ylabel("Survival Probability")
-    plt.savefig("./km_curve.png")
-    # plt.show()
+    plt.savefig(f"vises/km/{model_name}_km_curve.png")
+    plt.close()

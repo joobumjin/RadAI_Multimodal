@@ -39,7 +39,7 @@ class LinearModel(nn.Module):
     def _init_weights(self, m):
         if isinstance(m, nn.Linear):
             torch.nn.init.xavier_uniform_(m.weight)
-            if isinstance(m, nn.Linear) and m.bias is not None:
+            if m.bias is not None:
                 nn.init.constant_(m.bias, 0)
         elif isinstance(m, nn.LayerNorm):
             nn.init.constant_(m.bias, 0)
@@ -95,19 +95,24 @@ class Unimodal(nn.Module):
     def _init_weights(self, m):
         if isinstance(m, nn.Linear):
             torch.nn.init.xavier_uniform_(m.weight)
-            if isinstance(m, nn.Linear) and m.bias is not None:
+            if m.bias is not None:
                 nn.init.constant_(m.bias, 0)
-        elif isinstance(m, nn.LayerNorm):
+        if isinstance(m, nn.LayerNorm):
             nn.init.constant_(m.bias, 0)
             nn.init.constant_(m.weight, 1.0)
 
     def predict(self, x: Dict[str, Tensor]) -> Tensor:
         with torch.autocast(device_type=self.device, dtype=torch.float16, enabled=self.autocast):
             pred = self.predictor(x[self.mod])
+
         return pred
     
     def forward(self, x: Dict[str, Tensor]) -> tuple[Tensor, Tensor]:
         pred = self.predict(x)
 
         loss = [self.loss_fn(pred, x)] if self.loss_fn is not None else []
+
+        if torch.isnan(x[self.mod]).any(): print(x[self.mod])
+        # if torch.isnan(pred).any(): print(pred)
+        # if torch.isnan(loss[0]).any(): print(loss)
         return pred, *loss

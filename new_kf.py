@@ -18,25 +18,10 @@ def get_args_parser():
     parser = argparse.ArgumentParser('Supervised Panc Training', add_help=False)
 
     parser.add_argument('--seed',               type=int,   default=0)
-      
-    parser.add_argument('--batch_size',         type=int,   default=32)
 
-
+    #dataset  
     parser.add_argument('--data_path',          type=str,   default="../data/gemma_multimodal_bins")
     parser.add_argument('--test_path',          type=str,   default="../data/gemma_multimodal_bins_rw")
-
-    #training duration
-    parser.add_argument('--epochs',             type=int,   default=500)
-    parser.add_argument('--early_stop',         type=bool,  default=True)
-    parser.add_argument('--patience',           type=int,   default=5)
-    parser.add_argument('--folds',              type=int,   default=5)
-    parser.add_argument('--resample',           type=int,   default=9999)
-
-    #device
-    parser.add_argument('--loss_fn',            type=str,   default="cox_nll", choices=list(LOSS_FNS.keys()))
-    parser.add_argument('--model',              type=str,   default="gemma", choices=['gemma', 'qwen'])
-    parser.add_argument('--device',                         default='cuda')
-    parser.add_argument('--float16',            type=bool,  default=True) #i think this is dep
 
     #data sampling
     parser.add_argument('--mix_data',           action="store_true", 
@@ -52,6 +37,8 @@ def get_args_parser():
     parser.add_argument('--rad_lang',           action="store_true")
     parser.add_argument('--path_img',           action="store_true")
 
+    #model_setup
+    parser.add_argument('--loss_fn',            type=str,   default="cox_nll", choices=list(LOSS_FNS.keys()))
     parser.add_argument('--enc_dim',            type=int,   default=768)
     parser.add_argument('--emb_dim',            type=int,   default=256)
     parser.add_argument('--fusion_dim',         type=int,   nargs='+',      default=[64, 16])
@@ -60,31 +47,29 @@ def get_args_parser():
     parser.add_argument('--batch_norm',         action="store_true")
 
     #dataloader
+    parser.add_argument('--batch_size',         type=int,   default=128)
+    parser.add_argument('--survival_years',     type=int,   default=2)
     parser.add_argument('--prefetch_factor',    type=int,   default=2)
     parser.add_argument('--num_workers',        type=int,   default=1)
     parser.add_argument('--pin_mem',            type=bool,  default=False)
     parser.add_argument('--train_split',        type=float, default=.85)
+    
+    #optimizer
+    parser.add_argument('--epochs',             type=int,   default=500)
+    parser.add_argument('--early_stop',         type=bool,  default=True)
+    parser.add_argument('--patience',           type=int,   default=5)
+    parser.add_argument('--folds',              type=int,   default=5)
+    parser.add_argument('--lr',                 type=float, default=1e-3,       help='learning rate (absolute lr)')
+    parser.add_argument('--min_lr',             type=float, default=1e-7,       help='lower lr bound for cyclic schedulers that hit 0')
+    parser.add_argument('--const_lr',           action="store_true")
+    parser.add_argument('--warmup_epochs',      type=int,   default=25,         help='epochs to warmup LR')
+    parser.add_argument('--warmup_start',       type=float, default=1e-2,       help='epochs to warmup LR')
+    parser.add_argument('--early',              type=int,   default=0)
 
-    parser.add_argument('--survival_years',     type=int,   default=2)
+    #run infra
+    parser.add_argument('--hist',               action="store_true")
     parser.add_argument('--plot',               action="store_true")
     parser.add_argument('--track_best',         action="store_true")
-
-    # Optimizer parameters
-    parser.add_argument('--lr',                 type=float, default=1e-4,   metavar='LR',
-                        help='learning rate (absolute lr)')
-    parser.add_argument('--const_lr',           action="store_true")
-    parser.add_argument('--min_lr',             type=float, default=1e-7,   metavar='LR',
-                        help='lower lr bound for cyclic schedulers that hit 0')
-    parser.add_argument('--warmup_epochs',      type=int,   default=25,     metavar='N',
-                        help='epochs to warmup LR')
-    parser.add_argument('--warmup_start',       type=float, default=1e-2,   metavar='N',
-                        help='epochs to warmup LR')
-    parser.add_argument('--early',      type=int,   default=0)
-    
-    parser.add_argument('--save_path',                      default="../weights",
-                        help="directory to which the pretrained model weights should be saved")
-
-    parser.add_argument('--hist',               action="store_true")
     parser.add_argument('--disable_wandb',      action="store_true")
     parser.add_argument('--wb_proj',            type=str,   default="5CV")
     parser.add_argument('--run_name')
@@ -105,19 +90,19 @@ def get_stratify(args: Namespace, dataset: Dataset):
 def main(args):
     import warnings
     warnings.filterwarnings("ignore", message="Ties in `time` detected")
-    torch.autograd.set_detect_anomaly(True)
 
     if args.debug:
         args.epochs = 5
         args.disable_wandb = True
         args.resample = 5
+        torch.autograd.set_detect_anomaly(True)
 
     seed = args.seed
     torch.manual_seed(seed)
     np.random.seed(seed)
     
     args, mod_name = get_mod_name(args)
-    args.wb_proj = f"{mod_name} {args.model} {args.wb_proj} {args.folds}"
+    args.wb_proj = f"{mod_name} {args.wb_proj} {args.folds}"
 
     dataset, test_set = get_datasets(args)
     if args.mix_data:
@@ -171,8 +156,10 @@ def main(args):
         all = [torch.cat(l) for l in zip(train, val, test)]
 
         # ci_res, auc_res = bootstrap_cind_auc(args, test, ci_res, auc_res)
-        if split == 4 and args.plot:
-            km_preds(*all, model_name = f"Trimodal {args.survival_years}yr Model")
+        if args.plot:
+            km_preds(*all, model_name = f"Trimodal {args.survival_years}yr Split{split}")
+            inp_weights, pair_weights = compile_attn(model, test_loader, device)
+            vis_hat(inp_weights, pair_weights, model_name = f"Trimodal {args.survival_years}yr Split{split}")
 
     metrics = {key: np.vstack(arr) for key, arr in metrics.items()}
 
