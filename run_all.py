@@ -1,5 +1,8 @@
+from itertools import chain
+
 import pandas as pd
 import matplotlib.pyplot as plt
+import plotly.express as px
 
 import new_kf
 import km_stage
@@ -107,15 +110,20 @@ def get5():
     return sub
 
 def all_args():
-    arg = {
-        **get2(),
-        **get3(),
+    return {
+        # **get2(),
+        # **get3(),
         **get5(),
     }
 
-    return arg
-
 def plot(setup, df, met):
+    """
+    Matplotlib interval plots on metric performance
+    params:
+        - setup: str - just a string describing experimental setup
+        - df: pd.DataFrame - MultiIndex dataframe with metrics on row and [Model, ["Mean", "CI Low", "CI High"]] on multi-columns
+        - met: str - which metric (row from df) to plot
+    """
     idx = pd.IndexSlice
     means = df.loc[met, idx[:, "Mean"]].to_numpy()
     lows = means - df.loc[met, idx[:, "CI Low"]].to_numpy()
@@ -128,13 +136,18 @@ def plot(setup, df, met):
     plt.close()
 
 def plot_plotly(setup, df, met):
+    """
+    Plotly interval plots on metric performance
+    params:
+        - setup: str - just a string describing experimental setup
+        - df: pd.DataFrame - MultiIndex dataframe with metrics on row and [Model, ["Mean", "CI Low", "CI High"]] on multi-columns
+        - met: str - which metric (row from df) to plot
+    """
     idx = pd.IndexSlice
     means = df.loc[met, idx[:, "Mean"]].to_numpy()
     lows = means - df.loc[met, idx[:, "CI Low"]].to_numpy()
     highs = df.loc[met, idx[:, "CI High"]].to_numpy() - means
     
-    import plotly.express as px
-
     fig = px.scatter(
         x=means,
         y=df.columns.get_level_values(0).unique(),
@@ -148,21 +161,26 @@ def plot_plotly(setup, df, met):
     fig.write_image(f"vises/intervals/{setup}_{met}_intervals.pdf")
 
 def run_all():
+    """
+    Runs all the experiments in all_args() and 
+    plots model performance in each experimental setup
+    """
     arg_set = all_args()
+    models = ["Trimodal", "Bimodal Path+Rad", "Bimodal Path+Clin", "Bimodal Rad+Clin", 
+              "Unimodal Path", "Unimodal Rad", "Unimodal Clin", "KM Stage"]
+    
+    cols = list(chain.from_iterable([
+        [(m, "Mean"), (m, "CI Low"), (m, "CI High")] 
+        for m in models
+    ]))
     
     for setup, runs in arg_set.items():
-        models = ["Trimodal", "Bimodal Path+Rad", "Bimodal Path+Clin", "Bimodal Rad+Clin", "Unimodal Path", "Unimodal Rad", "Unimodal Clin", "KM Stage"]
-        cols = []
-        for m in models:
-            cols += [(m, "Mean"), (m, "CI Low"), (m, "CI High")]
-        
-            summ5 = pd.DataFrame(index=["AUC", "C-Index"], columns=cols)
-            summ5.index.name = "Metric (95% CI)"
-            summ5.columns = pd.MultiIndex.from_tuples(summ5.columns)
+        summ5 = pd.DataFrame(index=["AUC", "C-Index"], columns=cols)
+        summ5.index.name = "Metric (95% CI)"
+        summ5.columns = pd.MultiIndex.from_tuples(summ5.columns)
 
-
-        for n, args in runs.items():
-            if n != "km": 
+        for model, args in runs.items():
+            if model != "km": 
                 parser = new_kf.get_args_parser()
                 main_fn = new_kf.main
 
@@ -176,11 +194,11 @@ def run_all():
             summ5[(mod, "CI Low")] = [r.ci[0] for r in res5]
             summ5[(mod, "CI High")] = [r.ci[1] for r in res5]
 
-    plot_plotly(setup, summ5, "AUC")
-    plot_plotly(setup, summ5, "C-Index")
+        plot_plotly(setup, summ5, "AUC")
+        plot_plotly(setup, summ5, "C-Index")
 
-    with pd.ExcelWriter('vises/res.xlsx', engine='openpyxl', mode='a') as writer:
-        summ5.to_excel(writer, sheet_name=f'{setup}')
+        with pd.ExcelWriter('vises/res.xlsx', engine='openpyxl', mode='a', if_sheet_exists="replace") as writer:
+            summ5.to_excel(writer, sheet_name=f'{setup}')
 
 if __name__ == '__main__':
     run_all()

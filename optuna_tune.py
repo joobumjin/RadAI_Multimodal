@@ -4,6 +4,11 @@ from datetime import datetime
 import new_kf
 
 def run_trial(trial: optuna.Trial):
+    """
+    A single hyperparameter setup trial as part of an optuna search
+    params:
+        - trial: an optuna trial to be passed in by an optuna study
+    """
     #optimize on lr, batch size, emb dim, fused dim, early stop, num epochs, survival years, activation
     # batch_size = trial.suggest_categorical("batch_size", [32, 64, 128])
     emb_dim = trial.suggest_categorical("emb_dim", [64, 128, 256])
@@ -37,7 +42,11 @@ def run_trial(trial: optuna.Trial):
 
 
 def optimize():
-    # Get current time and format it as a string
+    """
+    Runs the actual optuna hyperparam optimization study
+    """
+
+    # get current time and format it as a string
     time_string = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     # study = optuna.create_study(directions=["maximize"], storage="sqlite:///db.sqlite3", study_name = f"Trimodal {time_string}")

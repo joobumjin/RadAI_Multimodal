@@ -36,7 +36,18 @@ def get_args_parser():
     parser.add_argument('--debug',              action="store_true")
     return parser
 
-def build_data(args):
+def build_data(args: argparse.Namespace):
+    """
+    Builds DataFrames according to args
+    params:
+        - args: argparsed Namespace
+    returns:
+        - train and validation combined: pd.DataFrame
+        - test: pd.DataFrame
+        - train and validation combined indices: np.ndarray
+        - test indices: np.ndarray
+        - stratification of datapoints based on censoring and death time: np.ndarray
+    """
     train_set, test_set = get_datasets(args, keys=["slide_ids", "survival_days", "survival_right_censor", "stage"]) 
 
     if args.mix_data:
@@ -82,7 +93,7 @@ def build_data(args):
     return tv_df, test_df, tv_inds, test_inds, None
 
 
-def main(args):
+def main(args: argparse.Namespace):
     if args.debug:
         args.resample = 5
 
