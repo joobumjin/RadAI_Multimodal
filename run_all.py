@@ -35,6 +35,7 @@ def get2():
         "c": f'--disable_wandb --modality uni_clin --stratify --fusion_dim 32 --early -167'.split(),
         "km": [],
     }
+
     return sub
 
 def get3():
@@ -68,6 +69,7 @@ def get3():
         "c": f'--disable_wandb --survival_years 3 --modality uni_clin --stratify --const_lr --fusion_dim 32 4 --early -159'.split(),
         "km": '--survival_years 3'.split(),
     }
+
     return sub
 
 def get5():
@@ -101,6 +103,7 @@ def get5():
         "c": f'--disable_wandb --survival_years 5 --modality uni_clin --stratify --const_lr --fusion_dim 32 4 --early -166'.split(),
         "km": '--survival_years 5'.split(),
     }
+    
     return sub
 
 def all_args():
@@ -118,8 +121,7 @@ def plot(setup, df, met):
     lows = means - df.loc[met, idx[:, "CI Low"]].to_numpy()
     highs = df.loc[met, idx[:, "CI High"]].to_numpy() - means
     
-    plt.errorbar(means, df.columns.get_level_values(0).unique(), xerr=[lows, highs], fmt='o', elinewidth=2, capsize=6, 
-                 label='95% CI')
+    plt.errorbar(means, df.columns.get_level_values(0).unique(), xerr=[lows, highs], fmt='o', elinewidth=2, capsize=6, label='95% CI')
     plt.title(f"Summary of {met} Performance on {setup}")
     plt.tight_layout() 
     plt.savefig(f"vises/intervals/{setup}_{met}_intervals.jpeg")
@@ -145,22 +147,19 @@ def plot_plotly(setup, df, met):
     fig.update_yaxes(title_text="Model")
     fig.write_image(f"vises/intervals/{setup}_{met}_intervals.pdf")
 
-
 def run_all():
     arg_set = all_args()
-    tables, text = {}, {} #{setup: [summary_tables]}
-
-    for setup, runs in arg_set.items(): #{setup: runs ({model_type: args})}
+    
+    for setup, runs in arg_set.items():
         models = ["Trimodal", "Bimodal Path+Rad", "Bimodal Path+Clin", "Bimodal Rad+Clin", "Unimodal Path", "Unimodal Rad", "Unimodal Clin", "KM Stage"]
         cols = []
         for m in models:
             cols += [(m, "Mean"), (m, "CI Low"), (m, "CI High")]
+        
+            summ5 = pd.DataFrame(index=["AUC", "C-Index"], columns=cols)
+            summ5.index.name = "Metric (95% CI)"
+            summ5.columns = pd.MultiIndex.from_tuples(summ5.columns)
 
-        summ5 = pd.DataFrame(index=["AUC", "C-Index"], columns=cols)
-        summ5.index.name = "Metric (95% CI)"
-        summ5.columns = pd.MultiIndex.from_tuples(summ5.columns)
-
-        text5 = pd.DataFrame(index=["AUC", "C-Index"], columns=models)
 
         for n, args in runs.items():
             if n != "km": 
@@ -177,32 +176,11 @@ def run_all():
             summ5[(mod, "CI Low")] = [r.ci[0] for r in res5]
             summ5[(mod, "CI High")] = [r.ci[1] for r in res5]
 
-            text5[mod] = [f"{r.avg:.3f} ({r.ci[0]:.3f}, {r.ci[1]:.3f})" for r in res5]
+    plot_plotly(setup, summ5, "AUC")
+    plot_plotly(setup, summ5, "C-Index")
 
-        tables[setup] = [summ5]
-        text[setup] = text5
-
-    with open('vises/out.md', 'w', encoding="utf-8") as f:
-        for setup, t in tables.items():
-            plot_plotly(setup, t[0], "AUC")
-            plot_plotly(setup, t[0], "C-Index")
-
-            print("\n--------")
-            print(setup)
-            print()
-            print("5 Fold CV")
-            print(text[setup])
-
-            f.write("\n")
-            f.write(f"# {setup}")
-            f.write("\n")
-            f.write("## 5 Fold CV")
-            f.write("\n")
-            f.write(t[0].to_markdown())
-
-            with pd.ExcelWriter('vises/res.xlsx', engine='openpyxl') as writer:
-                t[0].to_excel(writer, sheet_name=f'{setup}')
-
+    with pd.ExcelWriter('vises/res.xlsx', engine='openpyxl', mode='a') as writer:
+        summ5.to_excel(writer, sheet_name=f'{setup}')
 
 if __name__ == '__main__':
     run_all()
