@@ -16,7 +16,7 @@ from util import bootstrap_cind_auc, cind, auc
 
 
 def get_args_parser():
-    parser = argparse.ArgumentParser('Supervised Panc Training', add_help=False)
+    parser = argparse.ArgumentParser('KM-Stage Survival Training Training', add_help=False)
 
     parser.add_argument('--seed',               type=int,   default=0)
       

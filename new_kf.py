@@ -149,17 +149,20 @@ def main(args):
         for key in run: 
             metrics[key].append(run[key])
 
-        train = compile_split(model, train_loader, device)
-        val = compile_split(model, valid_loader, device)
-        test = compile_split(model, test_loader, device)
-
-        all = [torch.cat(l) for l in zip(train, val, test)]
-
         # ci_res, auc_res = bootstrap_cind_auc(args, test, ci_res, auc_res)
         if args.plot:
+            train = compile_split(model, train_loader, device)
+            val = compile_split(model, valid_loader, device)
+            test = compile_split(model, test_loader, device)
+    
+            all = [torch.cat(l) for l in zip(train, val, test)]
+
             km_preds(*all, model_name = f"Trimodal {args.survival_years}yr Split{split}")
             inp_weights, pair_weights = compile_attn(model, test_loader, device)
             vis_hat(inp_weights, pair_weights, model_name = f"Trimodal {args.survival_years}yr Split{split}")
+
+        #explicitly dealloc
+        del model, train_loader, valid_loader, test_loader
 
     metrics = {key: np.vstack(arr) for key, arr in metrics.items()}
 
