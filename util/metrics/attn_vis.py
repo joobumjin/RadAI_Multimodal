@@ -106,7 +106,7 @@ def vis_hat(inp_weights, pair_weights, model_name: str):
     fig = go.Figure(colorbar_trace)
     fig.update_layout(
         shapes=shapes, annotations=annotations,
-        width=1400, height=480, plot_bgcolor="white", paper_bgcolor="white",
+        width=1300, height=480, plot_bgcolor="white", paper_bgcolor="white",
         margin=dict(l=10, r=10, t=10, b=10),
         xaxis=dict(range=[-0.2, 14.0], visible=False),
         yaxis=dict(range=[0, 4.5], visible=False, scaleanchor="x", scaleratio=1),

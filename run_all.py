@@ -97,8 +97,8 @@ def get5():
             '--modality attn --early -32'.split(),
         "pc": f'--path_lang --clinical --emb_dim 16 --fusion_dim 64 16 8'.split() + \
             '--modality attn --early -100'.split(),
-        "rc": f'--rad_lang --clinical --emb_dim 16 --fusion_dim 64 16'.split() + \
-            '--modality attn --early -157'.split(),
+        "rc": f'--rad_lang --clinical --emb_dim 8 --fusion_dim 128 16'.split() + \
+            '--modality attn --early -163'.split(),
         "p": f'--modality uni_path --batch_size 256 --fusion_dim 512 64 16 --early -142'.split(),
         "r": f'--modality uni_rad --fusion_dim 64 16 --early -55'.split(),
         "c": f'--modality uni_clin --fusion_dim 32 4 --early -82'.split(),
@@ -128,8 +128,8 @@ def get5():
 
 def all_args():
     return {
-        # "2yr": get2(),
-        # "3yr": get3(),
+        "2yr": get2(),
+        "3yr": get3(),
         "5yr": get5(),
     }
 
@@ -198,7 +198,7 @@ def combined_plotly(yr, tables):
                 fig.add_trace(trace, row = met_ind, col=setup_ind+1)
             fig.update_xaxes(range=[0., 1.], row = met_ind, col=setup_ind+1)
 
-    fig.update_layout(height=480, width=1400, title_text=f"{yr} Performance")
+    fig.update_layout(height=750, width=1400, title_text=f"{yr} Performance")
     fig.write_image(f"vises/intervals/{yr}_Summarized.pdf")
 
 
@@ -247,10 +247,10 @@ def run_all():
         combined_plotly(yr, tables)    
         with pd.ExcelWriter('vises/res.xlsx', engine='openpyxl', mode='a', if_sheet_exists="overlay") as writer:
             for i, (setup, table) in enumerate(tables.items()):
-                table.to_excel(writer, sheet_name=yr, startrow=i*(len(table) + 3) + 2)
+                table.to_excel(writer, sheet_name=yr, startrow=i*(len(table) + 10) + 2)
 
                 worksheet = writer.sheets[yr]
-                worksheet[f"A{i*(len(table) + 3) + 1}"] = setup
+                worksheet[f"A{i*(len(table) + 10) + 1}"] = setup
 
 if __name__ == '__main__':
     run_all()
