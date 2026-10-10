@@ -87,7 +87,7 @@ def vis_hat(inp_weights, pair_weights, model_name: str):
     fx = top_x + 1.5 * cell_w - fw / 2
     cell(fx, fusion_y, None, w=fw, h=fh, fill="#E6E6E6", line="#6B6B3A")
     annotations.append(dict(x=fx + fw / 2, y=fusion_y + fh / 2,
-                            text="<i>x</i><sup><i>fusion</i></sup>",
+                            text="<i>x</i><sub><i>fusion</i></sub>",
                             showarrow=False, font=font))
     arrow(fx + fw / 2, mid_y + cell_h, fx + fw / 2, fusion_y)
     

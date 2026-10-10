@@ -1,10 +1,12 @@
 from itertools import chain
+import pickle
 
 import pandas as pd
 import matplotlib.pyplot as plt
+from matplotlib.transforms import ScaledTranslation
+import seaborn as sns
 from plotly.subplots import make_subplots
 import plotly.express as px
-import plotly.graph_objects as go
 
 import new_kf
 import km_stage
@@ -128,9 +130,9 @@ def get5():
 
 def all_args():
     return {
-        "2yr": get2(),
-        "3yr": get3(),
-        "5yr": get5(),
+        "2 Year": get2(),
+        # "3 Year": get3(),
+        # "5 Year": get5(),
     }
 
 def plot(setup, df, met):
@@ -150,6 +152,51 @@ def plot(setup, df, met):
     plt.title(f"Summary of {met} Performance on {setup}")
     plt.tight_layout() 
     plt.savefig(f"vises/intervals/{setup}_{met}_intervals.jpeg")
+    plt.close()
+
+def combined(yr, tables):
+    fig, axs = plt.subplots(nrows=2, ncols=len(tables), figsize=(30, 15))#, layout="constrained")
+
+    setups = ["Mixed", "Isolated"]
+    
+    for setup_ind, (setup, table) in enumerate(tables.items()):
+        for met_ind, met in enumerate(["AUC", "C-Index"]):
+            ax = axs[setup_ind, met_ind]
+            idx = pd.IndexSlice
+            means = table.loc[met, idx[:, "Mean"]].to_numpy()
+            lows = means - table.loc[met, idx[:, "CI Low"]].to_numpy()
+            highs = table.loc[met, idx[:, "CI High"]].to_numpy() - means
+
+            ax.errorbar(
+                means, 
+                table.columns.get_level_values(0).unique(), 
+                xerr=[lows, highs], 
+                fmt='o', 
+                markersize=4,
+                elinewidth=3, 
+                capsize=6, 
+                label='95% CI'
+            )
+
+            ax.set_title(f"{setups[setup_ind]} {met}", fontsize=20)
+            ax.set_xlim(0., 1.)
+            ax.tick_params(axis='x', labelsize=16)
+            ax.tick_params(axis='y', labelsize=16)
+            ax.grid(True, color="white", linestyle="-")
+
+    axs[0,0].text(
+        0.0, 1.0, "a)", 
+        transform=(axs[0,0].transAxes + ScaledTranslation(-2, +20/72, fig.dpi_scale_trans)),
+        fontsize=24, va='bottom', fontfamily='sans-serif', fontweight='bold')
+
+    axs[1,0].text(
+            0.0, 1.0, "b)", 
+            transform=(axs[1,0].transAxes + ScaledTranslation(-2, +20/72, fig.dpi_scale_trans)),
+            fontsize=24, va='bottom', fontfamily='sans-serif', fontweight='bold')
+
+    fig.suptitle(f"{yr} Survival Prediction Performance", fontsize=24)
+    plt.subplots_adjust(hspace=0.5, wspace=.6, top=0.9)
+    plt.savefig(f"../vises/intervals/{setup}_{yr}_intervals.pdf")
     plt.close()
 
 def plot_plotly(setup, df, met):
@@ -199,7 +246,7 @@ def combined_plotly(yr, tables):
             fig.update_xaxes(range=[0., 1.], row = met_ind, col=setup_ind+1)
 
     fig.update_layout(height=750, width=1400, title_text=f"{yr} Performance")
-    fig.write_image(f"vises/intervals/{yr}_Summarized.pdf")
+    fig.write_image(f"vises/intervals/{setup}_{yr}_Summarized.pdf")
 
 
 def run_all():
@@ -207,6 +254,8 @@ def run_all():
     Runs all the experiments in all_args() and 
     plots model performance in each experimental setup
     """
+    sns.set_theme()
+
     arg_set = all_args()
     models = ["Trimodal", "Bimodal Path+Rad", "Bimodal Path+Clin", "Bimodal Rad+Clin", 
               "Unimodal Path", "Unimodal Rad", "Unimodal Clin", "KM Stage"]
@@ -244,7 +293,9 @@ def run_all():
             plot_plotly(setup, summ5, "AUC")
             plot_plotly(setup, summ5, "C-Index")
 
-        combined_plotly(yr, tables)    
+        combined(yr, tables)    
+        combined_plotly(yr, tables) 
+        with open(f'{yr}.pkl', 'wb') as f: pickle.dump(tables, f)
         with pd.ExcelWriter('vises/res.xlsx', engine='openpyxl', mode='a', if_sheet_exists="overlay") as writer:
             for i, (setup, table) in enumerate(tables.items()):
                 table.to_excel(writer, sheet_name=yr, startrow=i*(len(table) + 10) + 2)
