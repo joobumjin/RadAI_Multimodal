@@ -8,6 +8,7 @@ ignore/
 __dep/
 vises/
 *.xlsx
+*.pkl
 
 #nonpublic data 
 Notebooks/*

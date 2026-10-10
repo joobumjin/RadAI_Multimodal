@@ -6,6 +6,8 @@ from lifelines.plotting import add_at_risk_counts
 import matplotlib.pyplot as plt
 import seaborn as sns
 
+from ..consts import DAYS_IN_MONTH
+
 def km_preds(all_deaths: torch.Tensor, all_times: torch.Tensor, all_preds: torch.Tensor, model_name: str, setup: str):
     """
     Builds and plots a KM curve based on predictions
@@ -26,7 +28,7 @@ def km_preds(all_deaths: torch.Tensor, all_times: torch.Tensor, all_preds: torch
     pred_binned = torch.bucketize(all_preds, pred_bins)
 
     df = pd.DataFrame({"Death": all_deaths, "Time": all_times, "Pred Bins": pred_binned})
-    df["Time"] = df["Time"] / (365.2425 / 12.)
+    df["Time"] = df["Time"] / DAYS_IN_MONTH
     df.loc[df['Time'] > 60.01, 'Death'] = False
     df['Time'] = df['Time'].clip(upper=60.01)
 
