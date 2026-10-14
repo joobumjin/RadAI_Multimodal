@@ -8,7 +8,7 @@ import seaborn as sns
 
 from ..consts import DAYS_IN_MONTH
 
-def km_preds(all_deaths: torch.Tensor, all_times: torch.Tensor, all_preds: torch.Tensor, model_name: str, setup: str):
+def km_preds(all_deaths: torch.Tensor, all_times: torch.Tensor, all_preds: torch.Tensor, model_name: str, setup: str, num_groups: int = 3):
     """
     Builds and plots a KM curve based on predictions
     Specifically splits the prediciton range into 3 equal bins and KM fits to those 3 risk groups
@@ -23,8 +23,7 @@ def km_preds(all_deaths: torch.Tensor, all_times: torch.Tensor, all_preds: torch
     sns.set_style({'axes.grid' : False})
     sns.set_palette("deep")
 
-    # all_preds = torch.exp(all_preds)
-    pred_bins = torch.linspace(torch.min(all_preds), torch.max(all_preds), 3)
+    pred_bins = torch.logspace(torch.min(all_preds), torch.max(all_preds), num_groups)
     pred_binned = torch.bucketize(all_preds, pred_bins)
 
     df = pd.DataFrame({"Death": all_deaths, "Time": all_times, "Pred Bins": pred_binned})

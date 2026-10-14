@@ -156,10 +156,17 @@ def main(args):
             test = compile_split(model, test_loader, device)
     
             all = [torch.cat(l) for l in zip(train, val, test)]
-
             km_preds(*all, model_name = f"Trimodal", setup=f"{args.survival_years}yr Split{split} {"mixed" if args.mix_data else "iso"}")
+            del all
+
             inp_weights, pair_weights = compile_attn(model, test_loader, device)
             vis_hat(inp_weights, pair_weights, model_name = f"Trimodal {args.survival_years}yr Split{split}")
+            del inp_weights, pair_weights
+
+            # logits, labels = compile_logits(model, device, [train_loader, valid_loader, test_loader], args)
+            # plot_umap(logits["path_lang"], labels, f"Path Lang, Trimodal {args.survival_years}yr Split{split}")
+            # plot_umap(logits["rad_lang"], labels, f"Rad Lang, Trimodal {args.survival_years}yr Split{split}")
+            # del logits, labels
 
         #explicitly dealloc
         del model, train_loader, valid_loader, test_loader

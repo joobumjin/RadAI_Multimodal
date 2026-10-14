@@ -41,12 +41,10 @@ def train_one_epoch(model: torch.nn.Module, device: torch.device, train_loader: 
             batch[key] = batch[key].to(device)
 
         preds, loss = model(batch)
-
-        with torch.inference_mode():
-            metrics["Train Loss"].update(loss.detach().item())
-            for name, fn in fns.items():
-                metric_val = fn(preds, batch["label"])
-                metrics[name].update(metric_val.detach().item())
+        metrics["Train Loss"].update(loss.detach().item())
+        for name, fn in fns.items():
+            metric_val = fn(preds, batch["label"])
+            metrics[name].update(metric_val.detach().item())
 
         loss.backward()
         optimizer.step()
@@ -68,11 +66,10 @@ def train_one_epoch_list(model: torch.nn.Module, device: torch.device, train_loa
 
         preds, loss = model(batch)
 
-        with torch.inference_mode():
-            metrics["Train Loss"].update(loss.detach().item())
-            for name, fn in fns.items():
-                metric_val = fn(preds, batch["label"])
-                metrics[name].update(metric_val.detach().item())
+        metrics["Train Loss"].update(loss.detach().item())
+        for name, fn in fns.items():
+            metric_val = fn(preds, batch["label"])
+            metrics[name].update(metric_val.detach().item())
 
         loss.backward()
         optimizer.step()

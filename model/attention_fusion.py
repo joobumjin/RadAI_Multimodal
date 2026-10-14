@@ -118,7 +118,7 @@ class HierarchicalAttentionFusion(nn.Module):
             nn.init.constant_(m.bias, 0)
             nn.init.constant_(m.weight, 1.0)
 
-    def predict(self, x: Dict[str, Tensor], get_attn: bool = False) -> Dict[str, Tensor]:
+    def predict(self, x: Dict[str, Tensor], get_attn: bool = False, return_mods: bool = False) -> Dict[str, Tensor]:
         logits = {}
         for modality, enc in self.encoders.items():
             with torch.autocast(device_type=self.device, dtype=torch.float16, enabled=self.autocast[modality]):
@@ -145,7 +145,12 @@ class HierarchicalAttentionFusion(nn.Module):
 
         weighted = torch.stack([pair_embs[pair] * pair_vals[pair] / val_sum for pair in self.pairs]).sum(0)
         preds = self.pred.predict(weighted)
-        if get_attn: return preds, (inp_weights, pair_vals)
+
+        extras = []
+        if get_attn: extras += [(inp_weights, pair_vals)]
+        if return_mods: extras += [logits]
+
+        if len(extras): return preds, *extras
         return preds
     
     def forward(self, x: Dict[str, Tensor]) -> Dict[str, Tensor]:
