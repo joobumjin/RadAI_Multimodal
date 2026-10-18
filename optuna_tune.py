@@ -10,35 +10,30 @@ def run_trial(trial: optuna.Trial):
         - trial: an optuna trial to be passed in by an optuna study
     """
     #optimize on lr, batch size, emb dim, fused dim, early stop, num epochs, survival years, activation
-    # batch_size = trial.suggest_categorical("batch_size", [32, 64, 128])
-    emb_dim = trial.suggest_categorical("emb_dim", [64, 128, 256])
-    fused_dim = trial.suggest_categorical("fused_dim", [0, 64, 128])
+    emb_dim = trial.suggest_categorical("emb_dim", [8, 16, 32, 64])
+    fusion_layers = trial.suggest_int("fusion_layers", 1, 3)
+    fusion_dims = []
+    for i in range(fusion_layers):
+        out_features = trial.suggest_categorical(f"fusion_l{i}", [8, 16, 32, 64, 128, 256])
+        fusion_dims.append(str(out_features))
 
-    epochs = trial.suggest_categorical("epochs", [200, 300, 500, 800])
-    early_stop = trial.suggest_int("early_stop", low=-(epochs // 3), high=0)
-    warmup = trial.suggest_categorical("warmup", [25, 50, 100])
-    lr = trial.suggest_categorical("lr", [1e-5, 1e-4, 2e-4, 1e-3])
-
-    yrs = trial.suggest_categorical("years", [2, 5])
-
-    strat = trial.suggest_categorical("stratify", ["", "--stratify"])
+    # epochs = trial.suggest_categorical("epochs", [200, 300, 500, 800])
+    # early_stop = trial.suggest_int("early_stop", low=-100, high=0)
+    # warmup = trial.suggest_categorical("warmup", [25, 50, 100])
 
     #build args, run main
-    args =  f'--survival_years {yrs} --epochs {epochs} --warmup_epochs {warmup} --early_stop {early_stop}'.split() + \
-            f'--lr {lr} {strat} --emb_dim {emb_dim} --fusion_dim {fused_dim}'.split() + \
-            '--disable_wandb --mix_data'.split() + \
-            '--layer_norm --batch_size 32 --clinical --path_lang --rad_lang --sparse'.split()
-    #  --track_best
+    args =  f'--emb_dim {emb_dim} --fusion_dim {" ".join(fusion_dims)}'.split() + \
+            '--disable_wandb --stratify'.split() + \
+            '--layer_norm --const_lr --disable_wandb --stratify'.split() + \
+            '--clinical --path_lang --rad_lang'.split() + \
+            '--modality hat --track_best'.split()
 
     parser = new_kf.get_args_parser()
     main_fn = new_kf.main
 
     args = parser.parse_args(args)
-    _, res5, _ = main_fn(args)
+    _, res5, _, _ = main_fn(args)
     return [r.avg for r in res5]
-
-    # _, res5, _, best = main_fn(args)
-    # return best
 
 
 def optimize():

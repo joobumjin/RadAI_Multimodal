@@ -143,7 +143,7 @@ def main(args):
         run = run_setup(args, MODEL_FNS[args.modality], 
                         train_loader, valid_loader, test_loader, 
                         run_name = run_name, return_keys=['Train Loss', 'Train AUC', 'Train C-Index', 'Test Loss', 'Test AUC', 'Test C-Index'], 
-                        ret_model=True, early_stop = args.early)
+                        ret_model=True)
         model, device = run.pop("model")
 
         for key in run: 
@@ -198,8 +198,8 @@ def main(args):
         fig.show()
 
     if args.track_best:
-        sum = avgs["Test AUC"] / .9 + avgs["Test C-Index"] / .6
-        last = - args.epochs // 3
+        sum = avgs["Test AUC"] / .9 + avgs["Test C-Index"] / .7
+        last = - args.epochs // 5
         best = [np.max(sum[last:])]
         selected = np.argmax(sum[last:]) + len(sum) + last
     else: 
@@ -217,8 +217,18 @@ def main(args):
 
     auc5fold = SimpleNamespace(avg = avgs['Test AUC'][selected], ci=auc_ci)
     ci5fold = SimpleNamespace(avg = avgs['Test C-Index'][selected], ci=c_ci)
-    print(f"AUC: {auc5fold.avg} ({auc_ci[0]:.3f}, {auc_ci[1]:.3f})")
-    print(f"C Ind: {ci5fold.avg} ({c_ci[0]:.3f}, {c_ci[1]:.3f})")
+
+    train_auc_ci = stats.t.interval(confidence=.95, df=4, loc=avgs['Train AUC'][selected], scale=errs['Train AUC'][selected])
+    train_auc_ci = [float(n) for n in train_auc_ci]
+    train_c_ci = stats.t.interval(confidence=.95, df=4, loc=avgs['Train C-Index'][selected], scale=errs['Train C-Index'][selected])
+    train_c_ci = [float(n) for n in train_c_ci]
+    train_auc5fold = SimpleNamespace(avg = avgs['Train AUC'][selected], ci=train_auc_ci)
+    train_ci5fold = SimpleNamespace(avg = avgs['Train C-Index'][selected], ci=train_c_ci)
+
+    print(f"Train AUC: \t{train_auc5fold.avg:.3f} ({train_auc5fold.ci[0]:.3f}, {train_auc5fold.ci[1]:.3f})"
+          f"\t C-Index: {train_ci5fold.avg:.3f} ({train_ci5fold.ci[0]:.3f}, {train_ci5fold.ci[1]:.3f})")
+    print(f"Test AUC: \t{auc5fold.avg:.3f} ({auc5fold.ci[0]:.3f}, {auc5fold.ci[1]:.3f})" 
+          f"\t C-Index: {ci5fold.avg:.3f} ({ci5fold.ci[0]:.3f}, {ci5fold.ci[1]:.3f})")
 
     # print(f"{"--" * 5}")
     # print(f"Bootstrapped Avg + 95% CI (at end)")

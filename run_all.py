@@ -16,28 +16,32 @@ DEFAULTS = "--layer_norm --const_lr --disable_wandb --stratify".split(" ")
 def get2():
     sub = {}
 
-    sub[f"mix2"] = {
-        "tri": f'--clinical --path_lang --rad_lang --emb_dim 8 --fusion_dim 64 16'.split() + \
-            '--modality hat --early -142 --plot'.split(),
-        "pr": f'--rad_lang --path_lang --emb_dim 8 --fusion_dim 64 16'.split() + \
-            '--modality attn --early -105'.split(),
-        "pc": f'--path_lang --clinical --emb_dim 16 --fusion_dim 64 16'.split() + \
-            '--modality attn --early -54'.split(),
-        "rc": f'--rad_lang --clinical --emb_dim 16 --fusion_dim 64 16'.split() + \
-            '--modality attn --early -31'.split(),
-        "p": f'--modality uni_path --batch_size 256 --fusion_dim 128 32 --early -95'.split(),
-        "r": f'--modality uni_rad --fusion_dim 128 32 16 --early -59'.split(),
-        "c": f'--modality uni_clin --early -167'.split(),
-        "km": [],
-    }
+    # sub[f"mix2"] = {
+    #     "tri": f'--clinical --path_lang --rad_lang --emb_dim 8 --fusion_dim 64 16'.split() + \
+    #         '--modality hat --early -142 --plot'.split(),
+    #     "pr": f'--rad_lang --path_lang --emb_dim 8 --fusion_dim 64 16'.split() + \
+    #         '--modality attn --early -105'.split(),
+    #     "pc": f'--path_lang --clinical --emb_dim 16 --fusion_dim 64 16'.split() + \
+    #         '--modality attn --early -54'.split(),
+    #     "rc": f'--rad_lang --clinical --emb_dim 16 --fusion_dim 64 16'.split() + \
+    #         '--modality attn --early -31'.split(),
+    #     "p": f'--modality uni_path --batch_size 256 --fusion_dim 128 32 --early -95'.split(),
+    #     "r": f'--modality uni_rad --fusion_dim 128 32 16 --early -59'.split(),
+    #     "c": f'--modality uni_clin --early -167'.split(),
+    #     "km": [],
+    # }
 
-    sub["mix2"] = {setup: args + ['--mix_data'] for setup, args in sub["mix2"].items()}
+    # sub["mix2"] = {setup: args + ['--mix_data'] for setup, args in sub["mix2"].items()}
 
     sub[f"iso2"] = {
-        "tri": f'--clinical --path_lang --rad_lang --emb_dim 16 --fusion_dim 128 16'.split() + \
-            '--modality hat --early -93 --plot'.split(),
+        "tri": f'--clinical --path_lang --rad_lang --emb_dim 16 --fusion_dim 256 16 8'.split() + \
+            '--modality hat --early -112 --plot'.split(),
+
+            ## 16 -> 128 16, early -93 has closer train test 
         "pr": f'--rad_lang --path_lang --emb_dim 8 --fusion_dim 64 16'.split() + \
             '--modality attn --early -20'.split(),
+            #check
+
         "pc": f'--path_lang --clinical --emb_dim 16 --fusion_dim 128 32 16'.split() + \
             '--modality attn --early -112'.split(),
         "rc": f'--rad_lang --clinical --emb_dim 16 --fusion_dim 128 16'.split() + \
@@ -196,7 +200,7 @@ def combined(yr, tables):
 
     fig.suptitle(f"{yr} Survival Prediction Performance", fontsize=24)
     plt.subplots_adjust(hspace=0.5, wspace=.6, top=0.9)
-    plt.savefig(f"../vises/intervals/{setup}_{yr}_intervals.pdf")
+    plt.savefig(f"vises/intervals/{setup}_{yr}_intervals.pdf")
     plt.close()
 
 def plot_plotly(setup, df, met):
@@ -293,9 +297,9 @@ def run_all():
             plot_plotly(setup, summ5, "AUC")
             plot_plotly(setup, summ5, "C-Index")
 
-        combined(yr, tables)    
-        combined_plotly(yr, tables) 
         with open(f'{yr}.pkl', 'wb') as f: pickle.dump(tables, f)
+        # combined(yr, tables)    
+        # combined_plotly(yr, tables) 
         with pd.ExcelWriter('vises/res.xlsx', engine='openpyxl', mode='a', if_sheet_exists="overlay") as writer:
             for i, (setup, table) in enumerate(tables.items()):
                 table.to_excel(writer, sheet_name=yr, startrow=i*(len(table) + 10) + 2)

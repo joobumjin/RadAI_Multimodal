@@ -113,6 +113,7 @@ def main(args: argparse.Namespace):
 
     ci_res, auc_res = None, None
     cinds, aucs = [], []
+    train_cinds, train_aucs = [], []
 
     for split, (train_inds, val_inds) in enumerate(splits):
         print(f"\n{"--" * 5}")
@@ -155,6 +156,25 @@ def main(args: argparse.Namespace):
         cinds.append(cval)
         aucs.append(a)
 
+
+        train_df_km_2yr = train['Stage'].map(dict(km_risk[args.survival_years * DAYS_IN_YR]))
+
+        cval = cind(
+            torch.from_numpy(train['Survival Event'].to_numpy(dtype=bool)), 
+            torch.from_numpy(train['Survival Time'].to_numpy()),
+            torch.from_numpy(train_df_km_2yr.to_numpy()), 
+        )
+
+        a = auc(
+            torch.from_numpy(train['Survival Event'].to_numpy(dtype=bool)), 
+            torch.from_numpy(train['Survival Time'].to_numpy()),
+            torch.from_numpy(train_df_km_2yr.to_numpy()), 
+            args.survival_years
+        )
+
+        train_cinds.append(cval)
+        train_aucs.append(a)
+
     auc_avg = np.mean(aucs)
     auc_err = stats.sem(aucs)
 
@@ -167,11 +187,21 @@ def main(args: argparse.Namespace):
     auc5fold = SimpleNamespace(avg = auc_avg, ci=auc_ci)
     ci5fold = SimpleNamespace(avg = ci_avg, ci=c_ci)
 
+    train_auc_avg = np.mean(train_aucs)
+    train_cind_avg = np.mean(train_cinds)
+    train_auc_ci = stats.t.interval(confidence=.95, df=4, loc=train_auc_avg, scale=stats.sem(train_aucs))
+    train_c_ci = stats.t.interval(confidence=.95, df=4, loc=train_cind_avg, scale=stats.sem(train_cinds))
+    train_auc5fold = SimpleNamespace(avg = train_auc_avg, ci=train_auc_ci)
+    train_ci5fold = SimpleNamespace(avg = train_cind_avg, ci=train_c_ci)
+    
+
     print(f"\nKM Stage{', mix data' if args.mix_data else ', inst. sep.'} - {args.survival_years}yr")
     print(f"{"--" * 5}")
     print(f"5-Fold Avg + 95% CI")
-    print(f"AUC: {auc5fold.avg} ({auc_ci[0]:.3f}, {auc_ci[1]:.3f})")
-    print(f"C Ind: {ci5fold.avg} ({c_ci[0]:.3f}, {c_ci[1]:.3f})")
+    print(f"Train AUC: \t{train_auc5fold.avg:.3f} ({train_auc5fold.ci[0]:.3f}, {train_auc5fold.ci[1]:.3f})"
+          f"\t C-Index: {train_ci5fold.avg:.3f} ({train_ci5fold.ci[0]:.3f}, {train_ci5fold.ci[1]:.3f})")
+    print(f"Test AUC: \t{auc5fold.avg:.3f} ({auc5fold.ci[0]:.3f}, {auc5fold.ci[1]:.3f})" 
+          f"\t C-Index: {ci5fold.avg:.3f} ({ci5fold.ci[0]:.3f}, {ci5fold.ci[1]:.3f})")
 
     # print(f"{"--" * 5}")
     # print(f"Bootstrapped Avg + 95% CI")
