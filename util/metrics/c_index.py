@@ -4,8 +4,26 @@ from torchsurv.metrics.cindex import ConcordanceIndex
 from torchsurv.metrics.auc import Auc
 from util.consts import *
 
-def compile_split(model, loader, device):
+def compile_split(model: torch.nn.Module, loader: DataLoader, device: torch.device):
     """
+    Compiles a split into predictions and label values
+
+    Parameters
+    ----------
+    model : torch.nn.Module
+        model to get preds from
+    loader : DataLoader
+        dataloader to compile
+    device : torch.device
+        device on which to do inference
+
+    Returns
+    ----------
+    compiled : list[torch.Tensor]
+        list of compiled 
+        - death labels
+        - survival time labels
+        - predicted hazards
     """
 
     model.eval()
@@ -28,10 +46,19 @@ def cind(death: torch.Tensor, times: torch.Tensor, preds: torch.Tensor) -> torch
     """
     Calculates C-Index of preds
 
-    params:
-        - deaths: bool tensor indicator for survival event
-        - times: float tensor for duration from diagnosis to last follow up
-        - preds: float tensor with model risk scores
+    Parameters
+    ----------
+    deaths : torch.Tensor 
+        bool tensor indicator for survival event
+    times : torch.Tensor 
+        float tensor for duration from diagnosis to last follow up
+    preds : torch.Tensor 
+        float tensor with model risk scores
+    
+    Returns
+    ----------
+    c : torch.Tensor
+        Shape (1, ) C-Index value
     """
     death = death.bool()
 
@@ -43,11 +70,21 @@ def auc(death: torch.Tensor, times: torch.Tensor, preds: torch.Tensor, yrs: int)
     """
     Calculates Censored AUC of preds
 
-    params:
-        - deaths: bool tensor indicator for survival event
-        - times: float tensor for duration from diagnosis to last follow up
-        - preds: float tensor with model risk scores
-        - yrs: int time at which to evaluate AUC
+    Parameters
+    ----------
+    deaths : torch.Tensor
+        bool tensor indicator for survival event
+    times : torch.Tensor
+        float tensor for duration from diagnosis to last follow up
+    preds : torch.Tensor
+        float tensor with model risk scores
+    yrs : int
+        int time at which to evaluate AUC
+    
+    Returns
+    ----------
+    a: torch.Tensor
+        Shape (1, ) AUC value
     """
 
     death = death.bool()
@@ -63,19 +100,33 @@ def calculate_c_indices_auc(model: torch.nn.Module, device: torch.device,
     """
     Calculates the C-Index and AUC for each of 3 splits
 
-    params:
-    - model: model to evaluate
-    - device: model's device
-    - train_loader: data loader for train split
-    - val_loader: data loader for validation split
-    - test_loader: data loader for test split
-    - surv_yr: time at which AUC will be evaluated
-    - compile_fn: function used to pull data from the dataloader with the model
-
     Required Loader Batch Keys:
     - "survival_right_censor": Right censor on event date
     - "survival_days"
     - Whatever else the model needs
+    
+    Parameters
+    ----------
+    model: torch.nn.Module
+        model to evaluate
+    device: torch.device
+        model's device
+    train_loader: DataLoader
+        data loader for train split
+    val_loader: DataLoader
+        data loader for validation split
+    test_loader: DataLoader
+        data loader for test split
+    surv_yr: int
+        time at which AUC will be evaluated
+    compile_fn: callable
+        function used to pull data from the dataloader with the model
+
+    
+    Returns
+    ----------
+    ret : dict[str, torch.Tensor]
+        structure of {split} {AUC or C-Index}: Tensor value
     """
     train_deaths, train_times, train_preds = compile_fn(model, train_loader, device)
 

@@ -13,10 +13,20 @@ def km_preds(all_deaths: torch.Tensor, all_times: torch.Tensor, all_preds: torch
     Builds and plots a KM curve based on predictions
     Specifically splits the prediciton range into 3 equal bins and KM fits to those 3 risk groups
 
-    params:
-    - all_deaths: bool tensor indicator for survival event
-    - all_times: float tensor for duration from diagnosis to last follow up
-    - all_preds: float tensor with model risk scores
+    Parameters
+    ----------
+    all_deaths : torch.Tensor
+        bool tensor indicator for survival event
+    all_times : torch.Tensor
+        float tensor for duration from diagnosis to last follow up
+    all_preds : torch.Tensor
+        float tensor with model risk scores
+    model_name : str
+        name of model for plot
+    setup : str
+        name of experimental setup for plot
+    num_groups : int
+        number of groups to bin patients into
     """
     
     sns.set_theme()

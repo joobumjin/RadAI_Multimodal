@@ -14,9 +14,13 @@ class InfoNCELoss(torch.nn.Module):
         """
         Calculates InfoNCE loss with identity samples being positive pairs
         and all others being negative pairs.
-        params:
-        - z1: encoded view 1 [B, D]
-        - z2: encoded view 2 [B, D]
+        
+        Parameters
+        ----------
+        z1 : torch.Tensor 
+            encoded view 1 [B, D]
+        z2 : torch.Tensor 
+            encoded view 2 [B, D]
         """
         B = len(z1)
         

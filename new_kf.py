@@ -71,6 +71,7 @@ def get_args_parser():
     parser.add_argument('--plot',               action="store_true")
     parser.add_argument('--track_best',         action="store_true")
     parser.add_argument('--disable_wandb',      action="store_true")
+    parser.add_argument('--return_extras',      action="store_true")
     parser.add_argument('--wb_proj',            type=str,   default="5CV")
     parser.add_argument('--run_name')
     parser.add_argument('--debug',              action="store_true")
@@ -78,16 +79,57 @@ def get_args_parser():
 
 # --------------------------------------------------------
 
-def get_stratify(args: Namespace, dataset: Dataset):
+def get_stratify(args: Namespace, dataset: Dataset) -> np.ndarray:
+    """
+    Returns stratification labels for every sample in the dataset
+    
+    Parameters
+    ----------
+    args : argparser.Namespace
+        the parsed cli arguments
+    dataset : Dataset
+        the dataset with n samples to be stratification labeled 
+    
+    Returns
+    ----------
+    strat : np.ndarray 
+        Array of shape (n, ) with values from 0 to 3
+        - 0: Censored, Died in under args.survival_years
+        - 1: Censored, Did not die in under args.survival_years
+        - 2: Uncensored, Died in under args.survival_years
+        - 3: Uncensored, Did not die in under args.survival_years
+    """
     strat = []
     for s in DataLoader(dataset):
-        time = s['survival_days'] > args.survival_years * DAYS_IN_YR
+        time = s['survival_days'] > (args.survival_years * DAYS_IN_YR)
         event = not s['survival_right_censor']
         strat.append((event * 2 + time)[0,0])
     strat = np.array(strat)
     return strat
 
-def main(args):
+def main(args: Namespace) -> tuple[str, list[SimpleNamespace], list[SimpleNamespace], Optional[list[dict]], Optional[list]]:
+    """
+    Runs KFold Cross Validation setup
+    
+    Parameters
+    ----------
+    args :  Namespace
+        the parsed cli arguments
+
+    Returns
+    ----------
+    mod_name : str
+        the name of the modality setup
+    5fold_res : list[SimpleNamespace]
+        the AUC and C-Index testing results under 5Fold CV
+    boot_res : list[SimpleNamespace]
+        the AUC and C-Index testing results under bootstrapping in 5fold CV
+    extras : Optional[list[dict]]
+        a list of dictionaries with any extra details about the setup, if args.return_extras is true
+    best : Optional[list]
+        the best merged score from training, if args.track_best is true
+    """
+
     import warnings
     warnings.filterwarnings("ignore", message="Ties in `time` detected")
 
@@ -230,13 +272,20 @@ def main(args):
     print(f"Test AUC: \t{auc5fold.avg:.3f} ({auc5fold.ci[0]:.3f}, {auc5fold.ci[1]:.3f})" 
           f"\t C-Index: {ci5fold.avg:.3f} ({ci5fold.ci[0]:.3f}, {ci5fold.ci[1]:.3f})")
 
+    extras = []
+    if args.return_extras: 
+        extras.append({
+            "Train AUC": train_auc5fold.avg,
+            "Train C-Index": train_ci5fold.avg
+        })
+
     # print(f"{"--" * 5}")
     # print(f"Bootstrapped Avg + 95% CI (at end)")
     # print(str(auc_res))
     # print(str(ci_res))
     # print(f"From {len(ci_res.entries)} bootstrap samples")
 
-    return mod_name, [auc5fold, ci5fold], [auc_res, ci_res], *best
+    return mod_name, [auc5fold, ci5fold], [auc_res, ci_res], *extras, *best
        
 
 if __name__ == '__main__':

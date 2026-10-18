@@ -34,18 +34,17 @@ def get2():
     # sub["mix2"] = {setup: args + ['--mix_data'] for setup, args in sub["mix2"].items()}
 
     sub[f"iso2"] = {
-        "tri": f'--clinical --path_lang --rad_lang --emb_dim 16 --fusion_dim 256 16 8'.split() + \
-            '--modality hat --early -112 --plot'.split(),
-
-            ## 16 -> 128 16, early -93 has closer train test 
-        "pr": f'--rad_lang --path_lang --emb_dim 8 --fusion_dim 64 16'.split() + \
+        "tri": f'--clinical --path_lang --rad_lang --emb_dim 64 --fusion_dim 128'.split() + \
+            '--modality hat --early -44 --plot'.split(),
+        "pr": f'--rad_lang --path_lang --emb_dim 64 --fusion_dim 64 32'.split() + \
             '--modality attn --early -20'.split(),
-            #check
 
         "pc": f'--path_lang --clinical --emb_dim 16 --fusion_dim 128 32 16'.split() + \
             '--modality attn --early -112'.split(),
+
         "rc": f'--rad_lang --clinical --emb_dim 16 --fusion_dim 128 16'.split() + \
             '--modality hat --early -44'.split(),
+        
         "p": f'--modality uni_path --batch_size 256 --fusion_dim 8 --early -20'.split(),
         "r": f'--modality uni_rad --fusion_dim 8 --early -86'.split(),
         "c": f'--modality uni_clin --fusion_dim 32 --early -167'.split(),
@@ -203,6 +202,39 @@ def combined(yr, tables):
     plt.savefig(f"vises/intervals/{setup}_{yr}_intervals.pdf")
     plt.close()
 
+def isolated_only(yr, tables):
+    fig, axs = plt.subplots(nrows=1, ncols=len(tables), figsize=(30, 8))#, layout="constrained")
+
+    table = tables['iso2']
+    for met_ind, met in enumerate(["AUC", "C-Index"]):
+        ax = axs[met_ind]
+        idx = pd.IndexSlice
+        means = table.loc[met, idx[:, "Mean"]].to_numpy()
+        lows = means - table.loc[met, idx[:, "CI Low"]].to_numpy()
+        highs = table.loc[met, idx[:, "CI High"]].to_numpy() - means
+
+        ax.errorbar(
+            means, 
+            table.columns.get_level_values(0).unique(), 
+            xerr=[lows, highs], 
+            fmt='o', 
+            markersize=4,
+            elinewidth=3, 
+            capsize=6, 
+            label='95% CI'
+        )
+
+        ax.set_title(f"{met}", fontsize=20)
+        ax.set_xlim(0, 1.00)
+        ax.tick_params(axis='x', labelsize=16)
+        ax.tick_params(axis='y', labelsize=16)
+        ax.grid(True, color="white", linestyle="-")
+
+    fig.suptitle(f"{yr} Survival Prediction Performance", fontsize=24)
+    plt.subplots_adjust(hspace=0.5, wspace=.6, top=0.9)
+    plt.savefig(f"../vises/intervals/iso_{yr}_intervals.pdf")
+    plt.show()
+
 def plot_plotly(setup, df, met):
     """
     Plotly interval plots on metric performance
@@ -300,6 +332,7 @@ def run_all():
         with open(f'{yr}.pkl', 'wb') as f: pickle.dump(tables, f)
         # combined(yr, tables)    
         # combined_plotly(yr, tables) 
+        isolated_only("2 Year", tables)
         with pd.ExcelWriter('vises/res.xlsx', engine='openpyxl', mode='a', if_sheet_exists="overlay") as writer:
             for i, (setup, table) in enumerate(tables.items()):
                 table.to_excel(writer, sheet_name=yr, startrow=i*(len(table) + 10) + 2)

@@ -1,14 +1,23 @@
 from torch import Tensor
 from torchsurv.loss.cox import *
 
-def cox_nll_loss(preds, x: dict[str, Tensor]):
+def cox_nll_loss(preds: Tensor, x: dict[str, Tensor]):
     """
     Cox Negative Log Likelihood Loss
-    Params:
-    - preds: Log hazards 
-    - x: Batch dict with keys
+
+    Parameters
+    ----------
+    preds : torch.Tensor
+        Log hazards 
+    x : dict[str, Tensor]
+        Batch dict with keys
         - "survival_right_censor": per patient surviving or not
         - "survival_days": survival in days
+
+    Returns
+    ----------
+    loss : torch.Tensor
+        Cox NLL Loss value
     """
     surviving = ~(x["survival_right_censor"].squeeze(-1).bool())
     time = x["survival_days"].squeeze(-1)

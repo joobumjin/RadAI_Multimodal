@@ -17,11 +17,16 @@ class Bootstrap:
 
     def __init__(self, name: str, fn: callable, stratify: Optional[Tensor], n_test: int = 16, n_resample: int = 999, random_state: Optional[int] = None):
         """
-        params:
-        - name: name of the statistic 
-        - fn: the statstic which will be bootstrap analyzed
-        - stratify: optional function to stratify data
-        - n_resample: how many times to run bootstrap resampling
+        Parameters
+        ----------
+        name : str
+            name of the statistic 
+        fn : callable
+            the statstic which will be bootstrap analyzed
+        stratify : Optional[Tensor]
+            optional function to stratify data
+        n_resample : int
+            how many times to run bootstrap resampling
         """
         self.name = name
         self.entries = []
@@ -61,11 +66,16 @@ def bootstrap_cind_auc(args: Namespace, test_samples: list[Tensor],
     """
     Keeps track of Bootstrap object instances for C-Index and AUC evaluation
 
-    params:
-    - args: argparse.Namespace
-    - test_samples: compiled test data with structure [deaths, times, preds]
-    - ci_res: Bootstrap object instance for C-Index
-    - auc_res: Bootstrap object instance for AUC
+    Parameters
+    ----------
+    args : Namespace
+        compiled cli args
+    test_samples : list[Tensor]
+        compiled test data with structure [deaths, times, preds]
+    ci_res : Optional[Bootstrap]
+        Bootstrap object instance for C-Index
+    auc_res : Optional[Bootstrap]
+        Bootstrap object instance for AUC
     """
     def strat(data):
         yrs = data[1] > args.survival_years * DAYS_IN_YR

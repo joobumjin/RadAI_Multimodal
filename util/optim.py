@@ -7,15 +7,26 @@ from torch.optim.lr_scheduler import SequentialLR, LinearLR, CosineAnnealingLR
 
 def get_opt_and_sched(model: nn.Module, args: Namespace, iter_per_epoch: Optional[int] = None):
     """
-    returns optimizer and linear warm up + cosine annealed LR scheduler
+    Returns optimizer and linear warm up + cosine annealed LR scheduler
 
-    params:
-    - model: model to optimize
-    - args: argparse.Namespace
+    Parameters
+    ----------
+    model : nn.Module
+        model to optimize
+    args : argparse.Namespace
+        parsed cli args
         - warmup_epochs: int, num warmup epochs
         - epochs: total epochs to train for (including warm up)
         - min_lr: minimum lr to decay to
-    - iter_per_epoch: number of scheduler steps per epoch (if stepping for every train step instead of once an epoch)
+    iter_per_epoch : Optional[int]
+        number of scheduler steps per epoch (if stepping for every train step instead of once an epoch)
+
+    Returns
+    ----------
+    optimizer : optim.AdamW
+        instance of adamw optimizer
+    scheduler : optim.lr_scheduler
+        learning rate scheduler as defined by args
     """
 
     optimizer = optim.AdamW(model.parameters(), lr=args.lr, betas=(0.9, 0.98))#, weight_decay=0.01)
