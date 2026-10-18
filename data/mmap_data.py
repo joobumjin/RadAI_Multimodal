@@ -36,21 +36,36 @@ class MemmapDatasetMultimodal(Dataset):
         label_key: str = "label"
     ):
         """
-        params:
-        - data_dir: Directory containing dataset files
-        - indices: Subset of slide indices to use (for train/val split)
-        - max_instances: Max patches to sample per slide
-        - return_key: Whether to return specific keys with each sample
-        - keys: Keys to be returned with each sample
-        - label_column: Column to be used as sample label, if exists
-        - label_dtype: dtype of label per sample
-        - index_filename: The name of file in data_dir which holds non-memmap data per sample
-        - bin_modality_keys: The names of the modalities to be loaded into the memmap
-        - bin_paths: Dict mapping mod name to the file in data_dir with the memmap data (defauts to <mod>_embs.dat)
-        - extra_modality_keys: The names of any non memmap modalities to be loaded
-        - allow_sparse_samples: Whether or not to allow samples with incomplete data
-        - label_fn: Function to transform the labels
-        - label_key: The key to denote the label
+        Parameters
+        ----------
+        data_dir : str
+            Directory containing dataset files
+        indices : Optional[List[int]]
+            Subset of slide indices to use (for train/val split)
+        max_instances : Optional[int]
+            Max patches to sample per slide
+        return_key : bool
+            Whether to return specific keys with each sample
+        keys : Optional[List[str]]
+            Keys to be returned with each sample
+        label_column : Optional[str]
+            Column to be used as sample label, if exists
+        label_dtype : Optional[np.dtype]
+            dtype of label per sample
+        index_filename : str
+            The name of file in data_dir which holds non-memmap data per sample
+        bin_modality_keys : Optional[List[str]]
+            The names of the modalities to be loaded into the memmap
+        bin_paths : Optional[Dict[str,str]]
+            Dict mapping mod name to the file in data_dir with the memmap data (defauts to <mod>_embs.dat)
+        extra_modality_keys : Optional[List[str]]
+            The names of any non memmap modalities to be loaded
+        allow_sparse_samples : bool
+            Whether or not to allow samples with incomplete data
+        label_fn : Optional[callable]
+            Function to transform the labels
+        label_key : str
+            The key to denote the label
         """
 
         self.label_key      = label_key

@@ -17,8 +17,11 @@ class EarlyStopper:
         """
         Update best score tracking with new score if new best
         Returns 
-        - a bool indicating whether to early stop or not 
-        - a bool indicating if this score is the best so far
+        ---------
+        early_stop : bool
+            a bool indicating whether to early stop or not 
+        best : bool
+            a bool indicating if this score is the best so far
         """
         self.epoch += 1
 
