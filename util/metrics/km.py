@@ -36,18 +36,26 @@ def km_preds(all_deaths: torch.Tensor, all_times: torch.Tensor, all_preds: torch
     pred_bins = torch.logspace(torch.min(all_preds), torch.max(all_preds), num_groups)
     pred_binned = torch.bucketize(all_preds, pred_bins)
 
+    print(f"KM Hazard Group Ranges")
+    print(f"  Bins: {pred_bins}")
+    for group in range(num_groups):
+        sliced = all_preds[pred_binned == group]
+        if len(sliced):
+            print(f"  Group {group}: \tMin: {torch.min(sliced).item():.3f} \tMax: {torch.max(sliced).item():.3f}")
+
     df = pd.DataFrame({"Death": all_deaths, "Time": all_times, "Pred Bins": pred_binned})
     df["Time"] = df["Time"] / DAYS_IN_MONTH
     df.loc[df['Time'] > 60.01, 'Death'] = False
     df['Time'] = df['Time'].clip(upper=60.01)
 
     # Initialize the fitter
-    ax = plt.subplot(111)
+    fig = plt.figure(figsize=(8, 5), dpi=300)
+    ax = fig.add_subplot(111)
     kmfs = []
 
-    for name, grouped_df in df.groupby("Pred Bins"):
+    for bin_group, grouped_df in df.groupby("Pred Bins"):
         kmf = KaplanMeierFitter()
-        kmf.fit(grouped_df["Time"], event_observed=grouped_df["Death"], label=f"Group {name}")
+        kmf.fit(grouped_df["Time"], event_observed=grouped_df["Death"], label=f"Group {bin_group}")
         kmf.plot_survival_function(ax=ax, ci_show=False)
         
         kmfs.append(kmf)
@@ -62,5 +70,5 @@ def km_preds(all_deaths: torch.Tensor, all_times: torch.Tensor, all_preds: torch
     ax.xaxis.set_label_position("bottom")
     ax.set_ylabel("Survival Probability")
     plt.tight_layout()
-    plt.savefig(f"vises/km/{model_name}_{setup}_km_curve.pdf")
+    plt.savefig(f"vises/km/{model_name}_{setup}_km_curve.png")
     plt.close()

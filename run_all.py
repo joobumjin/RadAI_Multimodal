@@ -34,17 +34,14 @@ def get2():
     # sub["mix2"] = {setup: args + ['--mix_data'] for setup, args in sub["mix2"].items()}
 
     sub[f"iso2"] = {
-        "tri": f'--clinical --path_lang --rad_lang --emb_dim 64 --fusion_dim 128'.split() + \
-            '--modality hat --early -44 --plot'.split(),
-        "pr": f'--rad_lang --path_lang --emb_dim 64 --fusion_dim 64 32'.split() + \
-            '--modality attn --early -20'.split(),
-
-        "pc": f'--path_lang --clinical --emb_dim 16 --fusion_dim 128 32 16'.split() + \
-            '--modality attn --early -112'.split(),
-
-        "rc": f'--rad_lang --clinical --emb_dim 16 --fusion_dim 128 16'.split() + \
-            '--modality hat --early -44'.split(),
-        
+        "tri": f'--clinical --path_lang --rad_lang --emb_dim 64 --fusion_dim 64'.split() + \
+            '--modality hat --early -74 --plot'.split(),
+        "pr": f'--rad_lang --path_lang --emb_dim 64 --fusion_dim 256 32 64'.split() + \
+            '--modality attn --early -42'.split(),
+        "pc": f'--path_lang --clinical --emb_dim 64 --fusion_dim 256 64 64'.split() + \
+            '--modality attn --early -66'.split(),
+        "rc": f'--rad_lang --clinical --emb_dim 64 --fusion_dim 128 256 8'.split() + \
+            '--modality attn --early -41'.split(),
         "p": f'--modality uni_path --batch_size 256 --fusion_dim 8 --early -20'.split(),
         "r": f'--modality uni_rad --fusion_dim 8 --early -86'.split(),
         "c": f'--modality uni_clin --fusion_dim 32 --early -167'.split(),
@@ -158,7 +155,7 @@ def plot(setup, df, met):
     plt.close()
 
 def combined(yr, tables):
-    fig, axs = plt.subplots(nrows=2, ncols=len(tables), figsize=(30, 15))#, layout="constrained")
+    fig, axs = plt.subplots(nrows=2, ncols=len(tables), figsize=(30, 15))
 
     setups = ["Mixed", "Isolated"]
     
@@ -203,9 +200,9 @@ def combined(yr, tables):
     plt.close()
 
 def isolated_only(yr, tables):
-    fig, axs = plt.subplots(nrows=1, ncols=len(tables), figsize=(30, 8))#, layout="constrained")
-
     table = tables['iso2']
+    fig, axs = plt.subplots(nrows=1, ncols=len(table), figsize=(30, 8))
+
     for met_ind, met in enumerate(["AUC", "C-Index"]):
         ax = axs[met_ind]
         idx = pd.IndexSlice
@@ -214,9 +211,9 @@ def isolated_only(yr, tables):
         highs = table.loc[met, idx[:, "CI High"]].to_numpy() - means
 
         ax.errorbar(
-            means, 
-            table.columns.get_level_values(0).unique(), 
-            xerr=[lows, highs], 
+            means[::-1], 
+            table.columns.get_level_values(0).unique()[::-1], 
+            xerr=[lows[::-1], highs[::-1]], 
             fmt='o', 
             markersize=4,
             elinewidth=3, 
@@ -232,7 +229,7 @@ def isolated_only(yr, tables):
 
     fig.suptitle(f"{yr} Survival Prediction Performance", fontsize=24)
     plt.subplots_adjust(hspace=0.5, wspace=.6, top=0.9)
-    plt.savefig(f"../vises/intervals/iso_{yr}_intervals.pdf")
+    plt.savefig(f"vises/intervals/iso_{yr}_intervals.pdf")
     plt.show()
 
 def plot_plotly(setup, df, met):
@@ -335,7 +332,7 @@ def run_all():
         isolated_only("2 Year", tables)
         with pd.ExcelWriter('vises/res.xlsx', engine='openpyxl', mode='a', if_sheet_exists="overlay") as writer:
             for i, (setup, table) in enumerate(tables.items()):
-                table.to_excel(writer, sheet_name=yr, startrow=i*(len(table) + 10) + 2)
+                table.to_excel(writer, sheet_name=f"iso {yr}", startrow=i*(len(table) + 10) + 2)
 
                 worksheet = writer.sheets[yr]
                 worksheet[f"A{i*(len(table) + 10) + 1}"] = setup

@@ -11,7 +11,7 @@ vises/
 *.pkl
 
 #nonpublic data 
-Notebooks/*
+Notebooks/
 
 # Byte-compiled / optimized / DLL files
 **/__pycache__/

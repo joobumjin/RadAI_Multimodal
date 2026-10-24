@@ -25,6 +25,7 @@ def compile_split(model: torch.nn.Module, loader: DataLoader, device: torch.devi
         - survival time labels
         - predicted hazards
     """
+    if loader is None: return [[], [], []]
 
     model.eval()
 
@@ -160,7 +161,7 @@ def calculate_c_indices_auc(model: torch.nn.Module, device: torch.device,
     }
 
     if num_val: 
-        ret["Validation C-Index"] = val_c
-        ret["Validation AUC"] = val_a
+        ret["Valid C-Index"] = val_c
+        ret["Valid AUC"] = val_a
 
     return ret

@@ -49,8 +49,7 @@ def get_args_parser():
     #dataloader
     parser.add_argument('--batch_size',         type=int,   default=128)
     parser.add_argument('--survival_years',     type=int,   default=2)
-    parser.add_argument('--prefetch_factor',    type=int,   default=2)
-    parser.add_argument('--num_workers',        type=int,   default=1)
+    parser.add_argument('--num_workers',        type=int,   default=0)
     parser.add_argument('--pin_mem',            type=bool,  default=False)
     parser.add_argument('--train_split',        type=float, default=.85)
     
@@ -73,7 +72,7 @@ def get_args_parser():
     parser.add_argument('--disable_wandb',      action="store_true")
     parser.add_argument('--return_extras',      action="store_true")
     parser.add_argument('--wb_proj',            type=str,   default="5CV")
-    parser.add_argument('--run_name')
+    parser.add_argument('--run_name',           type=str)
     parser.add_argument('--debug',              action="store_true")
     return parser
 
@@ -124,8 +123,8 @@ def main(args: Namespace) -> tuple[str, list[SimpleNamespace], list[SimpleNamesp
         the AUC and C-Index testing results under 5Fold CV
     boot_res : list[SimpleNamespace]
         the AUC and C-Index testing results under bootstrapping in 5fold CV
-    extras : Optional[list[dict]]
-        a list of dictionaries with any extra details about the setup, if args.return_extras is true
+    extras : Optional[dict]
+        a dictionary with any extra details about the setup, if args.return_extras is true
     best : Optional[list]
         the best merged score from training, if args.track_best is true
     """
@@ -167,6 +166,7 @@ def main(args: Namespace) -> tuple[str, list[SimpleNamespace], list[SimpleNamesp
     splits = kf.split(X=tv_inds) if not args.stratify else kf.split(X=tv_inds, y=strat[tv_inds])
 
     metrics = defaultdict(lambda: [])
+    inp_weights, pair_weights = defaultdict(lambda: []), defaultdict(lambda: [])
 
     ci_res, auc_res = None, None
 
@@ -184,7 +184,9 @@ def main(args: Namespace) -> tuple[str, list[SimpleNamespace], list[SimpleNamesp
 
         run = run_setup(args, MODEL_FNS[args.modality], 
                         train_loader, valid_loader, test_loader, 
-                        run_name = run_name, return_keys=['Train Loss', 'Train AUC', 'Train C-Index', 'Test Loss', 'Test AUC', 'Test C-Index'], 
+                        run_name = run_name, return_keys=['Train Loss', 'Train AUC', 'Train C-Index', 
+                                                          'Valid Loss', 'Valid AUC', 'Valid C-Index', 
+                                                          'Test Loss', 'Test AUC', 'Test C-Index'], 
                         ret_model=True)
         model, device = run.pop("model")
 
@@ -201,9 +203,13 @@ def main(args: Namespace) -> tuple[str, list[SimpleNamespace], list[SimpleNamesp
             km_preds(*all, model_name = f"Trimodal", setup=f"{args.survival_years}yr Split{split} {"mixed" if args.mix_data else "iso"}")
             del all
 
-            inp_weights, pair_weights = compile_attn(model, test_loader, device)
-            vis_hat(inp_weights, pair_weights, model_name = f"Trimodal {args.survival_years}yr Split{split}")
-            del inp_weights, pair_weights
+            inp_weight, pair_weight = compile_attn(model, test_loader, device)
+            vis_hat(inp_weight, pair_weight, model_name = f"Trimodal {args.survival_years}yr Split{split}")
+            for key, val in inp_weight.items():
+                inp_weights[key].append(val)
+
+            for key, val in pair_weight.items():
+                pair_weights[key].append(val)
 
             # logits, labels = compile_logits(model, device, [train_loader, valid_loader, test_loader], args)
             # plot_umap(logits["path_lang"], labels, f"Path Lang, Trimodal {args.survival_years}yr Split{split}")
@@ -212,6 +218,12 @@ def main(args: Namespace) -> tuple[str, list[SimpleNamespace], list[SimpleNamesp
 
         #explicitly dealloc
         del model, train_loader, valid_loader, test_loader
+
+    if args.plot:
+        inp_weights = {key: np.mean(val, axis=0) for key, val in inp_weights.items()}
+        pair_weights = {key: np.mean(val, axis=0) for key, val in pair_weights.items()}
+        print(inp_weights, pair_weights)
+        vis_hat(inp_weights, pair_weights, model_name = f"Trimodal {args.survival_years}yr AveragedSplit")
 
     metrics = {key: np.vstack(arr) for key, arr in metrics.items()}
 
@@ -227,7 +239,7 @@ def main(args: Namespace) -> tuple[str, list[SimpleNamespace], list[SimpleNamesp
 
         epochs = np.arange(len(list(metrics.values())[0][0]))
 
-        fig = make_subplots(rows=2, cols=3, shared_xaxes=True, vertical_spacing=0.05, subplot_titles=list(tracked.keys()))
+        fig = make_subplots(rows=3, cols=3, shared_xaxes=True, vertical_spacing=0.05, subplot_titles=list(tracked.keys()))
         for i, key in enumerate(tracked):
             fig.add_trace(go.Scatter(x=epochs, y=avgs[key], mode='lines', name=key), row=i//3 + 1, col=(i%3) + 1)
             fig.add_trace(
@@ -252,32 +264,25 @@ def main(args: Namespace) -> tuple[str, list[SimpleNamespace], list[SimpleNamesp
     print(f"{"--" * 5}")
     print(f"5-Fold Avg + 95% CI at epoch {selected}")
 
-    auc_ci = stats.t.interval(confidence=.95, df=4, loc=avgs['Test AUC'][selected], scale=errs['Test AUC'][selected])
-    auc_ci = [float(n) for n in auc_ci]
-    c_ci = stats.t.interval(confidence=.95, df=4, loc=avgs['Test C-Index'][selected], scale=errs['Test C-Index'][selected])
-    c_ci = [float(n) for n in c_ci]
+    res_5fold = {}
+    for split in ["Train", "Valid", "Test"]:
+        res_str = split
+        for metric in ["AUC", "C-Index"]:
+            sm = f'{split} {metric}'
+            ci = stats.t.interval(confidence=.95, df=4, loc=avgs[sm][selected], scale=errs[sm][selected])
+            ci = [float(n) for n in ci]
+            res_5fold[sm] = SimpleNamespace(avg = avgs[sm][selected], ci=ci)
+            res_str += f"\t {metric}: {avgs[sm][selected]:.3f} ({ci[0]:.3f}, {ci[1]:.3f})"
+        print(res_str)
 
-    auc5fold = SimpleNamespace(avg = avgs['Test AUC'][selected], ci=auc_ci)
-    ci5fold = SimpleNamespace(avg = avgs['Test C-Index'][selected], ci=c_ci)
-
-    train_auc_ci = stats.t.interval(confidence=.95, df=4, loc=avgs['Train AUC'][selected], scale=errs['Train AUC'][selected])
-    train_auc_ci = [float(n) for n in train_auc_ci]
-    train_c_ci = stats.t.interval(confidence=.95, df=4, loc=avgs['Train C-Index'][selected], scale=errs['Train C-Index'][selected])
-    train_c_ci = [float(n) for n in train_c_ci]
-    train_auc5fold = SimpleNamespace(avg = avgs['Train AUC'][selected], ci=train_auc_ci)
-    train_ci5fold = SimpleNamespace(avg = avgs['Train C-Index'][selected], ci=train_c_ci)
-
-    print(f"Train AUC: \t{train_auc5fold.avg:.3f} ({train_auc5fold.ci[0]:.3f}, {train_auc5fold.ci[1]:.3f})"
-          f"\t C-Index: {train_ci5fold.avg:.3f} ({train_ci5fold.ci[0]:.3f}, {train_ci5fold.ci[1]:.3f})")
-    print(f"Test AUC: \t{auc5fold.avg:.3f} ({auc5fold.ci[0]:.3f}, {auc5fold.ci[1]:.3f})" 
-          f"\t C-Index: {ci5fold.avg:.3f} ({ci5fold.ci[0]:.3f}, {ci5fold.ci[1]:.3f})")
+    best_split = np.argmax(metrics["Test AUC"][:, selected] / .9 + metrics["Test C-Index"][:, selected] / .7)
+    print(f"Best Performing Split: {best_split}")
 
     extras = []
     if args.return_extras: 
-        extras.append({
-            "Train AUC": train_auc5fold.avg,
-            "Train C-Index": train_ci5fold.avg
-        })
+        keys = ["Train AUC", "Train C-Index", "Valid AUC", "Valid C-Index"]
+        extras = [{k: float(res_5fold[k].avg) for k in keys}]
+        extras[0]["Selected"] = selected
 
     # print(f"{"--" * 5}")
     # print(f"Bootstrapped Avg + 95% CI (at end)")
@@ -285,7 +290,7 @@ def main(args: Namespace) -> tuple[str, list[SimpleNamespace], list[SimpleNamesp
     # print(str(ci_res))
     # print(f"From {len(ci_res.entries)} bootstrap samples")
 
-    return mod_name, [auc5fold, ci5fold], [auc_res, ci_res], *extras, *best
+    return mod_name, [res_5fold["Test AUC"], res_5fold["Test C-Index"]], [auc_res, ci_res], *extras, *best
        
 
 if __name__ == '__main__':

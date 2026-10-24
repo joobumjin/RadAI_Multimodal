@@ -13,6 +13,20 @@ def get_datasets(
     )-> tuple[MemmapDatasetMultimodal, MemmapDatasetMultimodal]:
     """
     Returns the train and test Datasets as dictated by args
+
+    Parameters
+    ----------
+    args : Namespace
+        parsed CLI arguments
+    keys : list[str]
+        other keys to get per sample 
+
+    Returns
+    ----------
+    train_set : MemmapDatasetMultimodal
+        Dataset at the training dataset path, as dictated by args
+    test_set : MemmapDatasetMultimodal
+        Dataset at the testing dataset path, as dictated by args
     """
 
     bin_mods, extra_mods = [], []
@@ -53,6 +67,30 @@ def get_combined_loaders(
     ) -> tuple[DataLoader, DataLoader, DataLoader]:
     """
     Given a combined dataset, splits and returns train, val, and test laoders
+
+    Parameters
+    ----------
+    args : Namespace
+        parsed CLI arguments
+    dataset : MemmapDatasetMultimodal
+        a combined (train, val, test) dataset. usually a ConcatDataset instance
+    train_inds : np.ndarray
+        indices of train samples inside dataset
+    validation_inds : np.ndarray
+        indices of validation samples inside dataset
+    test_inds : np.ndarray
+        indices of test samples inside dataset
+    verbose : bool
+        whether or not to print dataset details by split
+
+    Returns
+    ----------
+    train_loader : DataLoader
+        DataLoader for train data
+    val_loader : DataLoader
+        DataLoader for validation data
+    test_loader : DataLoader
+        DataLoader for test data
     """
 
     bin_mods, extra_mods = [], []
@@ -112,6 +150,30 @@ def get_subset_loaders(
     ) -> tuple[DataLoader, DataLoader, DataLoader]:
     """
     Given separate train+val and test datasets, splits and returns train, val, and test laoders
+
+    Parameters
+    ----------
+    args : Namespace
+        parsed CLI arguments
+    dataset : MemmapDatasetMultimodal
+        a combined (train, val) dataset
+    train_inds : np.ndarray
+        indices of train samples inside dataset
+    validation_inds : np.ndarray
+        indices of validation samples inside dataset
+    test_set : MemmapDatasetMultimodal
+        testing dataset
+    verbose : bool
+        whether or not to print dataset details by split
+
+    Returns
+    ----------
+    train_loader : DataLoader
+        DataLoader for train data
+    val_loader : DataLoader
+        DataLoader for validation data
+    test_loader : DataLoader
+        DataLoader for test data
     """
     
     bin_mods, extra_mods = [], []

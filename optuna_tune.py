@@ -1,3 +1,4 @@
+from typing import Union
 import argparse
 from argparse import Namespace
 
@@ -9,12 +10,14 @@ import new_kf
 def get_arg_parser():
     parser = argparse.ArgumentParser('Optuna Hyperparam Tuning', add_help=False)
     parser.add_argument("--mods",       choices=['prc', 'pr', 'pc', 'rc', 'p', 'r', 'c'], default='prc')
-    parser.add_argument("--n_trials",   type=int, default=50)
+    parser.add_argument("--n_trials",   type=int, default=100)
     parser.add_argument("--merge_obj",  action="store_true")
+
+    parser.add_argument("--storage",   type=str, default="db")
 
     return parser
 
-def run_trial(trial: optuna.Trial, args: Namespace):
+def run_trial(trial: optuna.Trial, args: Namespace) -> Union[float, list[float]]:
     """
     A single hyperparameter setup trial as part of an optuna search
 
@@ -27,9 +30,9 @@ def run_trial(trial: optuna.Trial, args: Namespace):
 
     Returns
     ----------
-    objective_value
+    objective_value : Union[float, list[float]]
         either a merged float value of best value if args.merge_obj
-        or a list of float with best AUC and best C-Index
+        or a list of float with best average AUC and best C-Index
     """
     mod_flag = {
         "p": "--path_lang",
@@ -37,6 +40,12 @@ def run_trial(trial: optuna.Trial, args: Namespace):
         "c": "--clinical"
     }
     mod_args = [mod_flag[mod] for mod in args.mods]
+    
+    uni_fus = {
+        "p": "--uni_path",
+        "r": "--uni_rad",
+        "c": "--uni_clin"
+    }
 
     #optimize on lr, batch size, emb dim, fused dim, early stop, num epochs, survival years, activation
     emb_dim = trial.suggest_categorical("emb_dim", [8, 16, 32, 64])
@@ -47,27 +56,36 @@ def run_trial(trial: optuna.Trial, args: Namespace):
         fusion_dims.append(str(out_features))
 
     # epochs = trial.suggest_categorical("epochs", [200, 300, 500, 800])
+    epochs = 500
     # early_stop = trial.suggest_int("early_stop", low=-100, high=0)
     # warmup = trial.suggest_categorical("warmup", [25, 50, 100])
 
+    if len(mod_args) == 3:
+        # fusion = trial.suggest_categorical("fusion", ["hat", "attn"])
+        fusion = "hat"
+    elif len(mod_args) == 2:
+        fusion = "attn"
+    else:
+        fusion = uni_fus[args.mods[0]]
+
     #build args, run main
     args =  f'--emb_dim {emb_dim} --fusion_dim {" ".join(fusion_dims)}'.split() + \
-            '--disable_wandb --stratify'.split() + \
+            f'--modality {fusion} --epochs {epochs}'.split() + \
+            '--disable_wandb --stratify --return_extras'.split() + \
             '--layer_norm --const_lr --disable_wandb --stratify'.split() + \
-            '--modality hat --track_best --return_extras'.split() + \
             mod_args
 
     parser = new_kf.get_args_parser()
     main_fn = new_kf.main
 
     args = parser.parse_args(args)
-    _, res5, _, extras, best = main_fn(args)
+    # _, res5, _, extras, best = main_fn(args)
+    _, res5, _, extras = main_fn(args)
 
-    for extra in extras:
-        for k, v in extra.items():
-            trial.set_user_attr(k, v)
+    for k, v in extras.items():
+        trial.set_user_attr(k, v)
 
-    if args.merge_obj: return best
+    if hasattr(args, "merge_obj") and args.merge_obj: return best
 
     return [r.avg for r in res5]
 
@@ -92,15 +110,20 @@ def optimize(args: Namespace):
     # get current time and format it as a string
     time_string = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
+    study_args = {
+        "storage": f"sqlite:///{args.storage}.sqlite3", 
+        "study_name": f"VS {mod} {time_string}"
+    }
+
     if args.merge_obj:
-        study = optuna.create_study(directions=["maximize"], storage="sqlite:///db.sqlite3", study_name = f"Trimodal {time_string}")
+        study = optuna.create_study(directions=["maximize"], **study_args)
     else:
-        study = optuna.create_study(directions=["maximize", "maximize"], storage="sqlite:///db.sqlite3", study_name = f"{mod} {time_string}")
-        study.set_metric_names(["Test AUC", "Test C-Index"])
+        study = optuna.create_study(directions=["maximize", "maximize"], **study_args)
+        study.set_metric_names(["Valid AUC", "Valid C-Index"])
     study.optimize(lambda trial: run_trial(trial, args), n_trials=args.n_trials, show_progress_bar=True)
 
-    if not args.merge_obj:
-        optuna.visualization.plot_pareto_front(study, target_names=["AUC", "C-Index"])
+    # if not args.merge_obj:
+    #     optuna.visualization.plot_pareto_front(study, target_names=["AUC", "C-Index"])
 
 if __name__ == '__main__':
     parser = get_arg_parser()

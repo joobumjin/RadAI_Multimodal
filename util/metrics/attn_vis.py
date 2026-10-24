@@ -41,14 +41,13 @@ def vis_hat(inp_weights, pair_weights, model_name: str):
     pair_x = [0.0, 4.3, 8.6]
     bottom_y, mid_y, fusion_y = 1.0, 2.3, 3.6
     top_x = 3.2
-    edge = "#3B4A9A"
-    font = dict(family="Times New Roman, serif", size=22, color="black")
+    font = dict(size=18, color="black", weight=200)
     
     shapes, annotations = [], []
     
-    def cell(x, y, v, w=cell_w, h=cell_h, fill=None, line=edge):
+    def cell(x, y, v, w=cell_w, h=cell_h, fill=None, line="#000000"):
         shapes.append(dict(type="rect", x0=x, y0=y, x1=x + w, y1=y + h,
-                        fillcolor=fill or color(v), line=dict(color=line, width=1.5)))
+                        fillcolor=fill or color(v), line=dict(color=line, width=.75)))
     
     def line(x0, y0, x1, y1):
         shapes.append(dict(type="line", x0=x0, y0=y0, x1=x1, y1=y1,
@@ -76,8 +75,8 @@ def vis_hat(inp_weights, pair_weights, model_name: str):
             cell(cx, bottom_y, v)
             c = cx + cell_w / 2
             centers.append(c)
-            annotations.append(dict(x=c, y=bottom_y - 0.6, text=name,
-                                    showarrow=False, font=font))
+            annotations.append(dict(x=c, y=bottom_y - 0.2, text=name,
+                                    showarrow=False, font=font, yanchor="top"))
             line(c, bottom_y + cell_h, c, bracket_y)
         line(min(centers + [cx_mid]), bracket_y, max(centers + [cx_mid]), bracket_y)
         arrow(cx_mid, bracket_y, cx_mid, mid_y)
@@ -85,9 +84,9 @@ def vis_hat(inp_weights, pair_weights, model_name: str):
     # ---- Fusion box
     fw, fh = 2.0, 0.65
     fx = top_x + 1.5 * cell_w - fw / 2
-    cell(fx, fusion_y, None, w=fw, h=fh, fill="#E6E6E6", line="#6B6B3A")
+    cell(fx, fusion_y, None, w=fw, h=fh, fill="#E6E6E6")
     annotations.append(dict(x=fx + fw / 2, y=fusion_y + fh / 2,
-                            text="<i>x</i><sub><i>fusion</i></sub>",
+                            text="<i>x</i><sub>fusion</sub>",
                             showarrow=False, font=font))
     arrow(fx + fw / 2, mid_y + cell_h, fx + fw / 2, fusion_y)
     
@@ -98,18 +97,18 @@ def vis_hat(inp_weights, pair_weights, model_name: str):
                     showscale=True,
                     colorbar=dict(tickvals=[0, 0.2, 0.4, 0.6, 0.8, 1.0],
                                 ticktext=["0.0", "0.2", "0.4", "0.6", "0.8", "1.0"],
-                                thickness=18, len=1.0, outlinewidth=1,
-                                tickfont=dict(family="Times New Roman, serif", size=16))),
+                                thickness=18, len=.93, outlinewidth=1,
+                                tickfont=dict(size=16), orientation='h', x = 0.496, y=-.2), ),
         hoverinfo="none", showlegend=False,
     )
     
     fig = go.Figure(colorbar_trace)
     fig.update_layout(
         shapes=shapes, annotations=annotations,
-        width=1300, height=480, plot_bgcolor="white", paper_bgcolor="white",
-        margin=dict(l=10, r=10, t=10, b=10),
-        xaxis=dict(range=[-0.2, 14.0], visible=False),
-        yaxis=dict(range=[0, 4.5], visible=False, scaleanchor="x", scaleratio=1),
+        width=1100, height=480, plot_bgcolor="white", paper_bgcolor="white",
+        margin=dict(l=3, r=3, t=5, b=5),
+        xaxis=dict(range=[-0.2, 13.0], visible=False),
+        yaxis=dict(range=[0, 5], visible=False, scaleanchor="x", scaleratio=1),
     )
     
     fig.write_image(f"vises/attn/{model_name} hat_attn_weights.pdf")

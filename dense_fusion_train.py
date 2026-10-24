@@ -47,8 +47,7 @@ def get_args_parser():
     #dataloader
     parser.add_argument('--batch_size',         type=int,   default=128)
     parser.add_argument('--survival_years',     type=int,   default=2)
-    parser.add_argument('--prefetch_factor',    type=int,   default=2)
-    parser.add_argument('--num_workers',        type=int,   default=1)
+    parser.add_argument('--num_workers',        type=int,   default=0)
     parser.add_argument('--pin_mem',            type=bool,  default=False)
     
     #optimizer
@@ -66,9 +65,8 @@ def get_args_parser():
     parser.add_argument('--hist',               action="store_true")
     parser.add_argument('--plot',               action="store_true")
     parser.add_argument('--resample',           type=int,   default=999)
-    parser.add_argument('--track_best',         action="store_true")
     parser.add_argument('--disable_wandb',      action="store_true")
-    parser.add_argument('--wb_proj',            type=str,   default="5CV")
+    parser.add_argument('--wb_proj',            type=str,   default="boot")
     parser.add_argument('--run_name')
     parser.add_argument('--debug',              action="store_true")
     return parser
@@ -85,6 +83,9 @@ def get_stratify(args: Namespace, dataset: Dataset):
     return strat
 
 def main(args):
+    import warnings
+    warnings.filterwarnings("ignore", message="Ties in `time` detected")
+    
     if args.debug:
         args.epochs = 5
         args.disable_wandb = True
@@ -96,7 +97,7 @@ def main(args):
     np.random.seed(seed)
     
     args, mod_name = get_mod_name(args)
-    args.wb_proj = f"{mod_name} {args.wb_proj} {args.folds}"
+    args.wb_proj = f"{mod_name} {args.wb_proj}"
 
     dataset, test_set = get_datasets(args)
     if args.mix_data:
@@ -120,18 +121,18 @@ def main(args):
     else:
         train_loader, valid_loader, test_loader = get_subset_loaders(args, dataset, train_inds, val_inds, test_set)
 
-    run_name = args.run_name if args.run_name is not None else " - ".join([f"{args.emb_dim}e{", sparse" if args.sparse else ""}", f"{args.label_col}", f"{args.model} - "])
+    run_name = args.run_name if args.run_name is not None else " - ".join([f"{args.emb_dim}e{", sparse" if args.sparse else ""}"])
 
     run = run_setup(args, MODEL_FNS[args.modality], 
                         train_loader, valid_loader, test_loader, 
                         run_name = run_name, return_keys=['Train Loss', 'Train AUC', 'Train C-Index', 'Test Loss', 'Test AUC', 'Test C-Index'], 
-                        ret_model=True, early_stop = args.early)
+                        ret_model=True)
     model, device = run.pop("model")
 
+    train = compile_split(model, train_loader, device)
+    val = compile_split(model, valid_loader, device)
+    test = compile_split(model, test_loader, device)
     if args.plot:
-        train = compile_split(model, train_loader, device)
-        val = compile_split(model, valid_loader, device)
-        test = compile_split(model, test_loader, device)
 
         all = [torch.cat(l) for l in zip(train, val, test)]
         km_preds(*all, model_name = f"Trimodal", setup=f"{args.survival_years}yr {"mixed" if args.mix_data else "iso"}")
@@ -150,8 +151,7 @@ def main(args):
     del model, train_loader, valid_loader, test_loader
 
     if args.hist:
-
-        epochs = np.arange(len(list(metrics.values())[0][0]))
+        epochs = np.arange(len(list(run.values())[0]))
 
         fig = make_subplots(rows=2, cols=3, shared_xaxes=True, vertical_spacing=0.05, subplot_titles=list(run.keys()))
         for i, key in enumerate(run):
@@ -159,7 +159,7 @@ def main(args):
 
         fig.show()
 
-    finals = {key: arr[-1].item() for key, arr in run.items()}
+    finals = {key: arr[-1] for key, arr in run.items()}
 
     ci_res, auc_res = bootstrap_cind_auc(args, test, None, None)
 
