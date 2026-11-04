@@ -205,16 +205,15 @@ def main(args: Namespace) -> tuple[str, list[SimpleNamespace], list[SimpleNamesp
 
             inp_weight, pair_weight = compile_attn(model, test_loader, device)
             vis_hat(inp_weight, pair_weight, model_name = f"Trimodal {args.survival_years}yr Split{split}")
-            for key, val in inp_weight.items():
-                inp_weights[key].append(val)
+            for attn_dict, acc_attn in zip([inp_weight, pair_weight], [inp_weights, pair_weights]):
+                for key, val in attn_dict.items():
+                    acc_attn[key].append(val)
+            del inp_weight, pair_weight
 
-            for key, val in pair_weight.items():
-                pair_weights[key].append(val)
-
-            # logits, labels = compile_logits(model, device, [train_loader, valid_loader, test_loader], args)
-            # plot_umap(logits["path_lang"], labels, f"Path Lang, Trimodal {args.survival_years}yr Split{split}")
-            # plot_umap(logits["rad_lang"], labels, f"Rad Lang, Trimodal {args.survival_years}yr Split{split}")
-            # del logits, labels
+            logits, labels = compile_logits(model, device, [train_loader, valid_loader, test_loader], args)
+            plot_umap(logits["path_lang"], f"Path Lang, Trimodal {args.survival_years}yr Split{split}", labels=labels)
+            plot_umap(logits["rad_lang"], f"Rad Lang, Trimodal {args.survival_years}yr Split{split}", labels=labels)
+            del logits, labels
 
         #explicitly dealloc
         del model, train_loader, valid_loader, test_loader

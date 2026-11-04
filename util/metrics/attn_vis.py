@@ -5,9 +5,9 @@ from plotly.colors import sample_colorscale
 
 def compile_attn(model, loader, device):
     mods = {
-        "clinical": "Clinical",
-        "path_lang": "Pathology Report",
-        "rad_lang": "Radiology Report"
+        "clinical": "Clinical /<br>Sociodemographic",
+        "path_lang": "Pathology<br>Report",
+        "rad_lang": "Radiology<br>Report"
     }
     model.eval()
 
@@ -41,7 +41,7 @@ def vis_hat(inp_weights, pair_weights, model_name: str):
     pair_x = [0.0, 4.3, 8.6]
     bottom_y, mid_y, fusion_y = 1.0, 2.3, 3.6
     top_x = 3.2
-    font = dict(size=18, color="black", weight=200)
+    font = dict(size=18, color="black", family="DejaVu Sans")
     
     shapes, annotations = [], []
     

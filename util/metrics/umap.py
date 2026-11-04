@@ -2,9 +2,13 @@ from collections import defaultdict
 from typing import Optional
 from argparse import Namespace
 
+import matplotlib.pyplot as plt
 import seaborn as sns
+import plotly.express as px
+
 
 import numpy as np
+import pandas as pd
 import torch 
 from torch import nn
 from torch.utils.data import DataLoader
@@ -50,9 +54,9 @@ def compile_logits(model: nn.Module, device: torch.device, loaders: list[DataLoa
             for key in batch: batch[key] = batch[key].to(device)
 
             with torch.inference_mode():
-                _, _, logit = model.predict(batch, True, True)
+                _, logit = model.predict(batch, False, ["path_lang", "rad_lang"])
             logits = {key: (arr.detach().cpu().numpy() if logits[key] is None 
-                            else torch.cat([logits[key], arr.detach().cpu().numpy()])) for key, arr in logit.items()}
+                            else np.concat([logits[key], arr.detach().cpu().numpy()])) for key, arr in logit.items()}
 
     return logits, labels
 
@@ -71,16 +75,20 @@ def plot_umap(logit: np.ndarray, model_name: str, labels: Optional[np.ndarray] =
     """
     sns.set_theme()
 
-    label_args = {}
+    # label_args = {}
 
+    mapper = umap.UMAP(n_jobs=1).fit(logit)
+    df = {"x": mapper.embedding_[:, 0], "y": mapper.embedding_[:, 1]}
     if labels is not None:
         label_text = {0: "Live Uncens.", 1: "Dead Uncens.", 2: "Live Cens.", 3: "Dead Uncens."}
-        labels = [label_text[l.item()] for l in labels]
-        label_args["hue"] = labels
-            
-    mapper = umap.UMAP().fit(logit)
-    ax = sns.scatter(x=mapper.embedding_[:, 0], y=mapper.embedding_[:, 1], **label_args)
-    fig = ax.get_figure()
-    fig.savefig(f"vises/umap/{model_name}.pdf", dpi=300)
-
-    del mapper
+        labels = [label_text[l] for l in labels]
+        df["label"] = labels
+        # label_args["hue"] = labels
+    
+    df = pd.DataFrame(df)
+    fig = px.scatter(df, x="x", y="y", color="label")
+    fig.write_image(f"vises/umap/{model_name}.pdf")
+    # ax = sns.scatterplot(x=mapper.embedding_[:, 0], y=mapper.embedding_[:, 1], **label_args)
+    # fig = ax.get_figure()
+    # fig.savefig(f"vises/umap/{model_name}.pdf", dpi=300)
+    # plt.close(fig)
